@@ -93,7 +93,7 @@ function App() {
               />
             )}
             
-            <div className="relative z-20 -mt-24 md:-mt-32 pb-10">
+            <div className="relative z-20 pb-10">
               {/* Render My List row if user has saved items */}
               {myList.length > 0 && (
                 <MovieRow 
@@ -118,8 +118,16 @@ function App() {
             <h2 className="text-2xl font-bold mb-6">Search Results for "{searchQuery}"</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {allFilteredMovies.map(movie => (
-                <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="cursor-pointer hover:scale-105 transition">
-                  <img src={movie.poster} alt={movie.title} className="w-full h-auto rounded-md" />
+                <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="cursor-pointer hover:scale-105 transition flex flex-col items-center">
+                  <img 
+                    src={movie.poster} 
+                    alt={movie.title} 
+                    className="w-full aspect-[2/3] object-cover rounded-md"
+                    onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/300x450/141414/E50914?text=No+Poster' }}
+                  />
+                  <div className="mt-2 text-sm font-semibold truncate w-full text-center text-gray-200 hover:text-white">
+                    {movie.title}
+                  </div>
                 </div>
               ))}
               {allFilteredMovies.length === 0 && (
@@ -136,6 +144,7 @@ function App() {
         movie={selectedMovie} 
         isOpen={!!selectedMovie} 
         onClose={() => setSelectedMovie(null)} 
+        onSelectMovie={setSelectedMovie}
         myList={myList}
         onToggleMyList={toggleMyList}
       />

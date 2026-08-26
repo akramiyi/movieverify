@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Bell, User } from 'lucide-react';
+import { Search, Bell, User, Menu, X } from 'lucide-react';
 
 const Navbar = ({ onSearch, searchQuery }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -21,14 +22,22 @@ const Navbar = ({ onSearch, searchQuery }) => {
   return (
     <nav 
       className={`fixed top-0 w-full z-50 transition-colors duration-500 ease-in-out ${
-        isScrolled ? 'bg-[#141414]' : 'bg-gradient-to-b from-black/80 to-transparent'
+        isScrolled || isMobileMenuOpen ? 'bg-[#141414]' : 'bg-gradient-to-b from-black/80 to-transparent'
       }`}
     >
       <div className="px-4 md:px-12 py-4 flex items-center justify-between">
         
         {/* Left Side - Logo & Links */}
-        <div className="flex items-center gap-8">
-          <div className="text-primary font-extrabold text-2xl tracking-tighter cursor-pointer">
+        <div className="flex items-center gap-4 md:gap-8">
+          {/* Hamburger Menu Icon for Mobile */}
+          <button 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="lg:hidden text-white focus:outline-none"
+          >
+            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+
+          <div className="text-primary font-extrabold text-xl md:text-2xl tracking-tighter cursor-pointer">
             MOVIEVERFY
           </div>
           
@@ -42,7 +51,7 @@ const Navbar = ({ onSearch, searchQuery }) => {
         </div>
 
         {/* Right Side - Search & Profile */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 md:gap-6">
           <div className={`flex items-center transition-all duration-300 ${isSearchExpanded ? 'bg-black/80 border border-white/80 px-2 py-1' : 'bg-transparent'}`}>
             <button 
               onClick={() => setIsSearchExpanded(!isSearchExpanded)}
@@ -52,13 +61,13 @@ const Navbar = ({ onSearch, searchQuery }) => {
             </button>
             <input 
               type="text"
-              placeholder="Titles, people, genres"
+              placeholder="Titles, genres"
               value={searchQuery}
               onChange={(e) => {
                 if(!isSearchExpanded) setIsSearchExpanded(true);
                 onSearch(e.target.value);
               }}
-              className={`bg-transparent text-white text-sm outline-none transition-all duration-300 ${isSearchExpanded ? 'w-48 md:w-64 ml-2 opacity-100' : 'w-0 opacity-0'}`}
+              className={`bg-transparent text-white text-xs md:text-sm outline-none transition-all duration-300 ${isSearchExpanded ? 'w-28 sm:w-48 md:w-64 ml-2 opacity-100' : 'w-0 opacity-0'}`}
             />
           </div>
           
@@ -73,8 +82,18 @@ const Navbar = ({ onSearch, searchQuery }) => {
             <span className="hidden sm:block text-white text-xs">&#9662;</span>
           </div>
         </div>
-        
       </div>
+
+      {/* Mobile Menu Dropdown Links */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden bg-[#141414] border-t border-white/10 px-6 py-4 flex flex-col gap-4 text-sm font-medium text-gray-300 transition-all duration-300">
+          <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="text-white hover:text-gray-300 transition">Home</a>
+          <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-gray-300 transition">TV Shows</a>
+          <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-gray-300 transition">Movies</a>
+          <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-gray-300 transition">New & Popular</a>
+          <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-gray-300 transition">My List</a>
+        </div>
+      )}
     </nav>
   );
 };

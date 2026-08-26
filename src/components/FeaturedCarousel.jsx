@@ -29,11 +29,11 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
           className="absolute inset-0"
         >
           {/* Backdrop Image */}
-          <div 
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-105"
-            style={{ 
-              backgroundImage: `url(${currentMovie.backdrop})`,
-            }}
+          <img 
+            className="absolute inset-0 w-full h-full object-cover scale-105"
+            src={currentMovie.backdrop || currentMovie.poster}
+            alt={currentMovie.title}
+            onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/500x750/141414/E50914?text=MovieVerfy' }}
           />
           
           {/* Netflix signature dark gradients */}
@@ -41,12 +41,12 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
           <div className="absolute inset-0 bg-gradient-to-r from-[#141414] via-[#141414]/50 to-transparent w-full md:w-[70%]" />
 
           {/* Content */}
-          <div className="absolute inset-0 flex flex-col justify-center px-4 md:px-16 pt-20">
+          <div className="absolute inset-0 flex flex-col justify-end px-4 md:px-16 pb-20 md:pb-32">
             <motion.div 
               initial={{ opacity: 0, x: -50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5, duration: 0.8 }}
-              className="max-w-2xl mt-12 md:mt-24"
+              className="max-w-2xl"
             >
               {/* Fake Netflix Series/Movie badge */}
               <div className="flex items-center gap-2 mb-4">

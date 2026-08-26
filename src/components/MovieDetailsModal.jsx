@@ -1,11 +1,17 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Play, Plus, ThumbsUp, Download, Check } from 'lucide-react';
+import { movies } from '../data/movies';
 
-const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList }) => {
+const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie }) => {
   if (!movie) return null;
 
   const isAddedToList = myList.some((m) => m.id === movie.id);
+
+  // Get similar movies based on genre intersection (excluding current movie itself)
+  const similarMovies = movies
+    .filter(m => m.id !== movie.id && m.genre.split(',').some(g => movie.genre.includes(g.trim())))
+    .slice(0, 3);
 
   const handleDownload = (quality, link) => {
     if(link && link !== "#") {
@@ -49,6 +55,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                 src={movie.backdrop || movie.poster} 
                 alt={movie.title}
                 className="w-full h-full object-cover"
+                onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/500x750/141414/E50914?text=MovieVerfy' }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-r from-[#181818]/80 to-transparent w-3/4" />
@@ -150,29 +157,42 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
               </div>
             </div>
 
-            {/* Similar Movies Placeholder */}
+            {/* Similar Movies Section */}
             <div className="px-10 pb-10">
               <h3 className="text-2xl font-bold text-white mb-6">More Like This</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {[1, 2, 3].map((_, i) => (
-                  <div key={i} className="bg-[#242424] rounded-lg overflow-hidden group cursor-pointer">
+                {similarMovies.map((simMovie) => (
+                  <div 
+                    key={simMovie.id} 
+                    onClick={() => onSelectMovie && onSelectMovie(simMovie)}
+                    className="bg-[#242424] rounded-lg overflow-hidden group cursor-pointer"
+                  >
                     <div className="relative aspect-video">
-                      <img src="https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80" alt="Placeholder" className="w-full h-full object-cover" />
+                      <img 
+                        src={simMovie.backdrop || simMovie.poster} 
+                        alt={simMovie.title} 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/500x750/141414/E50914?text=MovieVerfy' }}
+                      />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                          <Play className="w-10 h-10 text-white fill-current" />
                       </div>
                     </div>
-                    <div className="p-4">
+                    <div className="p-4 text-white">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-green-500 text-xs font-bold">95% Match</span>
-                        <span className="border border-gray-500 text-gray-300 px-1 rounded text-[10px]">1080p</span>
+                        <span className="text-green-500 text-xs font-bold">{Math.round(simMovie.rating * 10)}% Match</span>
+                        <span className="border border-gray-500 text-gray-300 px-1 rounded text-[10px] uppercase">{simMovie.quality}</span>
                       </div>
-                      <p className="text-sm text-gray-400 line-clamp-3">
-                        A placeholder description for a similar movie. This will dynamically load related content based on the genre.
+                      <p className="text-sm font-bold truncate mb-1">{simMovie.title}</p>
+                      <p className="text-xs text-gray-400 line-clamp-3">
+                        {simMovie.description}
                       </p>
                     </div>
                   </div>
                 ))}
+                {similarMovies.length === 0 && (
+                  <p className="text-gray-400 col-span-full text-sm">No similar titles found.</p>
+                )}
               </div>
             </div>
 

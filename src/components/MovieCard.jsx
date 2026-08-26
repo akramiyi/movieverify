@@ -1,44 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Plus, ThumbsUp, ChevronDown, Check } from 'lucide-react';
 
 const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [cardPos, setCardPos] = useState(null);
+  const cardRef = useRef(null);
   const isAddedToList = myList.some((m) => m.id === movie.id);
+
+  const handleMouseEnter = () => {
+    setIsHovered(true);
+    if(cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect();
+      setCardPos({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height
+      });
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+  };
+
+  let transformOrigin = 'center center';
+  if (cardPos) {
+    if (cardPos.left < 100) {
+      transformOrigin = 'left center';
+    } else if (window.innerWidth - (cardPos.left + cardPos.width) < 100) {
+      transformOrigin = 'right center';
+    }
+  }
 
   return (
     <div 
-      className="relative flex-none w-[160px] md:w-[240px] h-[90px] md:h-[135px] cursor-pointer"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      ref={cardRef}
+      className="relative flex-none w-[160px] md:w-[240px] h-[90px] md:h-[135px] cursor-pointer overflow-visible"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       onClick={() => onClick(movie)}
     >
       <img
         src={movie.backdrop || movie.poster}
         alt={movie.title}
         className="w-full h-full object-cover rounded-md"
+        onError={(e) => {
+          e.target.onerror = null;
+          e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(movie.title)}`;
+        }}
       />
       
-      <AnimatePresence>
-        {isHovered && (
+      {isHovered && cardPos && ReactDOM.createPortal(
+        <AnimatePresence>
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1.25 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.3, delay: 0.4 }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full bg-[#181818] rounded-md shadow-2xl z-50 overflow-hidden"
-            style={{ transformOrigin: 'center center' }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={handleMouseLeave}
+            className="bg-[#181818] rounded-md shadow-2xl overflow-hidden"
+            style={{
+              position: 'fixed',
+              top: cardPos.top - 20,
+              left: cardPos.left - (cardPos.width * 0.15),
+              width: cardPos.width * 1.3,
+              zIndex: 999,
+              transformOrigin: transformOrigin,
+            }}
           >
             <div className="relative aspect-video">
               <img
                 src={movie.backdrop || movie.poster}
                 alt={movie.title}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(movie.title)}`;
+                }}
               />
               <div className="absolute inset-0 bg-black/20" />
             </div>
 
-            <div className="p-3 md:p-4">
+            <div className="p-3 md:p-4 text-white">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <button 
@@ -81,8 +128,9 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
               </div>
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 };

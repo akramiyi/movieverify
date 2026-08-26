@@ -21,7 +21,7 @@
   }
 
   .glass-button {
-    @apply relative overflow-hidden bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-all duration-300;
+    @apply bg-[#2a2a2a] hover:bg-[#3a3a3a] transition-all duration-200 border border-white/10;
   }
 
   .glass-input {

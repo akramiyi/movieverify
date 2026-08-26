@@ -21,8 +21,8 @@ const Toast = ({ message, isVisible, onClose }) => {
           exit={{ opacity: 0, y: 20, scale: 0.9 }}
           className="fixed bottom-6 right-6 z-[200]"
         >
-          <div className="glass-panel px-6 py-4 rounded-xl flex items-center gap-3 border-l-4 border-l-primary shadow-2xl">
-            <CheckCircle2 className="w-5 h-5 text-primary" />
+          <div className="glass-panel px-6 py-4 rounded-xl flex items-center gap-3 border-l-4 border-l-[#E50914] shadow-2xl">
+            <CheckCircle2 className="w-5 h-5 text-[#E50914]" />
             <span className="text-white font-medium">{message}</span>
           </div>
         </motion.div>

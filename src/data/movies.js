@@ -195,8 +195,8 @@ export const movies = [
   {
     id: 10,
     title: "Pathaan",
-    poster: "https://image.tmdb.org/t/p/w500/m1bO3Wqgq0v8Y5wG1j5v1R86Z7B.jpg",
-    backdrop: "https://image.tmdb.org/t/p/original/jFzQhE9qE2t0XU5bQG5k9eJ5h5B.jpg",
+    poster: "https://i.pinimg.com/736x/ea/8d/41/ea8d41b73de7cfd3dad4a5b3d74b76d3.jpg",
+    backdrop: "https://i.pinimg.com/736x/0e/4a/e2/0e4ae2a39c09bd56f9a6baab0c52b4b5.jpg",
     year: 2023,
     language: "Hindi",
     quality: "1080p",
@@ -210,8 +210,8 @@ export const movies = [
   {
     id: 11,
     title: "K.G.F: Chapter 2",
-    poster: "https://image.tmdb.org/t/p/w500/b0s2K12y2P3bO1j23K53F3jG43.jpg",
-    backdrop: "https://image.tmdb.org/t/p/original/s1K4d799V5u6E4G6p8N7u3V4F5Q.jpg",
+    poster: "https://i.pinimg.com/736x/5b/8c/a9/5b8ca9f8e6b3c4d2a1f9e8b7c6d5e4f3.jpg",
+    backdrop: "https://i.pinimg.com/736x/a1/b2/c3/a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.jpg",
     year: 2022,
     language: "Kannada, Hindi",
     quality: "4K",
