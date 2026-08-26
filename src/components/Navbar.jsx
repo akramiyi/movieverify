@@ -1,122 +1,81 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Menu, X, Download } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Bell, User } from 'lucide-react';
 
-const Navbar = ({ onSearch, categories, selectedCategory, onSelectCategory }) => {
+const Navbar = ({ onSearch, searchQuery }) => {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
+      if (window.scrollY > 0) {
+        setIsScrolled(true);
+      } else {
+        setIsScrolled(false);
+      }
     };
+
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleSearch = (e) => {
-    setSearchQuery(e.target.value);
-    onSearch(e.target.value);
-  };
-
   return (
-    <>
-      <header 
-        className={`fixed top-0 w-full z-50 transition-all duration-300 ${
-          isScrolled ? 'glass py-3' : 'bg-transparent py-5'
-        }`}
-      >
-        <div className="container mx-auto px-4 md:px-6 flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-2 cursor-pointer">
-            <Download className="text-primary w-8 h-8" />
-            <h1 className="text-2xl font-bold tracking-wider text-glow">
-              Movie<span className="text-primary">Verfy</span>
-            </h1>
+    <nav 
+      className={`fixed top-0 w-full z-50 transition-colors duration-500 ease-in-out ${
+        isScrolled ? 'bg-[#141414]' : 'bg-gradient-to-b from-black/80 to-transparent'
+      }`}
+    >
+      <div className="px-4 md:px-12 py-4 flex items-center justify-between">
+        
+        {/* Left Side - Logo & Links */}
+        <div className="flex items-center gap-8">
+          <div className="text-primary font-extrabold text-2xl tracking-tighter cursor-pointer">
+            MOVIEVERFY
           </div>
-
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-6">
-            {categories.slice(0, 5).map(category => (
-              <button
-                key={category}
-                onClick={() => onSelectCategory(category)}
-                className={`text-sm font-medium transition-colors hover:text-primary ${
-                  selectedCategory === category ? 'text-primary' : 'text-gray-300'
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </nav>
-
-          {/* Search & Actions Desktop */}
-          <div className="hidden md:flex items-center gap-4">
-            <div className="relative group">
-              <input
-                type="text"
-                placeholder="Search movies..."
-                value={searchQuery}
-                onChange={handleSearch}
-                className="glass-input pl-10 pr-4 py-2 rounded-full w-64 text-sm text-gray-200 placeholder-gray-400"
-              />
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
-            </div>
+          
+          <div className="hidden lg:flex items-center gap-5 text-sm font-medium text-gray-300">
+            <a href="#" className="text-white hover:text-gray-300 transition">Home</a>
+            <a href="#" className="hover:text-gray-300 transition">TV Shows</a>
+            <a href="#" className="hover:text-gray-300 transition">Movies</a>
+            <a href="#" className="hover:text-gray-300 transition">New & Popular</a>
+            <a href="#" className="hover:text-gray-300 transition">My List</a>
           </div>
-
-          {/* Mobile Menu Toggle */}
-          <button 
-            className="md:hidden text-gray-200 hover:text-primary transition-colors"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
         </div>
-      </header>
 
-      {/* Mobile Menu Overlay */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-0 z-40 pt-24 px-4 bg-background/95 backdrop-blur-xl md:hidden"
-          >
-            <div className="flex flex-col gap-6">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search movies..."
-                  value={searchQuery}
-                  onChange={handleSearch}
-                  className="glass-input w-full pl-10 pr-4 py-3 rounded-xl text-lg text-gray-200 placeholder-gray-400"
-                />
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              </div>
-              
-              <div className="flex flex-col gap-4">
-                {categories.map(category => (
-                  <button
-                    key={category}
-                    onClick={() => {
-                      onSelectCategory(category);
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`text-xl font-medium text-left py-2 border-b border-white/10 ${
-                      selectedCategory === category ? 'text-primary' : 'text-gray-300'
-                    }`}
-                  >
-                    {category}
-                  </button>
-                ))}
-              </div>
+        {/* Right Side - Search & Profile */}
+        <div className="flex items-center gap-6">
+          <div className={`flex items-center transition-all duration-300 ${isSearchExpanded ? 'bg-black/80 border border-white/80 px-2 py-1' : 'bg-transparent'}`}>
+            <button 
+              onClick={() => setIsSearchExpanded(!isSearchExpanded)}
+              className="text-white focus:outline-none"
+            >
+              <Search className="w-5 h-5 md:w-6 md:h-6" />
+            </button>
+            <input 
+              type="text"
+              placeholder="Titles, people, genres"
+              value={searchQuery}
+              onChange={(e) => {
+                if(!isSearchExpanded) setIsSearchExpanded(true);
+                onSearch(e.target.value);
+              }}
+              className={`bg-transparent text-white text-sm outline-none transition-all duration-300 ${isSearchExpanded ? 'w-48 md:w-64 ml-2 opacity-100' : 'w-0 opacity-0'}`}
+            />
+          </div>
+          
+          <button className="text-white hidden sm:block">
+            <Bell className="w-5 h-5 md:w-6 md:h-6" />
+          </button>
+          
+          <div className="flex items-center gap-2 cursor-pointer">
+            <div className="w-8 h-8 rounded bg-blue-600 flex items-center justify-center text-white">
+              <User className="w-5 h-5" />
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+            <span className="hidden sm:block text-white text-xs">&#9662;</span>
+          </div>
+        </div>
+        
+      </div>
+    </nav>
   );
 };
 

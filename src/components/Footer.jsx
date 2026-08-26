@@ -1,84 +1,55 @@
 import React from 'react';
-import { Download, Heart, Tv2, Send, Globe } from 'lucide-react';
 
 const Footer = () => {
   return (
-    <footer className="relative mt-20 border-t border-white/10 bg-background pt-16 pb-8 overflow-hidden">
-      {/* Background Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1/2 bg-primary/10 blur-[120px] rounded-full pointer-events-none" />
-
-      <div className="container mx-auto px-4 md:px-6 relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
-          
-          {/* Brand */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Download className="text-primary w-8 h-8" />
-              <h2 className="text-2xl font-bold tracking-wider">
-                Movie<span className="text-primary">Verfy</span>
-              </h2>
-            </div>
-            <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
-              Your ultimate destination for downloading premium movies and web series in stunning high definition quality. Experience cinema like never before.
-            </p>
-          </div>
-
-          {/* Quick Links */}
-          <div>
-            <h3 className="text-white font-bold mb-6 text-lg">Quick Links</h3>
-            <ul className="space-y-3">
-              {['Home', 'Latest Releases', 'Request Movie', 'DMCA', 'Contact Us'].map((link) => (
-                <li key={link}>
-                  <a href="#" className="text-gray-400 hover:text-primary transition-colors text-sm flex items-center gap-2 before:content-[''] before:w-1.5 before:h-1.5 before:bg-primary/50 before:rounded-full before:transition-all hover:before:bg-primary hover:before:scale-150">
-                    {link}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Categories */}
-          <div>
-            <h3 className="text-white font-bold mb-6 text-lg">Top Categories</h3>
-            <ul className="space-y-3">
-              {['Bollywood', 'Hollywood', 'South Indian', 'Web Series', 'Anime'].map((cat) => (
-                <li key={cat}>
-                  <a href="#" className="text-gray-400 hover:text-primary transition-colors text-sm flex items-center gap-2 before:content-[''] before:w-1.5 before:h-1.5 before:bg-secondary/50 before:rounded-full before:transition-all hover:before:bg-secondary hover:before:scale-150">
-                    {cat}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Social */}
-          <div>
-            <h3 className="text-white font-bold mb-6 text-lg">Connect With Us</h3>
-            <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 rounded-full glass hover:bg-white/10 flex items-center justify-center text-gray-300 hover:text-red-500 transition-colors group">
-                <Tv2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              </a>
-              <a href="#" className="w-10 h-10 rounded-full glass hover:bg-white/10 flex items-center justify-center text-gray-300 hover:text-blue-400 transition-colors group">
-                <Send className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              </a>
-              <a href="#" className="w-10 h-10 rounded-full glass hover:bg-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-colors group">
-                <Globe className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              </a>
-            </div>
-            <p className="text-gray-500 text-xs mt-6">
-              Join our Telegram channel for the fastest updates and direct links.
-            </p>
-          </div>
+    <footer className="w-full bg-[#141414] text-gray-500 py-12 px-4 md:px-16 mt-20">
+      <div className="max-w-6xl mx-auto">
+        {/* Social Links */}
+        <div className="flex items-center gap-6 mb-8 text-white">
+          {/* Facebook inline SVG */}
+          <svg className="w-6 h-6 hover:text-gray-300 cursor-pointer transition fill-current" viewBox="0 0 24 24">
+            <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c4.56-.93 8-4.96 8-9.8z"/>
+          </svg>
+          {/* Instagram inline SVG */}
+          <svg className="w-6 h-6 hover:text-gray-300 cursor-pointer transition fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+          </svg>
+          {/* Twitter inline SVG */}
+          <svg className="w-6 h-6 hover:text-gray-300 cursor-pointer transition fill-current" viewBox="0 0 24 24">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+          </svg>
+          {/* YouTube inline SVG */}
+          <svg className="w-6 h-6 hover:text-gray-300 cursor-pointer transition fill-current" viewBox="0 0 24 24">
+            <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.108C19.527 3.545 12 3.545 12 3.545s-7.527 0-9.388.51a3.003 3.003 0 0 0-2.11 2.108C0 8.024 0 12 0 12s0 3.976.502 5.837a3.003 3.003 0 0 0 2.11 2.108c1.86.51 9.388.51 9.388.51s7.527 0 9.388-.51a3.003 3.003 0 0 0 2.11-2.108c.502-1.86.502-5.837.502-5.837s0-3.976-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+          </svg>
         </div>
 
-        {/* Bottom */}
-        <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-gray-500 text-sm">
-            © {new Date().getFullYear()} MovieVerfy. All rights reserved.
-          </p>
-          <p className="text-gray-500 text-sm flex items-center gap-1">
-            Made with <Heart className="w-4 h-4 text-red-500" /> for movie lovers
-          </p>
+        {/* Links Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-sm">
+          <a href="#" className="hover:underline">Audio Description</a>
+          <a href="#" className="hover:underline">Help Center</a>
+          <a href="#" className="hover:underline">Gift Cards</a>
+          <a href="#" className="hover:underline">Media Center</a>
+          <a href="#" className="hover:underline">Investor Relations</a>
+          <a href="#" className="hover:underline">Jobs</a>
+          <a href="#" className="hover:underline">Terms of Use</a>
+          <a href="#" className="hover:underline">Privacy</a>
+          <a href="#" className="hover:underline">Legal Notices</a>
+          <a href="#" className="hover:underline">Cookie Preferences</a>
+          <a href="#" className="hover:underline">Corporate Information</a>
+          <a href="#" className="hover:underline">Contact Us</a>
+        </div>
+
+        {/* Service Code Button */}
+        <button className="border border-gray-500 text-gray-500 px-2 py-1 text-sm hover:text-gray-400 hover:border-gray-400 transition mb-6">
+          Service Code
+        </button>
+
+        {/* Copyright */}
+        <div className="text-xs">
+          © 2024-2026 MovieVerfy, Inc.
         </div>
       </div>
     </footer>

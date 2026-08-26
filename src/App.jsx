@@ -1,155 +1,143 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from './components/Navbar';
-import Hero from './components/Hero';
 import FeaturedCarousel from './components/FeaturedCarousel';
-import CategoryFilter from './components/CategoryFilter';
-import MovieGrid from './components/MovieGrid';
+import MovieRow from './components/MovieRow';
 import MovieDetailsModal from './components/MovieDetailsModal';
 import Footer from './components/Footer';
-import Toast from './components/Toast';
-import { movies, getFeaturedMovies, getMoviesByCategory, getLatestMovies, getTrendingMovies } from './data/movies';
-
-const categories = ['All', 'Bollywood', 'Hollywood', 'South Indian', 'Web Series', 'Action', 'Sci-Fi'];
+import { movies, getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
 
 function App() {
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedMovie, setSelectedMovie] = useState(null);
-  const [toastMessage, setToastMessage] = useState('');
-  const [isToastVisible, setIsToastVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [myList, setMyList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('movieverify_mylist');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to load My List from localStorage:', e);
+      return [];
+    }
+  });
 
   const featuredMovies = getFeaturedMovies();
+  const trendingMovies = getTrendingMovies();
+  const bollywoodMovies = getMoviesByCategory('Bollywood');
+  const southIndianMovies = getMoviesByCategory('South Indian');
+  const webSeries = getMoviesByCategory('Web Series');
+  const actionMovies = getMoviesByCategory('Action');
 
-  // Fake loading screen
   useEffect(() => {
+    // Snappy loading screen
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 1500);
+    }, 1200);
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSearch = (query) => {
-    setSearchQuery(query);
+  const toggleMyList = (movie) => {
+    if (!movie) return;
+    setMyList((prev) => {
+      const exists = prev.some((m) => m.id === movie.id);
+      let updated;
+      if (exists) {
+        updated = prev.filter((m) => m.id !== movie.id);
+      } else {
+        updated = [...prev, movie];
+      }
+      try {
+        localStorage.setItem('movieverify_mylist', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to save My List to localStorage:', e);
+      }
+      return updated;
+    });
   };
 
-  const showToast = (message) => {
-    setToastMessage(message);
-    setIsToastVisible(true);
-  };
-
-  const scrollToMovies = () => {
-    const element = document.getElementById('movie-section');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
-  // Filter movies based on category and search query
-  const filteredMovies = useMemo(() => {
-    let result = getMoviesByCategory(selectedCategory);
-    
-    if (searchQuery.trim() !== '') {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(m => 
-        m.title.toLowerCase().includes(query) || 
-        m.genre.toLowerCase().includes(query)
-      );
-    }
-    
-    return result;
-  }, [selectedCategory, searchQuery]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
-        <motion.div
-          animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-          className="w-20 h-20 bg-primary/20 rounded-full flex items-center justify-center blur-md absolute"
-        />
-        <h1 className="text-4xl font-bold tracking-wider text-glow relative z-10">
-          Movie<span className="text-primary">Verfy</span>
-        </h1>
-        <div className="mt-8 w-48 h-1 bg-white/10 rounded-full overflow-hidden">
-          <motion.div 
-            initial={{ x: '-100%' }}
-            animate={{ x: '100%' }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-1/2 h-full bg-primary"
-          />
-        </div>
-      </div>
-    );
-  }
+  // Filter movies for search
+  const allFilteredMovies = movies.filter(m => 
+    m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    m.genre.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen bg-background text-gray-200 font-sans selection:bg-primary/30">
-      <Navbar 
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
-        onSearch={handleSearch}
-      />
+    <div className="min-h-screen bg-[#141414] text-white">
+      <AnimatePresence>
+        {isLoading && (
+          <motion.div 
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+            className="fixed inset-0 z-[100] bg-[#141414] flex items-center justify-center"
+          >
+            {/* Netflix style loading spinner */}
+            <div className="w-16 h-16 border-4 border-t-primary border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <main className="pb-20">
-        {!searchQuery && <Hero onExplore={scrollToMovies} />}
+      <Navbar onSearch={setSearchQuery} searchQuery={searchQuery} />
 
-        <div id="movie-section" className="container mx-auto px-4 md:px-6 pt-24">
-          
-          {/* Show Featured Movie only when not searching and on 'All' category */}
-          {!searchQuery && selectedCategory === 'All' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-            >
+      <main className="pb-20 min-h-screen">
+        {!searchQuery ? (
+          <>
+            {isLoading ? (
+              <div className="relative w-full h-[80vh] md:h-[90vh] bg-[#181818] animate-pulse overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
+              </div>
+            ) : (
               <FeaturedCarousel 
                 movies={featuredMovies}
                 onPlayTrailer={setSelectedMovie}
-                onDownload={setSelectedMovie}
               />
-            </motion.div>
-          )}
+            )}
+            
+            <div className="relative z-20 -mt-24 md:-mt-32 pb-10">
+              {/* Render My List row if user has saved items */}
+              {myList.length > 0 && (
+                <MovieRow 
+                  title="My List" 
+                  movies={myList} 
+                  onMovieClick={setSelectedMovie} 
+                  isLoading={isLoading} 
+                  myList={myList} 
+                  onToggleMyList={toggleMyList} 
+                />
+              )}
 
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
-            <div>
-              <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">
-                {searchQuery ? `Search Results for "${searchQuery}"` : 
-                 selectedCategory === 'All' ? 'Trending Movies' : `${selectedCategory} Movies`}
-              </h2>
-              <p className="text-gray-400 text-sm">
-                Discover the best movies and web series in high quality.
-              </p>
+              <MovieRow title="Trending Now" movies={trendingMovies} onMovieClick={setSelectedMovie} isLoading={isLoading} myList={myList} onToggleMyList={toggleMyList} />
+              <MovieRow title="Bollywood Hits" movies={bollywoodMovies} onMovieClick={setSelectedMovie} isLoading={isLoading} myList={myList} onToggleMyList={toggleMyList} />
+              <MovieRow title="South Indian Action" movies={southIndianMovies} onMovieClick={setSelectedMovie} isLoading={isLoading} myList={myList} onToggleMyList={toggleMyList} />
+              <MovieRow title="Web Series" movies={webSeries} onMovieClick={setSelectedMovie} isLoading={isLoading} myList={myList} onToggleMyList={toggleMyList} />
+              <MovieRow title="Action Movies" movies={actionMovies} onMovieClick={setSelectedMovie} isLoading={isLoading} myList={myList} onToggleMyList={toggleMyList} />
+            </div>
+          </>
+        ) : (
+          <div className="pt-32 px-4 md:px-12">
+            <h2 className="text-2xl font-bold mb-6">Search Results for "{searchQuery}"</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {allFilteredMovies.map(movie => (
+                <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="cursor-pointer hover:scale-105 transition">
+                  <img src={movie.poster} alt={movie.title} className="w-full h-auto rounded-md" />
+                </div>
+              ))}
+              {allFilteredMovies.length === 0 && (
+                <p className="text-gray-400 col-span-full">No titles found.</p>
+              )}
             </div>
           </div>
-
-          <CategoryFilter 
-            categories={categories}
-            selectedCategory={selectedCategory}
-            onSelectCategory={setSelectedCategory}
-          />
-
-          <MovieGrid 
-            movies={filteredMovies} 
-            onMovieClick={setSelectedMovie}
-          />
-        </div>
+        )}
       </main>
 
       <Footer />
 
       <MovieDetailsModal 
         movie={selectedMovie} 
+        isOpen={!!selectedMovie} 
         onClose={() => setSelectedMovie(null)} 
-        onShowToast={showToast}
-      />
-
-      <Toast 
-        message={toastMessage} 
-        isVisible={isToastVisible} 
-        onClose={() => setIsToastVisible(false)} 
+        myList={myList}
+        onToggleMyList={toggleMyList}
       />
     </div>
   );

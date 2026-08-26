@@ -11,44 +11,53 @@
 
 @layer components {
 
-  /* Glassmorphism Utilities */
+  /* Netflix Style Utilities */
   .glass {
-    @apply bg-card backdrop-blur-md border border-white/10 shadow-[0_4px_30px_rgba(0, 0, 0, 0.1)];
+    @apply bg-black/80 backdrop-blur-md border border-white/10;
   }
 
   .glass-panel {
-    @apply bg-white/5 backdrop-blur-lg border border-white/10 shadow-[0_8px_32px_rgba(0, 0, 0, 0.37)];
+    @apply bg-[#181818] border border-white/5 shadow-2xl;
   }
 
   .glass-button {
-    @apply relative overflow-hidden bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all duration-300 shadow-[0_4px_15px_rgba(0, 0, 0, 0.2)] hover:shadow-[0_0_15px_rgba(59, 130, 246, 0.5)];
+    @apply relative overflow-hidden bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-all duration-300;
   }
 
   .glass-input {
-    @apply bg-black/40 backdrop-blur-md border border-white/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300;
+    @apply bg-black/60 backdrop-blur-md border border-white/30 focus:border-white focus:bg-black/80 outline-none transition-all duration-300 text-white;
   }
 
-  /* Neon text effects */
+  /* Remove neon glows, keep simple shadows */
   .text-glow {
-    text-shadow: 0 0 10px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.3);
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
   }
 
   .text-glow-purple {
-    text-shadow: 0 0 10px rgba(139, 92, 246, 0.5), 0 0 20px rgba(139, 92, 246, 0.3);
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
   }
 
-  /* Scrollbar styling */
+  /* Custom Scrollbar for Rows */
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Main Scrollbar */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-background;
+    @apply bg-black;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-white/20 rounded-full hover:bg-white/30 transition-colors;
+    @apply bg-[#333] hover:bg-[#555] transition-colors rounded-none;
   }
 }
 

@@ -7,12 +7,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#05050f', // Very dark blue/black
-        card: 'rgba(255, 255, 255, 0.05)',
-        'card-hover': 'rgba(255, 255, 255, 0.1)',
-        primary: '#3b82f6', // Blue
-        secondary: '#8b5cf6', // Purple
-        accent: '#06b6d4', // Cyan
+        background: '#141414', // Netflix dark grey/black
+        card: '#181818',
+        'card-hover': '#2f2f2f',
+        primary: '#E50914', // Netflix Red
+        secondary: '#b81d24',
+        accent: '#ffffff',
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
