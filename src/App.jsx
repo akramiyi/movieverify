@@ -2,13 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
-import FeaturedMovie from './components/FeaturedMovie';
+import FeaturedCarousel from './components/FeaturedCarousel';
 import CategoryFilter from './components/CategoryFilter';
 import MovieGrid from './components/MovieGrid';
 import MovieDetailsModal from './components/MovieDetailsModal';
 import Footer from './components/Footer';
 import Toast from './components/Toast';
-import { movies, getFeaturedMovie, getLatestMovies, getMoviesByCategory } from './data/movies';
+import { movies, getFeaturedMovies, getMoviesByCategory, getLatestMovies, getTrendingMovies } from './data/movies';
 
 const categories = ['All', 'Bollywood', 'Hollywood', 'South Indian', 'Web Series', 'Action', 'Sci-Fi'];
 
@@ -20,7 +20,7 @@ function App() {
   const [isToastVisible, setIsToastVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const featuredMovie = getFeaturedMovie();
+  const featuredMovies = getFeaturedMovies();
 
   // Fake loading screen
   useEffect(() => {
@@ -105,9 +105,10 @@ function App() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
             >
-              <FeaturedMovie 
-                movie={featuredMovie} 
-                onDownloadClick={setSelectedMovie}
+              <FeaturedCarousel 
+                movies={featuredMovies}
+                onPlayTrailer={setSelectedMovie}
+                onDownload={setSelectedMovie}
               />
             </motion.div>
           )}

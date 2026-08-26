@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Heart, Youtube, Send, Globe } from 'lucide-react';
+import { Download, Heart, Tv2, Send, Globe } from 'lucide-react';
 
 const Footer = () => {
   return (
@@ -56,7 +56,7 @@ const Footer = () => {
             <h3 className="text-white font-bold mb-6 text-lg">Connect With Us</h3>
             <div className="flex gap-4">
               <a href="#" className="w-10 h-10 rounded-full glass hover:bg-white/10 flex items-center justify-center text-gray-300 hover:text-red-500 transition-colors group">
-                <Youtube className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                <Tv2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
               </a>
               <a href="#" className="w-10 h-10 rounded-full glass hover:bg-white/10 flex items-center justify-center text-gray-300 hover:text-blue-400 transition-colors group">
                 <Send className="w-5 h-5 group-hover:scale-110 transition-transform" />

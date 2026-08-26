@@ -51,9 +51,13 @@ const MovieDetailsModal = ({ movie, onClose, onShowToast }) => {
     }
   };
 
-  const handleDownload = (quality) => {
-    onShowToast(`Starting ${quality} download...`);
-    // In a real app, this would trigger the actual download
+  const handleDownload = (quality, url) => {
+    if (url && url !== '#') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      onShowToast(`Started ${quality} download...`);
+    } else {
+      onShowToast(`Sorry, ${quality} link is not available yet.`);
+    }
   };
 
   return (
@@ -164,40 +168,63 @@ const MovieDetailsModal = ({ movie, onClose, onShowToast }) => {
             {/* Download Options */}
             <div className="mt-auto">
               <h3 className="text-lg font-semibold text-white mb-4">Download Options</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <button 
-                  onClick={() => handleDownload('480p')}
-                  className="flex flex-col items-center justify-center p-4 rounded-2xl glass-button group"
-                >
-                  <span className="text-xl font-bold text-white mb-1 group-hover:text-primary transition-colors">480p</span>
-                  <span className="text-xs text-gray-400 mb-3">~ 500 MB</span>
-                  <div className="flex items-center gap-1 text-primary font-medium text-sm">
-                    <Download className="w-4 h-4" /> Download
-                  </div>
-                </button>
-                
-                <button 
-                  onClick={() => handleDownload('720p')}
-                  className="flex flex-col items-center justify-center p-4 rounded-2xl glass-button group border-primary/30 bg-primary/5"
-                >
-                  <span className="text-xl font-bold text-white mb-1 group-hover:text-primary transition-colors">720p</span>
-                  <span className="text-xs text-gray-400 mb-3">~ 1.2 GB</span>
-                  <div className="flex items-center gap-1 text-primary font-medium text-sm">
-                    <Download className="w-4 h-4" /> Download
-                  </div>
-                </button>
+              
+              {movie.seasons ? (
+                <div className="flex flex-col gap-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                  {movie.seasons.map((s, idx) => (
+                    <div key={idx} className="glass-panel p-4 rounded-2xl border border-white/5">
+                      <h4 className="text-primary font-bold mb-3">Season {s.season}</h4>
+                      <div className="flex flex-col gap-3">
+                        {s.parts.map((part, pIdx) => (
+                          <div key={pIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/20 p-3 rounded-xl">
+                            <span className="text-white font-medium">{part.name}</span>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => handleDownload('480p', part.download480p)} className="px-3 py-1.5 text-xs font-semibold glass-button text-gray-300 hover:text-white rounded-lg border-white/10">480p</button>
+                              <button onClick={() => handleDownload('720p', part.download720p)} className="px-3 py-1.5 text-xs font-semibold glass-button text-primary border-primary/30 rounded-lg bg-primary/5">720p</button>
+                              <button onClick={() => handleDownload('1080p', part.download1080p)} className="px-3 py-1.5 text-xs font-semibold glass-button text-secondary border-secondary/30 rounded-lg bg-secondary/5">1080p</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <button 
+                    onClick={() => handleDownload('480p', movie.download480p)}
+                    className="flex flex-col items-center justify-center p-4 rounded-2xl glass-button group"
+                  >
+                    <span className="text-xl font-bold text-white mb-1 group-hover:text-primary transition-colors">480p</span>
+                    <span className="text-xs text-gray-400 mb-3">~ 500 MB</span>
+                    <div className="flex items-center gap-1 text-primary font-medium text-sm">
+                      <Download className="w-4 h-4" /> Download
+                    </div>
+                  </button>
+                  
+                  <button 
+                    onClick={() => handleDownload('720p', movie.download720p)}
+                    className="flex flex-col items-center justify-center p-4 rounded-2xl glass-button group border-primary/30 bg-primary/5"
+                  >
+                    <span className="text-xl font-bold text-white mb-1 group-hover:text-primary transition-colors">720p</span>
+                    <span className="text-xs text-gray-400 mb-3">~ 1.2 GB</span>
+                    <div className="flex items-center gap-1 text-primary font-medium text-sm">
+                      <Download className="w-4 h-4" /> Download
+                    </div>
+                  </button>
 
-                <button 
-                  onClick={() => handleDownload('1080p')}
-                  className="flex flex-col items-center justify-center p-4 rounded-2xl glass-button group"
-                >
-                  <span className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary mb-1">1080p</span>
-                  <span className="text-xs text-gray-400 mb-3">~ 2.5 GB</span>
-                  <div className="flex items-center gap-1 text-primary font-medium text-sm">
-                    <Download className="w-4 h-4" /> Download
-                  </div>
-                </button>
-              </div>
+                  <button 
+                    onClick={() => handleDownload('1080p', movie.download1080p)}
+                    className="flex flex-col items-center justify-center p-4 rounded-2xl glass-button group"
+                  >
+                    <span className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary mb-1">1080p</span>
+                    <span className="text-xs text-gray-400 mb-3">~ 2.5 GB</span>
+                    <div className="flex items-center gap-1 text-primary font-medium text-sm">
+                      <Download className="w-4 h-4" /> Download
+                    </div>
+                  </button>
+                </div>
+              )}
 
               {/* Watch Online Button */}
               <button className="w-full mt-4 py-4 rounded-2xl border border-white/10 hover:border-white/30 bg-white/5 hover:bg-white/10 transition-all text-white font-semibold flex items-center justify-center gap-2">

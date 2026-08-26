@@ -41,8 +41,9 @@ const Hero = ({ onExplore }) => {
             </span>
           </h1>
           
-          <p className="text-lg md:text-2xl text-gray-400 mb-10 max-w-2xl mx-auto font-light">
-            Your Next Movie Starts Here. Download premium movies and web series in stunning 4K and 1080p quality.
+          <p className="text-lg md:text-2xl text-gray-300 mb-10 max-w-3xl mx-auto font-light leading-relaxed">
+            Experience seamless entertainment. Get <span className="text-white font-semibold">1-Click Direct Downloads</span> with <span className="text-white font-semibold">Zero Ads</span>. 
+            Enjoy 100% verified, premium movies and web series in stunning 4K and 1080p quality. No popups, no redirects—just pure cinema.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

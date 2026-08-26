@@ -1,19 +1,19 @@
 export const movies = [
   {
     id: 1,
-    title: "Interstellar",
-    poster: "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
-    backdrop: "https://image.tmdb.org/t/p/original/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg",
-    year: 2014,
+    title: "Casino",
+    poster: "https://i.pinimg.com/1200x/2d/1c/11/2d1c1188f23bdb03497c197b991f3cf4.jpg",
+    backdrop: "https://i.pinimg.com/1200x/bd/b7/ea/bdb7eafd236465a47f60cf8df8c9a1b9.jpg",
+    year: 1995,
     language: "English",
     quality: "1080p",
-    genre: "Sci-Fi",
-    rating: 8.6,
-    description: "A team of explorers travel through a wormhole in space in an attempt to ensure humanity's survival.",
-    trailerUrl: "https://www.youtube.com/watch?v=zSWdZVtXT7E",
-    download480p: "#",
-    download720p: "#",
-    download1080p: "#",
+    genre: "Hollywood, Crime, Drama",
+    rating: 8.2,
+    description: "Casino is a 1995 epic biographical gangster film directed by Martin Scorsese, marking his eighth legendary collaboration with Robert De Niro. Adapted from Nicholas Pileggi's non-fiction book Casino: Love and Honor in Las Vegas, the film meticulously chronicles the multi-million dollar, mob-controlled gaming empire of Las Vegas during the 1970s and 1980s.",
+    trailerUrl: "https://www.youtube.com/watch?v=EJXDMwGWhoA",
+    download480p: "https://new3.gdflix.io/file/2OzALiJpdMPqaD8QwJZf",
+    download720p: "https://new3.gdflix.io/file/2OzALiJpdMPqaD8QwJZf",
+    download1080p: "https://new3.gdflix.io/file/2OzALiJpdMPqaD8QwJZf",
     featured: true,
     trending: true,
     latest: false
@@ -40,26 +40,26 @@ export const movies = [
   {
     id: 3,
     title: "Jawan",
-    poster: "https://image.tmdb.org/t/p/w500/jILeVkOBfQxJb950nE334a1W4T.jpg",
-    backdrop: "https://image.tmdb.org/t/p/original/1X7vow16X7CnCoexXh4H4F2yDJv.jpg",
+    poster: "https://i.pinimg.com/1200x/ad/61/d3/ad61d3fcb78a53c6ad76502441fdfa9b.jpg",
+    backdrop: "https://i.pinimg.com/736x/86/6a/8f/866a8fcac5f6a6473f69d7517f32e543.jpg",
     year: 2023,
     language: "Hindi",
     quality: "1080p",
     genre: "Bollywood",
     rating: 7.5,
     description: "A high-octane action thriller which outlines the emotional journey of a man who is set to rectify the wrongs in the society.",
-    trailerUrl: "#",
-    download480p: "#",
-    download720p: "#",
-    download1080p: "#",
-    featured: false,
+    trailerUrl: "https://youtu.be/MWOlnZSnXJo?si=-Z-5GH40985ynvby",
+    download480p: "https://new6.filesdl.top/cloud/9cvFSjXqm44N3Sg",
+    download720p: "https://new6.filesdl.top/cloud/yZuSSdcu3l1LwXS",
+    download1080p: "https://new6.filesdl.top/cloud/V4C1XTfnHU",
+    featured: true,
     trending: true,
     latest: true
   },
   {
     id: 4,
     title: "Salaar",
-    poster: "https://image.tmdb.org/t/p/w500/c7aM3xWbsoA6m6R5pZID9104GZ6.jpg",
+    poster: "https://i.pinimg.com/736x/2d/11/4f/2d114fe3f4910255e02ffe2fd8ecd8c0.jpg",
     backdrop: "https://image.tmdb.org/t/p/original/2wA3mGj6P6Fz8lYjY6H3O5I2K7h.jpg",
     year: 2023,
     language: "Telugu, Hindi",
@@ -68,9 +68,9 @@ export const movies = [
     rating: 7.1,
     description: "A gang leader tries to keep a promise made to his dying friend and takes on the other criminal gangs.",
     trailerUrl: "#",
-    download480p: "#",
-    download720p: "#",
-    download1080p: "#",
+    download480p: "https://new6.filesdl.top/cloud/ZcFv0mVra1",
+    download720p: "https://new6.filesdl.top/cloud/noiu3BP8w9",
+    download1080p: "https://new6.filesdl.top/cloud/g01NLJdyFh",
     featured: false,
     trending: false,
     latest: true
@@ -78,7 +78,7 @@ export const movies = [
   {
     id: 5,
     title: "The Boys",
-    poster: "https://image.tmdb.org/t/p/w500/7Ns6tOqsT7h2R5F6L8A6L6F45t.jpg",
+    poster: "https://i.pinimg.com/736x/8d/7a/1b/8d7a1b6f0974fa398194fe8cef50231f.jpg",
     backdrop: "https://image.tmdb.org/t/p/original/mGVrXeIjyecj6TKmwOQ0N3e1W5Z.jpg",
     year: 2024,
     language: "English, Hindi",
@@ -86,17 +86,70 @@ export const movies = [
     genre: "Web Series",
     rating: 8.7,
     description: "A group of vigilantes set out to take down corrupt superheroes who abuse their superpowers.",
+    trailerUrl: "https://youtu.be/M1bhOaLV4FU?si=H6GiNU0zjoEsOnBH",
+    seasons: [
+      {
+        season: 1,
+        parts: [
+          { name: "Part 1", download480p: "https://new6.filesdl.top/cloud/Qz5ubPAu7bs51QU", download720p: "https://new6.filesdl.top/cloud/Qz5ubPAu7bs51QU", download1080p: "https://new6.filesdl.top/cloud/Qz5ubPAu7bs51QU" },
+          { name: "Part 2", download480p: "https://new6.filesdl.top/cloud/rFnXwgIHJXZHpEE", download720p: "https://new6.filesdl.top/cloud/rFnXwgIHJXZHpEE", download1080p: "https://new6.filesdl.top/cloud/rFnXwgIHJXZHpEE" }
+        ]
+      },
+      {
+        season: 2,
+        parts: [
+          { name: "Part 1", download480p: "https://new6.filesdl.top/cloud/EKFm2MmmeLtHv13", download720p: "https://new6.filesdl.top/cloud/EKFm2MmmeLtHv13", download1080p: "https://new6.filesdl.top/cloud/EKFm2MmmeLtHv13" },
+          { name: "Part 2", download480p: "https://new6.filesdl.top/cloud/HQQGsT46UbpSbCB", download720p: "https://new6.filesdl.top/cloud/HQQGsT46UbpSbCB", download1080p: "https://new6.filesdl.top/cloud/HQQGsT46UbpSbCB" }
+        ]
+      },
+      {
+        season: 3,
+        parts: [
+          { name: "Part 1", download480p: "https://new6.filesdl.top/cloud/Davq6QyNZVNMgpf", download720p: "https://new6.filesdl.top/cloud/Davq6QyNZVNMgpf", download1080p: "https://new6.filesdl.top/cloud/Davq6QyNZVNMgpf" },
+          { name: "Part 2", download480p: "https://new6.filesdl.top/cloud/HLBrdjO9nqbmZei", download720p: "https://new6.filesdl.top/cloud/HLBrdjO9nqbmZei", download1080p: "https://new6.filesdl.top/cloud/HLBrdjO9nqbmZei" }
+        ]
+      },
+      {
+        season: 4,
+        parts: [
+          { name: "Part 1", download480p: "https://new6.filesdl.top/cloud/wIvpYdiZru", download720p: "https://new6.filesdl.top/cloud/wIvpYdiZru", download1080p: "https://new6.filesdl.top/cloud/wIvpYdiZru" },
+          { name: "Part 2", download480p: "https://new6.filesdl.top/cloud/7USzqsuXW5", download720p: "https://new6.filesdl.top/cloud/7USzqsuXW5", download1080p: "https://new6.filesdl.top/cloud/7USzqsuXW5" }
+        ]
+      },
+      {
+        season: 5,
+        parts: [
+          { name: "Part 1", download480p: "https://new6.filesdl.top/cloud/2RHkZQen8b", download720p: "https://new6.filesdl.top/cloud/2RHkZQen8b", download1080p: "https://new6.filesdl.top/cloud/2RHkZQen8b" },
+          { name: "Part 2", download480p: "https://new6.filesdl.top/cloud/BTsM7ERCXS", download720p: "https://new6.filesdl.top/cloud/BTsM7ERCXS", download1080p: "https://new6.filesdl.top/cloud/BTsM7ERCXS" }
+        ]
+      }
+    ],
+    featured: false,
+    trending: true,
+    latest: true
+  },
+  {
+    id: 6,
+    title: "Toxic",
+    poster: "https://i.pinimg.com/736x/ae/a6/4a/aea64a004592a797f36cf88e3bc6c0c4.jpg",
+    backdrop: "https://i.pinimg.com/736x/ae/a6/4a/aea64a004592a797f36cf88e3bc6c0c4.jpg",
+    year: 2025,
+    language: "Kannada, Hindi",
+    quality: "TBA",
+    genre: "Action, Crime",
+    rating: "NR",
+    description: "A fairy tale for grown-ups. An upcoming Indian action thriller film directed by Geetu Mohandas starring Yash.",
     trailerUrl: "#",
     download480p: "#",
     download720p: "#",
     download1080p: "#",
-    featured: false,
+    featured: true,
     trending: true,
     latest: true
   }
 ];
 
-export const getFeaturedMovie = () => movies.find(m => m.featured);
+export const getFeaturedMovies = () => movies.filter(m => m.featured);
 export const getTrendingMovies = () => movies.filter(m => m.trending);
 export const getLatestMovies = () => movies.filter(m => m.latest);
 export const getMoviesByCategory = (category) => {
