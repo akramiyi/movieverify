@@ -37,8 +37,13 @@ const Navbar = ({ onSearch, searchQuery }) => {
             {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
 
-          <div className="text-primary font-extrabold text-xl md:text-2xl tracking-tighter cursor-pointer">
-            MOVIEVERFY
+          <div className="flex items-center gap-1.5 cursor-pointer select-none font-black text-lg md:text-2xl">
+            <div className="flex items-center justify-center w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-[#FF3445] to-[#E50914] rounded-md shadow-[0_0_10px_rgba(229,9,20,0.5)] text-white text-sm md:text-base font-black">
+              M
+            </div>
+            <span className="text-white tracking-tighter font-sans uppercase">
+              Ovie<span className="text-[#E50914]">verify</span>
+            </span>
           </div>
           
           <div className="hidden lg:flex items-center gap-5 text-sm font-medium text-gray-300">

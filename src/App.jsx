@@ -6,8 +6,13 @@ import MovieRow from './components/MovieRow';
 import MovieDetailsModal from './components/MovieDetailsModal';
 import Footer from './components/Footer';
 import { movies, getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
+import IntroAnimation from './components/IntroAnimation';
 
 function App() {
+  const [showIntro, setShowIntro] = useState(() => {
+    // return !sessionStorage.getItem('introShown');
+    return true; // For testing on refresh
+  });
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +65,10 @@ function App() {
     m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     m.genre.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (showIntro) {
+    return <IntroAnimation onComplete={() => setShowIntro(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-[#141414] text-white">

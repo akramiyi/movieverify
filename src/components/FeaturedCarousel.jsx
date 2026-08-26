@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Plus, Info } from 'lucide-react';
+import { Download, Plus, Info, Play } from 'lucide-react';
 
 const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -33,7 +33,17 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
             className="absolute inset-0 w-full h-full object-cover scale-105"
             src={currentMovie.backdrop || currentMovie.poster}
             alt={currentMovie.title}
-            onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/500x750/141414/E50914?text=MovieVerfy' }}
+            onError={(e) => {
+              if (!e.target.dataset.triedFallback) {
+                e.target.dataset.triedFallback = 'true';
+                if (currentMovie.poster) {
+                  e.target.src = currentMovie.poster;
+                  return;
+                }
+              }
+              e.target.onerror = null;
+              e.target.src = 'https://via.placeholder.com/500x750/141414/E50914?text=MovieVerfy';
+            }}
           />
           
           {/* Netflix signature dark gradients */}
@@ -81,11 +91,17 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
                   Download
                 </button>
                 <button 
-                  onClick={() => onPlayTrailer(currentMovie)}
+                  onClick={() => {
+                    if (currentMovie.trailerUrl && currentMovie.trailerUrl !== '#') {
+                      window.open(currentMovie.trailerUrl, '_blank');
+                    } else {
+                      alert('Trailer link is not available yet.');
+                    }
+                  }}
                   className="px-6 md:px-8 py-2 md:py-3 bg-[#6d6d6eb3] hover:bg-[#6d6d6e66] text-white rounded font-bold transition-all flex items-center gap-2 text-base md:text-xl"
                 >
-                  <Info className="w-6 h-6" />
-                  More Info
+                  <Play className="w-6 h-6 fill-current" />
+                  Trailer
                 </button>
               </div>
             </motion.div>

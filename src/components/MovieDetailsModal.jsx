@@ -39,23 +39,35 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-4xl bg-[#181818] rounded-xl overflow-hidden shadow-2xl z-10 my-8"
+            className="relative w-full max-w-4xl bg-[#181818] rounded-xl shadow-2xl z-10 my-8 max-h-[90vh] flex flex-col overflow-hidden"
           >
             {/* Close Button */}
             <button 
               onClick={onClose}
-              className="absolute top-4 right-4 z-50 w-10 h-10 bg-[#181818] rounded-full flex items-center justify-center text-white hover:bg-gray-800 transition"
+              className="absolute top-4 right-4 z-50 w-10 h-10 bg-[#181818]/60 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-gray-800 transition shadow-lg border border-white/10"
             >
               <X className="w-6 h-6" />
             </button>
 
-            {/* Top Banner Area */}
-            <div className="relative w-full h-[300px] md:h-[450px]">
+            {/* Scrollable Content Wrapper */}
+            <div className="overflow-y-auto flex-1 hide-scrollbar">
+              {/* Top Banner Area */}
+              <div className="relative w-full h-[300px] md:h-[450px] flex-none">
               <img 
                 src={movie.backdrop || movie.poster} 
                 alt={movie.title}
-                className="w-full h-full object-cover"
-                onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/500x750/141414/E50914?text=MovieVerfy' }}
+                className={`w-full h-full object-cover ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
+                onError={(e) => {
+                  if (!e.target.dataset.triedFallback) {
+                    e.target.dataset.triedFallback = 'true';
+                    if (movie.poster) {
+                      e.target.src = movie.poster;
+                      return;
+                    }
+                  }
+                  e.target.onerror = null;
+                  e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(movie.title)}`;
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-r from-[#181818]/80 to-transparent w-3/4" />
@@ -171,8 +183,18 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                       <img 
                         src={simMovie.backdrop || simMovie.poster} 
                         alt={simMovie.title} 
-                        className="w-full h-full object-cover" 
-                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/500x750/141414/E50914?text=MovieVerfy' }}
+                        className={`w-full h-full object-cover ${simMovie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`} 
+                        onError={(e) => {
+                          if (!e.target.dataset.triedFallback) {
+                            e.target.dataset.triedFallback = 'true';
+                            if (simMovie.poster) {
+                              e.target.src = simMovie.poster;
+                              return;
+                            }
+                          }
+                          e.target.onerror = null;
+                          e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(simMovie.title)}`;
+                        }}
                       />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                          <Play className="w-10 h-10 text-white fill-current" />
@@ -193,11 +215,11 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                 {similarMovies.length === 0 && (
                   <p className="text-gray-400 col-span-full text-sm">No similar titles found.</p>
                 )}
-              </div>
             </div>
-
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
       )}
     </AnimatePresence>
   );

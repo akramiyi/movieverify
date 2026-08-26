@@ -37,7 +37,7 @@ const Hero = ({ onExplore }) => {
             </span>
             <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-accent to-secondary text-glow">
-              MOVIEVERFY
+              MOVIEVERIFY
             </span>
           </h1>
           

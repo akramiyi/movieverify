@@ -37,21 +37,39 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
 
   return (
     <div 
-      ref={cardRef}
-      className="relative flex-none w-[160px] md:w-[240px] h-[90px] md:h-[135px] cursor-pointer overflow-visible"
+      className="flex flex-col flex-none w-[160px] md:w-[240px] cursor-pointer overflow-visible gap-1.5"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onClick={() => onClick(movie)}
+      onClick={() => {
+        setIsHovered(false);
+        onClick(movie);
+      }}
     >
-      <img
-        src={movie.backdrop || movie.poster}
-        alt={movie.title}
-        className="w-full h-full object-cover rounded-md"
-        onError={(e) => {
-          e.target.onerror = null;
-          e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(movie.title)}`;
-        }}
-      />
+      <div 
+        ref={cardRef}
+        className="relative w-full h-[90px] md:h-[135px] overflow-visible rounded-md"
+      >
+        <img
+          src={movie.backdrop || movie.poster}
+          alt={movie.title}
+          className={`w-full h-full object-cover rounded-md ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
+          onError={(e) => {
+            if (!e.target.dataset.triedFallback) {
+              e.target.dataset.triedFallback = 'true';
+              if (movie.poster) {
+                e.target.src = movie.poster;
+                return;
+              }
+            }
+            e.target.onerror = null;
+            e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(movie.title)}`;
+          }}
+        />
+      </div>
+
+      <span className="text-[11px] md:text-xs font-semibold tracking-wider uppercase text-neutral-400 group-hover:text-[#E50914] transition-colors duration-300 mt-1 truncate px-1">
+        {movie.title}
+      </span>
       
       {isHovered && cardPos && ReactDOM.createPortal(
         <AnimatePresence>
@@ -76,8 +94,15 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
               <img
                 src={movie.backdrop || movie.poster}
                 alt={movie.title}
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
                 onError={(e) => {
+                  if (!e.target.dataset.triedFallback) {
+                    e.target.dataset.triedFallback = 'true';
+                    if (movie.poster) {
+                      e.target.src = movie.poster;
+                      return;
+                    }
+                  }
                   e.target.onerror = null;
                   e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(movie.title)}`;
                 }}
@@ -111,6 +136,8 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
                   <ChevronDown className="w-3 h-3 md:w-4 md:h-4" />
                 </button>
               </div>
+
+              <h3 className="font-bold text-xs md:text-sm mb-1 truncate text-white">{movie.title}</h3>
 
               <div className="flex items-center gap-2 text-xs md:text-sm mb-1">
                 <span className="text-green-500 font-bold">{Math.round(movie.rating * 10)}% Match</span>
