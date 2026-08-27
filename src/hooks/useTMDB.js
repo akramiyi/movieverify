@@ -204,7 +204,7 @@ export const useTMDB = () => {
                 download480p: row.download480p || null,
                 download720p: row.download720p || null,
                 download1080p: row.download1080p || null,
-                seasons: null
+                seasons: row.seasons || null
               };
             });
           }

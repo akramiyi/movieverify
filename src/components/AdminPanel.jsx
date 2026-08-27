@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut } from 'lucide-react';
+import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, activeLinks } from '../hooks/useTMDB';
 
@@ -20,6 +20,9 @@ const AdminPanel = ({ onClose }) => {
   const [link480, setLink480] = useState('');
   const [link720, setLink720] = useState('');
   const [link1080, setLink1080] = useState('');
+  
+  // Seasons Data for TV Shows
+  const [seasonsData, setSeasonsData] = useState([]);
 
   // Status/Feedbacks
   const [actionStatus, setActionStatus] = useState({ type: '', message: '' });
@@ -161,7 +164,7 @@ const AdminPanel = ({ onClose }) => {
             download480p: row.download480p || null,
             download720p: row.download720p || null,
             download1080p: row.download1080p || null,
-            seasons: null
+            seasons: row.seasons || null
           };
         });
       }
@@ -200,17 +203,27 @@ const AdminPanel = ({ onClose }) => {
     setSearchResults([]);
 
     // Check if it already exists in Supabase to pre-fill links
-    const existing = activeDbList.find(item => String(item.id) === String(movie.id));
+    const existing = activeDbList.find(item => String(item.id) === String(movie.id) || String(item.tmdb_id) === String(movie.id));
     if (existing) {
       setLink480(existing.download480p || '');
       setLink720(existing.download720p || '');
       setLink1080(existing.download1080p || '');
+      setSeasonsData(existing.seasons || []);
     } else {
       setLink480('');
       setLink720('');
       setLink1080('');
+      setSeasonsData([]);
     }
   };
+
+  // TV Shows dynamic handlers
+  const handleAddSeason = () => setSeasonsData([...seasonsData, { season: seasonsData.length + 1, parts: [] }]);
+  const handleRemoveSeason = (sIdx) => { const u = [...seasonsData]; u.splice(sIdx, 1); setSeasonsData(u); };
+  const handleUpdateSeason = (sIdx, val) => { const u = [...seasonsData]; u[sIdx].season = Number(val); setSeasonsData(u); };
+  const handleAddPart = (sIdx) => { const u = [...seasonsData]; u[sIdx].parts.push({ name: `Episode ${u[sIdx].parts.length + 1}`, download480p: '', download720p: '', download1080p: '' }); setSeasonsData(u); };
+  const handleRemovePart = (sIdx, pIdx) => { const u = [...seasonsData]; u[sIdx].parts.splice(pIdx, 1); setSeasonsData(u); };
+  const handleUpdatePart = (sIdx, pIdx, f, val) => { const u = [...seasonsData]; u[sIdx].parts[pIdx][f] = val; setSeasonsData(u); };
 
   // Save/Upsert links to Supabase
   const handleSave = async (e) => {
@@ -227,9 +240,10 @@ const AdminPanel = ({ onClose }) => {
           tmdb_id: String(selectedMovie.id),
           media_type: selectedMovie.mediaType || 'movie',
           title: selectedMovie.title,
-          download480p: link480.trim(),
-          download720p: link720.trim(),
-          download1080p: link1080.trim(),
+          download480p: link480.trim() || null,
+          download720p: link720.trim() || null,
+          download1080p: link1080.trim() || null,
+          seasons: seasonsData.length > 0 ? seasonsData : null,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
 
@@ -240,6 +254,7 @@ const AdminPanel = ({ onClose }) => {
       setLink480('');
       setLink720('');
       setLink1080('');
+      setSeasonsData([]);
       fetchCurrentLinks();
     } catch (err) {
       console.error('Supabase save error details:', {
@@ -424,38 +439,91 @@ const AdminPanel = ({ onClose }) => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">480p Download URL</label>
-                <input 
-                  type="url"
-                  placeholder="https://your-authorized-link.com/480p"
-                  value={link480}
-                  onChange={e => setLink480(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm"
-                />
-              </div>
+              {selectedMovie.mediaType === 'tv' ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-white font-bold">Seasons & Episodes</h4>
+                    <button type="button" onClick={handleAddSeason} className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded text-white font-bold transition">+ Add Season</button>
+                  </div>
+                  {seasonsData.map((s, sIdx) => (
+                    <div key={sIdx} className="bg-black/30 p-4 border border-white/5 rounded-lg space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-bold text-sm">Season</span>
+                          <input type="number" value={s.season} onChange={(e) => handleUpdateSeason(sIdx, e.target.value)} className="w-16 bg-black/50 border border-white/10 p-1 text-white text-center rounded outline-none" min="1" />
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => handleAddPart(sIdx)} className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-900/20 rounded transition font-bold">+ Add Episode</button>
+                          <button type="button" onClick={() => handleRemoveSeason(sIdx)} className="text-xs text-red-500 hover:text-red-400 p-1.5 bg-red-900/20 rounded transition"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                      
+                      {s.parts.map((p, pIdx) => (
+                        <div key={pIdx} className="bg-white/5 p-3 rounded-lg space-y-3 border border-white/5 relative mt-3">
+                          <button type="button" onClick={() => handleRemovePart(sIdx, pIdx)} className="absolute top-2 right-2 text-red-500 hover:text-red-400 p-1"><X className="w-4 h-4" /></button>
+                          <div className="pr-8">
+                            <label className="block text-gray-400 text-[10px] uppercase mb-1 font-semibold tracking-wider">Episode Title</label>
+                            <input type="text" value={p.name} onChange={(e) => handleUpdatePart(sIdx, pIdx, 'name', e.target.value)} placeholder="e.g. S01E01 - Pilot" className="w-full bg-black/50 border border-white/10 p-2 text-white text-sm rounded outline-none focus:border-[#E50914] transition" />
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-gray-400 text-[10px] uppercase mb-1 font-semibold tracking-wider">480p URL</label>
+                              <input type="url" value={p.download480p} onChange={(e) => handleUpdatePart(sIdx, pIdx, 'download480p', e.target.value)} placeholder="URL" className="w-full bg-black/50 border border-white/10 p-2 text-white text-sm rounded outline-none focus:border-[#E50914] transition" />
+                            </div>
+                            <div>
+                              <label className="block text-gray-400 text-[10px] uppercase mb-1 font-semibold tracking-wider">720p URL</label>
+                              <input type="url" value={p.download720p} onChange={(e) => handleUpdatePart(sIdx, pIdx, 'download720p', e.target.value)} placeholder="URL" className="w-full bg-black/50 border border-white/10 p-2 text-white text-sm rounded outline-none focus:border-[#E50914] transition" />
+                            </div>
+                            <div>
+                              <label className="block text-gray-400 text-[10px] uppercase mb-1 font-semibold tracking-wider">1080p URL</label>
+                              <input type="url" value={p.download1080p} onChange={(e) => handleUpdatePart(sIdx, pIdx, 'download1080p', e.target.value)} placeholder="URL" className="w-full bg-black/50 border border-white/10 p-2 text-white text-sm rounded outline-none focus:border-[#E50914] transition" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {s.parts.length === 0 && <div className="text-gray-500 text-xs italic">No episodes added yet.</div>}
+                    </div>
+                  ))}
+                  {seasonsData.length === 0 && (
+                    <div className="text-center p-6 border border-white/10 border-dashed rounded text-gray-500 text-sm">No seasons added yet. Click "+ Add Season" to begin.</div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">480p Download URL</label>
+                    <input 
+                      type="url"
+                      placeholder="https://your-authorized-link.com/480p"
+                      value={link480}
+                      onChange={e => setLink480(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">720p Download URL</label>
-                <input 
-                  type="url"
-                  placeholder="https://your-authorized-link.com/720p"
-                  value={link720}
-                  onChange={e => setLink720(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm"
-                />
-              </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">720p Download URL</label>
+                    <input 
+                      type="url"
+                      placeholder="https://your-authorized-link.com/720p"
+                      value={link720}
+                      onChange={e => setLink720(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">1080p Download URL</label>
-                <input 
-                  type="url"
-                  placeholder="https://your-authorized-link.com/1080p"
-                  value={link1080}
-                  onChange={e => setLink1080(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm"
-                />
-              </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">1080p Download URL</label>
+                    <input 
+                      type="url"
+                      placeholder="https://your-authorized-link.com/1080p"
+                      value={link1080}
+                      onChange={e => setLink1080(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="flex gap-2">
                 <button 
