@@ -130,6 +130,38 @@ const fetchTMDB = async (endpoint) => {
   return response.json();
 };
 
+// Fetch metadata for a specific ID dynamically, trying movie then tv
+const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
+  const result = [];
+  for (const idStr of ids) {
+    const id = Number(idStr);
+    if (isNaN(id)) continue;
+    
+    const existing = alreadyFetchedList.find(m => String(m.id) === String(id));
+    if (existing) {
+      result.push(existing);
+      continue;
+    }
+    
+    try {
+      let item;
+      try {
+        item = await fetchTMDB(`/movie/${id}`);
+        item.media_type = 'movie';
+      } catch (err) {
+        item = await fetchTMDB(`/tv/${id}`);
+        item.media_type = 'tv';
+      }
+      if (item) {
+        result.push(formatMovie(item));
+      }
+    } catch (e) {
+      console.error(`Failed to fetch metadata for TMDB ID: ${id}`, e);
+    }
+  }
+  return result;
+};
+
 export const useTMDB = () => {
   const [data, setData] = useState({
     trending: [],
@@ -138,6 +170,7 @@ export const useTMDB = () => {
     southIndian: [],
     webSeries: [],
     featured: null,
+    downloadAvailable: [],
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -186,6 +219,44 @@ export const useTMDB = () => {
 
         const featuredMovie = trendingList.find(m => m.backdrop && m.description) || trendingList[0] || null;
 
+        // Resolve Download Available Movies (combines downloadLinks.js keys + local movies with links)
+        const downloadAvailableIds = Object.keys(downloadLinks).filter(id => {
+          const links = downloadLinks[id];
+          return !!(links.download480p || links.download720p || links.download1080p);
+        });
+
+        const allFetchedSoFar = [
+          ...trendingList,
+          ...popularList,
+          ...bollywoodList,
+          ...southIndianList,
+          ...webSeriesList
+        ];
+
+        const resolvedList = await fetchMetadataForIds(downloadAvailableIds, allFetchedSoFar);
+
+        // Also add any local movies from movies.js that have download links
+        localMovies.forEach(m => {
+          const hasLocalLink = !!(m.download480p || m.download720p || m.download1080p || m.seasons);
+          if (hasLocalLink && !resolvedList.some(r => String(r.id) === String(m.id) || r.title.toLowerCase() === m.title.toLowerCase())) {
+            resolvedList.push({
+              ...m,
+              mediaType: m.seasons ? 'tv' : 'movie'
+            });
+          }
+        });
+
+        // Deduplicate resolvedList by id
+        const deduplicatedDownloads = [];
+        const seenIds = new Set();
+        resolvedList.forEach(movie => {
+          const key = String(movie.id);
+          if (!seenIds.has(key)) {
+            seenIds.add(key);
+            deduplicatedDownloads.push(movie);
+          }
+        });
+
         if (active) {
           setData({
             trending: trendingList,
@@ -193,7 +264,8 @@ export const useTMDB = () => {
             bollywood: bollywoodList,
             southIndian: southIndianList,
             webSeries: webSeriesList,
-            featured: featuredMovie
+            featured: featuredMovie,
+            downloadAvailable: deduplicatedDownloads
           });
           setError(null);
         }
@@ -227,7 +299,6 @@ export const searchTMDB = async (query) => {
     `${BASE_URL}/search/multi?query=${encodeURIComponent(query.trim())}` +
     `&language=en-US&page=1&include_adult=false`;
 
-  // Dev mode verbose debugging outputs
   console.log('TMDB search query:', query);
 
   try {

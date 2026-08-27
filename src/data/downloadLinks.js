@@ -1,12 +1,19 @@
 // Add the TMDB movie ID here.
 // Add only links that you are authorized to distribute.
 const downloadLinks = {
-  // Example:
-  // "550": {
-  //   download480p: "https://example.com/480p",
-  //   download720p: "https://example.com/720p",
-  //   download1080p: "https://example.com/1080p"
-  // }
+  // To test the automatic "Download Available" section, uncomment these entries:
+  /*
+  "550": {
+    download480p: "https://authorized-link.example/480",
+    download720p: "",
+    download1080p: ""
+  },
+  "603": {
+    download480p: "",
+    download720p: "https://authorized-link.example/720",
+    download1080p: "https://authorized-link.example/1080"
+  }
+  */
 };
 
 export default downloadLinks;

@@ -25,6 +25,7 @@ function App() {
     southIndian,
     webSeries,
     featured,
+    downloadAvailable,
     isLoading: isTMDBLoading,
     error: tmdbError
   } = useTMDB();
@@ -97,6 +98,7 @@ function App() {
   const displayBollywood = (tmdbError || bollywood.length === 0) ? getMoviesByCategory('Bollywood') : bollywood;
   const displaySouthIndian = (tmdbError || southIndian.length === 0) ? getMoviesByCategory('South Indian') : southIndian;
   const displayWebSeries = (tmdbError || webSeries.length === 0) ? getMoviesByCategory('Web Series') : webSeries;
+  const displayDownloadAvailable = (tmdbError || !downloadAvailable) ? [] : downloadAvailable;
 
   const toggleMyList = (movie) => {
     if (!movie) return;
@@ -165,6 +167,38 @@ function App() {
                 <MovieRow 
                   title="My List" 
                   movies={myList} 
+                  onMovieClick={setSelectedMovie} 
+                  isLoading={appLoading} 
+                  myList={myList} 
+                  onToggleMyList={toggleMyList} 
+                />
+              )}
+
+              {displayDownloadAvailable.length === 0 ? (
+                <div className="space-y-2 md:space-y-4 mb-8">
+                  <h2 className="text-sm font-semibold text-[#e5e5e5] md:text-2xl px-4 md:px-12 flex items-center gap-2">
+                    Download Available
+                    <span className="inline-flex items-center gap-1 bg-green-950/50 border border-green-800 text-green-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full font-bold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      Available
+                    </span>
+                  </h2>
+                  <p className="text-gray-400 text-xs md:text-sm px-4 md:px-12 py-3">
+                    No downloads available yet.
+                  </p>
+                </div>
+              ) : (
+                <MovieRow 
+                  title={
+                    <span className="flex items-center gap-2">
+                      Download Available
+                      <span className="inline-flex items-center gap-1 bg-green-950/50 border border-green-800 text-green-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full font-bold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                        Available
+                      </span>
+                    </span>
+                  }
+                  movies={displayDownloadAvailable} 
                   onMovieClick={setSelectedMovie} 
                   isLoading={appLoading} 
                   myList={myList} 
