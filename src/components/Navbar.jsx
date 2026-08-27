@@ -85,12 +85,12 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
 
         {/* Right Side - Search & Profile */}
         <div className="flex items-center gap-4 md:gap-6">
-          <div className={`flex items-center transition-all duration-300 ${isSearchExpanded ? 'bg-black/80 border border-white/80 px-2 py-1' : 'bg-transparent'}`}>
+          <div className={`flex items-center transition-all duration-300 ${isSearchExpanded ? 'bg-black border border-white px-3 py-1.5' : 'bg-transparent'}`}>
             <button 
               onClick={() => setIsSearchExpanded(!isSearchExpanded)}
-              className="text-white focus:outline-none"
+              className="text-white focus:outline-none flex items-center justify-center"
             >
-              <Search className="w-5 h-5 md:w-6 md:h-6" />
+              <Search className="w-5 h-5 md:w-6 md:h-6 stroke-[2.5]" />
             </button>
             <input 
               type="text"
@@ -100,7 +100,9 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
                 if(!isSearchExpanded) setIsSearchExpanded(true);
                 onSearch(e.target.value);
               }}
-              className={`bg-transparent text-white text-xs md:text-sm outline-none transition-all duration-300 ${isSearchExpanded ? 'w-28 sm:w-48 md:w-64 ml-2 opacity-100' : 'w-0 opacity-0'}`}
+              className={`bg-transparent text-white text-sm outline-none transition-all duration-300 placeholder-gray-400 ${
+                isSearchExpanded ? 'w-36 md:w-52 ml-3 opacity-100' : 'w-0 opacity-0'
+              }`}
             />
           </div>
           
