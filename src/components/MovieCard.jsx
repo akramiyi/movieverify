@@ -6,6 +6,7 @@ import { Download, Plus, ThumbsUp, ChevronDown, Check } from 'lucide-react';
 const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [cardPos, setCardPos] = useState(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const cardRef = useRef(null);
   const isAddedToList = myList.some((m) => m.id === movie.id);
 
@@ -49,12 +50,16 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
     >
       <div 
         ref={cardRef}
-        className="relative w-full h-[90px] md:h-[135px] overflow-visible rounded-md"
+        className="relative w-full h-[90px] md:h-[135px] overflow-visible rounded-md bg-[#222]"
       >
+        {!imageLoaded && (
+          <div className="absolute inset-0 bg-[#2a2a2a] animate-pulse rounded-md z-0" />
+        )}
         <img
           src={movie.backdrop || movie.poster}
           alt={movie.title}
-          className={`w-full h-full object-cover rounded-md ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
+          onLoad={() => setImageLoaded(true)}
+          className={`w-full h-full object-cover rounded-md transition-opacity duration-500 z-10 relative ${imageLoaded ? 'opacity-100' : 'opacity-0'} ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
           onError={(e) => {
             if (!e.target.dataset.triedFallback) {
               e.target.dataset.triedFallback = 'true';
