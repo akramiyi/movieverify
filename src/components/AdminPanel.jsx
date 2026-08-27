@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
+import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB } from '../hooks/useTMDB';
 
 const AdminPanel = ({ onClose }) => {
   // Login State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userVal, setUserVal] = useState('');
+  const [emailVal, setEmailVal] = useState('');
   const [passVal, setPassVal] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   // Movie Search/Form State
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,18 +26,89 @@ const AdminPanel = ({ onClose }) => {
   const [activeDbList, setActiveDbList] = useState([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
 
-  // Authenticate Admin Credentials
-  const handleLogin = (e) => {
-    e.preventDefault();
-    const correctUser = import.meta.env.VITE_ADMIN_USERNAME || 'admin';
-    const correctPass = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
+  // Check active session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          // Verify admin role in admin_users table
+          const { data: adminData, error: adminErr } = await supabase
+            .from('admin_users')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
+          
+          if (adminData && !adminErr) {
+            setIsLoggedIn(true);
+            fetchCurrentLinks();
+          } else {
+            // Not authorized
+            await supabase.auth.signOut();
+          }
+        }
+      } catch (err) {
+        console.error('Session check failed:', err);
+      }
+    };
+    checkSession();
+  }, []);
 
-    if (userVal === correctUser && passVal === correctPass) {
-      setIsLoggedIn(true);
-      setLoginError('');
-      fetchCurrentLinks();
-    } else {
-      setLoginError('Invalid Username or Password');
+  // Authenticate Admin Credentials using Supabase Auth
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsAuthenticating(true);
+
+    try {
+      // 1. Sign in using email/password
+      const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
+        email: emailVal.trim(),
+        password: passVal.trim()
+      });
+
+      if (authErr) {
+        setLoginError(authErr.message || 'Invalid login credentials');
+        setIsAuthenticating(false);
+        return;
+      }
+
+      if (authData?.user) {
+        // 2. Query admin_users table to verify role
+        const { data: adminData, error: adminErr } = await supabase
+          .from('admin_users')
+          .select('*')
+          .eq('user_id', authData.user.id)
+          .maybeSingle();
+
+        if (adminErr || !adminData) {
+          setLoginError('You are not authorized to access the Admin Panel.');
+          await supabase.auth.signOut();
+          setIsAuthenticating(false);
+          return;
+        }
+
+        setIsLoggedIn(true);
+        fetchCurrentLinks();
+      }
+    } catch (err) {
+      console.error('Authentication process failed:', err);
+      setLoginError('Server authentication error. Please try again.');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  // Sign out admin session
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setIsLoggedIn(false);
+      setSelectedMovie(null);
+      setEmailVal('');
+      setPassVal('');
+    } catch (e) {
+      console.error('Logout failed:', e);
     }
   };
 
@@ -108,10 +180,13 @@ const AdminPanel = ({ onClose }) => {
         .from('download_links')
         .upsert({
           id: String(selectedMovie.id),
+          tmdb_id: String(selectedMovie.id),
+          media_type: selectedMovie.mediaType || 'movie',
           title: selectedMovie.title,
           download480p: link480.trim(),
           download720p: link720.trim(),
-          download1080p: link1080.trim()
+          download1080p: link1080.trim(),
+          updated_at: new Date().toISOString()
         });
 
       if (error) throw error;
@@ -160,21 +235,21 @@ const AdminPanel = ({ onClose }) => {
           </button>
 
           <div className="flex flex-col items-center mt-6 mb-8">
-            <div className="w-12 h-12 bg-primary/20 border border-primary text-primary flex items-center justify-center rounded-full mb-4">
-              <Key className="w-6 h-6 text-[#E50914]" />
+            <div className="w-12 h-12 bg-[#E50914]/20 border border-[#E50914] text-[#E50914] flex items-center justify-center rounded-full mb-4">
+              <Key className="w-6 h-6" />
             </div>
             <h2 className="text-2xl font-black text-white">MovieVerify Admin</h2>
-            <p className="text-gray-400 text-xs mt-1">Enter credentials to access manager</p>
+            <p className="text-gray-400 text-xs mt-1">Sign in with Supabase Auth credentials</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Username</label>
+              <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Admin Email</label>
               <input 
-                type="text" 
+                type="email" 
                 required
-                value={userVal}
-                onChange={e => setUserVal(e.target.value)}
+                value={emailVal}
+                onChange={e => setEmailVal(e.target.value)}
                 className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm"
               />
             </div>
@@ -198,9 +273,10 @@ const AdminPanel = ({ onClose }) => {
 
             <button 
               type="submit"
-              className="w-full py-3 bg-[#E50914] hover:bg-[#b80710] text-white rounded font-bold transition text-sm shadow-lg mt-4 focus:outline-none"
+              disabled={isAuthenticating}
+              className="w-full py-3 bg-[#E50914] hover:bg-[#b80710] disabled:bg-red-800 disabled:opacity-50 text-white rounded font-bold transition text-sm shadow-lg mt-4 focus:outline-none"
             >
-              Sign In
+              {isAuthenticating ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
         </div>
@@ -211,12 +287,22 @@ const AdminPanel = ({ onClose }) => {
   return (
     <div className="fixed inset-0 z-[150] bg-black/95 flex flex-col p-4 md:p-8 overflow-y-auto backdrop-blur-md">
       <div className="w-full max-w-4xl mx-auto bg-[#181818] border border-white/10 rounded-lg p-6 md:p-8 shadow-2xl flex flex-col md:flex-row gap-8 relative mt-12">
-        <button 
-          onClick={onClose}
-          className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white transition text-xs font-bold px-4 py-2 rounded-full flex items-center gap-1.5 focus:outline-none"
-        >
-          Close Manager
-        </button>
+        
+        {/* Logout and Close headers */}
+        <div className="absolute top-4 right-4 flex items-center gap-2">
+          <button 
+            onClick={handleLogout}
+            className="bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
+          >
+            <LogOut className="w-3.5 h-3.5" /> Logout
+          </button>
+          <button 
+            onClick={onClose}
+            className="bg-white/10 hover:bg-white/20 text-white transition text-xs font-bold px-4 py-2 rounded-full focus:outline-none"
+          >
+            Close Manager
+          </button>
+        </div>
 
         {/* Left Form Panel */}
         <div className="flex-1 space-y-6">
