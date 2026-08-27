@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from './components/Navbar';
 import FeaturedCarousel from './components/FeaturedCarousel';
 import MovieRow from './components/MovieRow';
+import MovieCard from './components/MovieCard';
 import MovieDetailsModal from './components/MovieDetailsModal';
 import Footer from './components/Footer';
 import { movies, getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
@@ -18,6 +19,11 @@ function App() {
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('home');
+  const [seeAllSection, setSeeAllSection] = useState(null);
+
+  useEffect(() => {
+    setSeeAllSection(null);
+  }, [activeTab, searchQuery]);
   
   const {
     trending,
@@ -155,92 +161,121 @@ function App() {
 
       <main className="pb-20 min-h-screen">
         {!searchQuery ? (
-          <>
-            {appLoading ? (
-              <div className="relative w-full h-[80vh] md:h-[90vh] bg-[#181818] animate-pulse overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
+          seeAllSection ? (
+            <div className="pt-32 px-4 md:px-12">
+              <div className="flex items-center gap-4 mb-8">
+                <button 
+                  onClick={() => setSeeAllSection(null)}
+                  className="bg-white/10 hover:bg-white/20 text-white transition text-xs md:text-sm font-bold px-4 py-2 rounded-full flex items-center gap-1.5 focus:outline-none"
+                >
+                  <span>←</span> Back to Home
+                </button>
+                <h2 className="text-xl md:text-3xl font-extrabold text-white flex items-center gap-2">
+                  {seeAllSection.title}
+                </h2>
               </div>
-            ) : (
-              <FeaturedCarousel 
-                movies={displayFeatured}
-                onPlayTrailer={setSelectedMovie}
-              />
-            )}
-            
-            <div className="relative z-20 pb-10">
-              {/* Render My List row if user has saved items */}
-              {myList.length > 0 && (activeTab === 'home' || activeTab === 'mylist') && (
-                <MovieRow 
-                  title="My List" 
-                  movies={myList} 
-                  onMovieClick={setSelectedMovie} 
-                  isLoading={appLoading} 
-                  myList={myList} 
-                  onToggleMyList={toggleMyList} 
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                {seeAllSection.movies.map((movie) => (
+                  <MovieCard 
+                    key={movie.id} 
+                    movie={movie} 
+                    onClick={() => setSelectedMovie(movie)} 
+                    myList={myList}
+                    onToggleMyList={toggleMyList}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              {appLoading ? (
+                <div className="relative w-full h-[80vh] md:h-[90vh] bg-[#181818] animate-pulse overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
+                </div>
+              ) : (
+                <FeaturedCarousel 
+                  movies={displayFeatured}
+                  onPlayTrailer={setSelectedMovie}
                 />
               )}
-
-              {/* Download Available Section */}
-              {(activeTab === 'home') && (
-                displayDownloadAvailable.length === 0 ? (
-                  <div className="space-y-2 md:space-y-4 mb-8">
-                    <h2 className="text-sm font-semibold text-[#e5e5e5] md:text-2xl px-4 md:px-12 flex items-center gap-2">
-                      Download Available
-                      <span className="inline-flex items-center gap-1 bg-green-950/50 border border-green-800 text-green-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full font-bold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                        Available
-                      </span>
-                    </h2>
-                    <p className="text-gray-400 text-xs md:text-sm px-4 md:px-12 py-3">
-                      No downloads available yet.
-                    </p>
-                  </div>
-                ) : (
+              
+              <div className="relative z-20 pb-10">
+                {/* Render My List row if user has saved items */}
+                {myList.length > 0 && (activeTab === 'home' || activeTab === 'mylist') && (
                   <MovieRow 
-                    title={
-                      <span className="flex items-center gap-2">
+                    title="My List" 
+                    movies={myList} 
+                    onMovieClick={setSelectedMovie} 
+                    isLoading={appLoading} 
+                    myList={myList} 
+                    onToggleMyList={toggleMyList} 
+                    onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })}
+                  />
+                )}
+
+                {/* Download Available Section */}
+                {(activeTab === 'home') && (
+                  displayDownloadAvailable.length === 0 ? (
+                    <div className="space-y-2 md:space-y-4 mb-8">
+                      <h2 className="text-sm font-semibold text-[#e5e5e5] md:text-2xl px-4 md:px-12 flex items-center gap-2">
                         Download Available
                         <span className="inline-flex items-center gap-1 bg-green-950/50 border border-green-800 text-green-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full font-bold">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                           Available
                         </span>
-                      </span>
-                    }
-                    movies={displayDownloadAvailable} 
-                    onMovieClick={setSelectedMovie} 
-                    isLoading={appLoading} 
-                    myList={myList} 
-                    onToggleMyList={toggleMyList} 
-                  />
-                )
-              )}
+                      </h2>
+                      <p className="text-gray-400 text-xs md:text-sm px-4 md:px-12 py-3">
+                        No downloads available yet.
+                      </p>
+                    </div>
+                  ) : (
+                    <MovieRow 
+                      title={
+                        <span className="flex items-center gap-2">
+                          Download Available
+                          <span className="inline-flex items-center gap-1 bg-green-950/50 border border-green-800 text-green-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                            Available
+                          </span>
+                        </span>
+                      }
+                      movies={displayDownloadAvailable} 
+                      onMovieClick={setSelectedMovie} 
+                      isLoading={appLoading} 
+                      myList={myList} 
+                      onToggleMyList={toggleMyList} 
+                      onSeeAll={(title, list) => setSeeAllSection({ title: "Download Available", movies: list })}
+                    />
+                  )
+                )}
 
-              {/* Trending Now */}
-              {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
-                <MovieRow title="Trending Now" movies={displayTrending} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} />
-              )}
+                {/* Trending Now */}
+                {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
+                  <MovieRow title="Trending Now" movies={displayTrending} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                )}
 
-              {/* Bollywood Hits */}
-              {(activeTab === 'home' || activeTab === 'movies') && (
-                <MovieRow title="Bollywood Hits" movies={displayBollywood} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} />
-              )}
+                {/* Bollywood Hits */}
+                {(activeTab === 'home' || activeTab === 'movies') && (
+                  <MovieRow title="Bollywood Hits" movies={displayBollywood} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                )}
 
-              {/* South Indian Action */}
-              {(activeTab === 'home' || activeTab === 'movies') && (
-                <MovieRow title="South Indian Action" movies={displaySouthIndian} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} />
-              )}
+                {/* South Indian Action */}
+                {(activeTab === 'home' || activeTab === 'movies') && (
+                  <MovieRow title="South Indian Action" movies={displaySouthIndian} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                )}
 
-              {/* Web Series / TV Shows */}
-              {(activeTab === 'home' || activeTab === 'tv') && (
-                <MovieRow title="Web Series" movies={displayWebSeries} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} />
-              )}
+                {/* Web Series / TV Shows */}
+                {(activeTab === 'home' || activeTab === 'tv') && (
+                  <MovieRow title="Web Series" movies={displayWebSeries} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                )}
 
-              {/* Popular Movies */}
-              {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
-                <MovieRow title="Popular Movies" movies={displayPopular} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} />
-              )}
-            </div>
-          </>
+                {/* Popular Movies */}
+                {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
+                  <MovieRow title="Popular Movies" movies={displayPopular} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                )}
+              </div>
+            </>
+          )
         ) : (
           <div className="pt-32 px-4 md:px-12">
             <h2 className="text-2xl font-bold mb-6">Search Results for "{searchQuery}"</h2>

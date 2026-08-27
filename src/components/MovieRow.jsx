@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import MovieCard from './MovieCard';
 import SkeletonCard from './SkeletonCard';
 
-const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyList }) => {
+const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyList, onSeeAll }) => {
   const rowRef = useRef(null);
   const [isMoved, setIsMoved] = useState(false);
 
@@ -23,9 +23,19 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
 
   return (
     <div className="space-y-2 md:space-y-4 mb-8 overflow-visible">
-      <h2 className="whitespace-nowrap cursor-pointer text-sm font-semibold text-[#e5e5e5] transition duration-200 hover:text-white md:text-2xl px-4 md:px-12">
-        {title}
-      </h2>
+      <div className="flex items-center justify-between px-4 md:px-12">
+        <h2 className="whitespace-nowrap cursor-pointer text-sm font-semibold text-[#e5e5e5] transition duration-200 hover:text-white md:text-2xl">
+          {title}
+        </h2>
+        {!isLoading && movies && movies.length > 0 && onSeeAll && (
+          <button 
+            onClick={() => onSeeAll(title, movies)}
+            className="text-xs md:text-sm font-semibold text-gray-400 hover:text-[#E50914] transition duration-300 flex items-center gap-1 focus:outline-none"
+          >
+            See All <span className="text-[10px] md:text-xs">▸</span>
+          </button>
+        )}
+      </div>
       
       <div className="group relative md:-ml-2 overflow-visible">
         {!isLoading && (
