@@ -31,7 +31,7 @@ function App() {
 
   const [isTimerLoading, setIsTimerLoading] = useState(true);
   const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [myList, setMyList] = useState(() => {
     try {
       const saved = localStorage.getItem('movieverify_mylist');
@@ -51,38 +51,42 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!searchQuery || !searchQuery.trim()) {
+    const query = searchQuery.trim();
+
+    if (!query) {
       setSearchResults([]);
-      setIsSearching(false);
+      setSearchLoading(false);
       return;
     }
 
-    setIsSearching(true);
-    const delayDebounceFn = setTimeout(async () => {
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+
       try {
-        const results = await searchTMDB(searchQuery);
-        if (results.length === 0) {
-          const localResults = movies.filter(m => 
-            m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            m.genre.toLowerCase().includes(searchQuery.toLowerCase())
-          );
-          setSearchResults(localResults);
-        } else {
+        const results = await searchTMDB(query);
+
+        if (!cancelled) {
           setSearchResults(results);
         }
-      } catch (err) {
-        console.error('Search failed, falling back to local:', err);
-        const localResults = movies.filter(m => 
-          m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          m.genre.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        setSearchResults(localResults);
+      } catch (error) {
+        console.error('Search failed:', error);
+
+        if (!cancelled) {
+          setSearchResults([]);
+        }
       } finally {
-        setIsSearching(false);
+        if (!cancelled) {
+          setSearchLoading(false);
+        }
       }
     }, 400);
 
-    return () => clearTimeout(delayDebounceFn);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [searchQuery]);
 
   const appLoading = isTMDBLoading || isTimerLoading;
@@ -178,7 +182,7 @@ function App() {
         ) : (
           <div className="pt-32 px-4 md:px-12">
             <h2 className="text-2xl font-bold mb-6">Search Results for "{searchQuery}"</h2>
-            {isSearching ? (
+            {searchLoading ? (
               <p className="text-gray-400">Searching...</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -196,7 +200,7 @@ function App() {
                   </div>
                 ))}
                 {searchResults.length === 0 && (
-                  <p className="text-gray-400 col-span-full">No movies or series found</p>
+                  <p className="text-gray-400 col-span-full">No titles found.</p>
                 )}
               </div>
             )}

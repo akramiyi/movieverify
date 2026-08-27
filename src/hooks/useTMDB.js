@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import downloadLinks from '../data/downloadLinks';
 import { movies as localMovies } from '../data/movies';
 
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+const BASE_URL = 'https://api.themoviedb.org/3';
+const IMG_BASE = 'https://image.tmdb.org/t/p';
 
 const GENRE_MAP = {
   28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
@@ -13,18 +14,23 @@ const GENRE_MAP = {
   10765: "Sci-Fi & Fantasy", 10766: "Soap", 10767: "Talk", 10768: "War & Politics"
 };
 
-const LANG_MAP = {
-  en: "English", hi: "Hindi", te: "Telugu", ta: "Tamil", kn: "Kannada", ml: "Malayalam", es: "Spanish", ja: "Japanese", ko: "Korean"
+const headers = {
+  Authorization: `Bearer ${import.meta.env.VITE_TMDB_TOKEN}`,
+  'Content-Type': 'application/json'
 };
+
+// Console audit for production credentials validation
+console.log(
+  'TMDB token configured:',
+  Boolean(import.meta.env.VITE_TMDB_TOKEN)
+);
 
 // Helper to merge local download links with priority
 export const getDownloadLinks = (movieId, movieTitle) => {
-  // Priority 1: Manual downloadLinks.js (match by TMDB ID)
   if (downloadLinks[movieId]) {
     return downloadLinks[movieId];
   }
   
-  // Priority 2: Existing movies.js download links (match by ID or Title case-insensitive)
   const localMatch = localMovies.find(
     (m) => String(m.id) === String(movieId) || (m.title && movieTitle && m.title.toLowerCase() === movieTitle.toLowerCase())
   );
@@ -33,11 +39,10 @@ export const getDownloadLinks = (movieId, movieTitle) => {
       download480p: localMatch.download480p || null,
       download720p: localMatch.download720p || null,
       download1080p: localMatch.download1080p || null,
-      seasons: localMatch.seasons || null // Support TV shows seasons links
+      seasons: localMatch.seasons || null
     };
   }
   
-  // Priority 3: No download links
   return {
     download480p: null,
     download720p: null,
@@ -45,27 +50,45 @@ export const getDownloadLinks = (movieId, movieTitle) => {
   };
 };
 
-const normalizeMovie = (item) => {
-  const isTV = item.media_type === 'tv' || !!item.first_air_date;
-  const id = item.id;
-  const title = isTV ? item.name : item.title;
-  
-  let year = '';
-  const dateStr = isTV ? item.first_air_date : item.release_date;
-  if (dateStr) {
-    year = new Date(dateStr).getFullYear() || '';
+export const formatMovie = (m) => {
+  const id = m.id;
+  const title = m.title || m.name || 'Untitled';
+
+  const poster = m.poster_path
+    ? `${IMG_BASE}/w500${m.poster_path}`
+    : null;
+
+  const backdrop = m.backdrop_path
+    ? `${IMG_BASE}/original${m.backdrop_path}`
+    : null;
+
+  const year =
+    m.release_date?.slice(0, 4) ||
+    m.first_air_date?.slice(0, 4) ||
+    'N/A';
+
+  const language = m.original_language
+    ? m.original_language.toUpperCase()
+    : 'N/A';
+
+  const quality = '1080p';
+
+  let genre = '';
+  if (Array.isArray(m.genre_names)) {
+    genre = m.genre_names.join(', ');
+  } else if (Array.isArray(m.genre_ids)) {
+    genre = m.genre_ids.map(id => GENRE_MAP[id]).filter(Boolean).join(', ');
   }
-  
-  const rating = item.vote_average || 0;
-  const language = LANG_MAP[item.original_language] || item.original_language || 'English';
-  const quality = "1080p"; // Default MovieVerify presentation quality
-  const genres = (item.genre_ids || []).map(id => GENRE_MAP[id]).filter(Boolean).join(", ") || (isTV ? 'Web Series' : 'Movie');
-  
-  const poster = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '';
-  const backdrop = item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : poster;
-  
+
+  const rating =
+    typeof m.vote_average === 'number'
+      ? m.vote_average.toFixed(1)
+      : 'N/A';
+
+  const description = m.overview || '';
+
   const links = getDownloadLinks(id, title);
-  
+
   return {
     id,
     title,
@@ -74,15 +97,18 @@ const normalizeMovie = (item) => {
     year,
     language,
     quality,
-    genre: genres,
+    genre,
     rating,
-    description: item.overview || '',
-    trailerUrl: '',
-    mediaType: isTV ? 'tv' : 'movie',
-    ...links,
+    description,
+    trailerUrl: null,
+    download480p: links.download480p || null,
+    download720p: links.download720p || null,
+    download1080p: links.download1080p || null,
+    seasons: links.seasons || null,
     featured: false,
     trending: false,
-    latest: false
+    latest: false,
+    mediaType: m.media_type || (m.first_air_date ? 'tv' : 'movie')
   };
 };
 
@@ -93,11 +119,8 @@ const fetchTMDB = async (endpoint) => {
     throw new Error('VITE_TMDB_TOKEN environment variable is not defined.');
   }
 
-  const response = await fetch(`${TMDB_BASE_URL}${endpoint}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }
+  const response = await fetch(`${BASE_URL}${endpoint}`, {
+    headers
   });
 
   if (!response.ok) {
@@ -126,19 +149,15 @@ export const useTMDB = () => {
       try {
         setIsLoading(true);
         
-        // 1. Fetch Trending
         const trendingRes = await fetchTMDB('/trending/all/week');
-        const trendingList = (trendingRes.results || []).map(normalizeMovie);
+        const trendingList = (trendingRes.results || []).map(formatMovie);
 
-        // 2. Fetch Popular
         const popularRes = await fetchTMDB('/movie/popular?language=en-US&page=1');
-        const popularList = (popularRes.results || []).map(normalizeMovie);
+        const popularList = (popularRes.results || []).map(formatMovie);
 
-        // 3. Fetch Bollywood
         const bollywoodRes = await fetchTMDB('/discover/movie?with_original_language=hi&sort_by=popularity.desc&page=1');
-        const bollywoodList = (bollywoodRes.results || []).map(normalizeMovie);
+        const bollywoodList = (bollywoodRes.results || []).map(formatMovie);
 
-        // 4. Fetch South Indian (Telugu, Tamil, Kannada, Malayalam)
         const [teluguRes, tamilRes, kannadaRes, malayalamRes] = await Promise.all([
           fetchTMDB('/discover/movie?with_original_language=te&sort_by=popularity.desc&page=1'),
           fetchTMDB('/discover/movie?with_original_language=ta&sort_by=popularity.desc&page=1'),
@@ -146,7 +165,6 @@ export const useTMDB = () => {
           fetchTMDB('/discover/movie?with_original_language=ml&sort_by=popularity.desc&page=1')
         ]);
         
-        // Merge & deduplicate
         const mergedSouth = [
           ...(teluguRes.results || []),
           ...(tamilRes.results || []),
@@ -161,13 +179,11 @@ export const useTMDB = () => {
         
         const southIndianList = Array.from(uniqueSouthMap.values())
           .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
-          .map(normalizeMovie);
+          .map(formatMovie);
 
-        // 5. Fetch Web Series
         const webSeriesRes = await fetchTMDB('/tv/popular?language=en-US&page=1');
-        const webSeriesList = (webSeriesRes.results || []).map(normalizeMovie);
+        const webSeriesList = (webSeriesRes.results || []).map(formatMovie);
 
-        // 6. Featured Movie (Find the best featured option from trending/popular)
         const featuredMovie = trendingList.find(m => m.backdrop && m.description) || trendingList[0] || null;
 
         if (active) {
@@ -203,17 +219,49 @@ export const useTMDB = () => {
   return { ...data, isLoading, error };
 };
 
-// Search Helper
+// Search Helper with debugging logs
 export const searchTMDB = async (query) => {
-  if (!query || !query.trim()) return [];
-  
+  if (!query?.trim()) return [];
+
+  const url =
+    `${BASE_URL}/search/multi?query=${encodeURIComponent(query.trim())}` +
+    `&language=en-US&page=1&include_adult=false`;
+
+  // Dev mode verbose debugging outputs
+  console.log('TMDB search query:', query);
+
   try {
-    const res = await fetchTMDB(`/search/multi?query=${encodeURIComponent(query)}&language=en-US&page=1`);
-    return (res.results || [])
-      .filter(item => item.media_type === 'movie' || item.media_type === 'tv')
-      .map(normalizeMovie);
-  } catch (err) {
-    console.error('Error searching TMDB:', err);
+    const res = await fetch(url, {
+      method: 'GET',
+      headers
+    });
+
+    console.log('TMDB response status:', res.status);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('TMDB Search Error:', res.status, errorText);
+      return [];
+    }
+
+    const data = await res.json();
+
+    console.log('TMDB results count:', data.results?.length);
+
+    if (!Array.isArray(data.results)) {
+      console.error('Invalid TMDB search response:', data);
+      return [];
+    }
+
+    return data.results
+      .filter(item =>
+        item.media_type === 'movie' ||
+        item.media_type === 'tv'
+      )
+      .map(formatMovie);
+
+  } catch (error) {
+    console.error('TMDB search request failed:', error);
     return [];
   }
 };
@@ -222,9 +270,16 @@ export const searchTMDB = async (query) => {
 export const fetchTMDBDetails = async (id, mediaType) => {
   try {
     const type = mediaType === 'tv' ? 'tv' : 'movie';
-    const res = await fetchTMDB(`/${type}/${id}?append_to_response=credits,videos`);
+    const response = await fetch(`${BASE_URL}/${type}/${id}?append_to_response=credits,videos`, {
+      headers
+    });
     
-    // Find YouTube trailer
+    if (!response.ok) {
+      throw new Error(`Details fetch failed: ${response.status}`);
+    }
+    
+    const res = await response.json();
+    
     let trailerUrl = '';
     if (res.videos && res.videos.results) {
       const trailer = res.videos.results.find(v => v.type === 'Trailer' && v.site === 'YouTube') || res.videos.results[0];
