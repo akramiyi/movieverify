@@ -132,6 +132,8 @@ function App() {
     return <IntroAnimation onComplete={() => setShowIntro(false)} />;
   }
 
+  console.log('showAdmin:', showAdmin);
+
   return (
     <div className="min-h-screen bg-[#141414] text-white">
       <AnimatePresence>
@@ -153,6 +155,7 @@ function App() {
         searchQuery={searchQuery} 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
+        onAdminClick={() => setShowAdmin(true)}
       />
 
       {tmdbError && (

@@ -33,6 +33,12 @@ export const getDownloadLinks = (movieId, movieTitle) => {
   if (activeLinks[movieId]) {
     return activeLinks[movieId];
   }
+  if (activeLinks[`${movieId}-movie`]) {
+    return activeLinks[`${movieId}-movie`];
+  }
+  if (activeLinks[`${movieId}-tv`]) {
+    return activeLinks[`${movieId}-tv`];
+  }
   
   const localMatch = localMovies.find(
     (m) => String(m.id) === String(movieId) || (m.title && movieTitle && m.title.toLowerCase() === movieTitle.toLowerCase())

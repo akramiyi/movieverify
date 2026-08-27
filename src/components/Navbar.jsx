@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Bell, User, Menu, X } from 'lucide-react';
 
-const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab }) => {
+const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdminClick }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -108,12 +108,20 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab }) => 
             <Bell className="w-5 h-5 md:w-6 md:h-6" />
           </button>
           
-          <div className="flex items-center gap-2 cursor-pointer">
-            <div className="w-8 h-8 rounded bg-blue-600 flex items-center justify-center text-white">
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              console.log('MOVIEVERIFY ADMIN ICON CLICKED');
+              if (onAdminClick) onAdminClick();
+            }} 
+            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
+          >
+            <div className="w-8 h-8 rounded bg-blue-600 flex items-center justify-center text-white pointer-events-none">
               <User className="w-5 h-5" />
             </div>
-            <span className="hidden sm:block text-white text-xs">&#9662;</span>
-          </div>
+            <span className="hidden sm:block text-white text-xs pointer-events-none">&#9662;</span>
+          </button>
         </div>
       </div>
 

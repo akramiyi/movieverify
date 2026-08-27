@@ -39,7 +39,11 @@ const AdminPanel = ({ onClose }) => {
             .eq('user_id', session.user.id)
             .maybeSingle();
           
-          if (adminData && !adminErr) {
+          console.log('Supabase session:', !!session);
+          const isAdmin = !!(adminData && !adminErr);
+          console.log('Admin authorized:', isAdmin);
+
+          if (isAdmin) {
             setIsLoggedIn(true);
             fetchCurrentLinks();
           } else {
@@ -179,7 +183,7 @@ const AdminPanel = ({ onClose }) => {
       const { error } = await supabase
         .from('download_links')
         .upsert({
-          id: String(selectedMovie.id),
+          id: `${selectedMovie.id}-${selectedMovie.mediaType || 'movie'}`,
           tmdb_id: String(selectedMovie.id),
           media_type: selectedMovie.mediaType || 'movie',
           title: selectedMovie.title,
@@ -187,7 +191,7 @@ const AdminPanel = ({ onClose }) => {
           download720p: link720.trim(),
           download1080p: link1080.trim(),
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'tmdb_id,media_type' });
 
       if (error) throw error;
 
