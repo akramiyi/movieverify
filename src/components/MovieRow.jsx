@@ -25,6 +25,8 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
     ? [...movies, ...movies, ...movies, ...movies] 
     : [];
 
+  const scrollDuration = movies && movies.length > 0 ? `${movies.length * 6.5}s` : '50s';
+
   return (
     <div className="space-y-2 md:space-y-4 mb-8 overflow-visible">
       <div className="flex items-center justify-between px-4 md:px-12">
@@ -42,7 +44,10 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
       </div>
       
       <div className="overflow-hidden w-full relative md:-ml-2">
-        <div className={`${!isLoading ? 'animate-marquee' : 'flex'} flex items-center space-x-2 py-10 px-4 md:px-12`}>
+        <div 
+          className={`${!isLoading ? 'animate-marquee' : 'flex'} flex items-center space-x-2 py-10 px-4 md:px-12`}
+          style={{ animationDuration: scrollDuration }}
+        >
           {isLoading ? (
             Array.from({ length: 6 }).map((_, index) => (
               <SkeletonCard key={index} />
