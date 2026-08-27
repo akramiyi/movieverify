@@ -217,14 +217,6 @@ export const useTMDB = () => {
         const webSeriesRes = await fetchTMDB('/tv/popular?language=en-US&page=1');
         const webSeriesList = (webSeriesRes.results || []).map(formatMovie);
 
-        const featuredList = trendingList.filter(m => m.backdrop && m.description).slice(0, 6);
-
-        // Resolve Download Available Movies (combines downloadLinks.js keys + local movies with links)
-        const downloadAvailableIds = Object.keys(downloadLinks).filter(id => {
-          const links = downloadLinks[id];
-          return !!(links.download480p || links.download720p || links.download1080p);
-        });
-
         const allFetchedSoFar = [
           ...trendingList,
           ...popularList,
@@ -232,6 +224,30 @@ export const useTMDB = () => {
           ...southIndianList,
           ...webSeriesList
         ];
+
+        // Deduplicate and filter master pool of all categories for Hero Section
+        const uniqueHeroPool = [];
+        const seenHeroIds = new Set();
+        allFetchedSoFar.forEach(m => {
+          if (m.backdrop && m.description) {
+            const key = String(m.id);
+            if (!seenHeroIds.has(key)) {
+              seenHeroIds.add(key);
+              uniqueHeroPool.push(m);
+            }
+          }
+        });
+
+        // Randomly shuffle to give a diverse cinematic layout
+        const featuredList = uniqueHeroPool
+          .sort(() => 0.5 - Math.random())
+          .slice(0, 8);
+
+        // Resolve Download Available Movies (combines downloadLinks.js keys + local movies with links)
+        const downloadAvailableIds = Object.keys(downloadLinks).filter(id => {
+          const links = downloadLinks[id];
+          return !!(links.download480p || links.download720p || links.download1080p);
+        });
 
         const resolvedList = await fetchMetadataForIds(downloadAvailableIds, allFetchedSoFar);
 
