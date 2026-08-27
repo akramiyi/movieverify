@@ -92,7 +92,7 @@ function App() {
 
   const appLoading = isTMDBLoading || isTimerLoading;
 
-  const displayFeatured = (tmdbError || !featured) ? getFeaturedMovies() : [featured];
+  const displayFeatured = (tmdbError || !featured || featured.length === 0) ? getFeaturedMovies() : featured;
   const displayTrending = (tmdbError || trending.length === 0) ? getTrendingMovies() : trending;
   const displayPopular = (tmdbError || popular.length === 0) ? getTrendingMovies() : popular;
   const displayBollywood = (tmdbError || bollywood.length === 0) ? getMoviesByCategory('Bollywood') : bollywood;

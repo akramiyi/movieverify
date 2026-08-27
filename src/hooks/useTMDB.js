@@ -169,7 +169,7 @@ export const useTMDB = () => {
     bollywood: [],
     southIndian: [],
     webSeries: [],
-    featured: null,
+    featured: [],
     downloadAvailable: [],
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -217,7 +217,7 @@ export const useTMDB = () => {
         const webSeriesRes = await fetchTMDB('/tv/popular?language=en-US&page=1');
         const webSeriesList = (webSeriesRes.results || []).map(formatMovie);
 
-        const featuredMovie = trendingList.find(m => m.backdrop && m.description) || trendingList[0] || null;
+        const featuredList = trendingList.filter(m => m.backdrop && m.description).slice(0, 6);
 
         // Resolve Download Available Movies (combines downloadLinks.js keys + local movies with links)
         const downloadAvailableIds = Object.keys(downloadLinks).filter(id => {
@@ -264,7 +264,7 @@ export const useTMDB = () => {
             bollywood: bollywoodList,
             southIndian: southIndianList,
             webSeries: webSeriesList,
-            featured: featuredMovie,
+            featured: featuredList,
             downloadAvailable: deduplicatedDownloads
           });
           setError(null);
