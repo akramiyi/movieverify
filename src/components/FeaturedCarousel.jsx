@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Plus, Info, Play } from 'lucide-react';
+import { fetchTMDBDetails } from '../hooks/useTMDB';
 
 const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -94,9 +95,16 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
                   Download
                 </button>
                 <button 
-                  onClick={() => {
+                  onClick={async () => {
                     if (currentMovie.trailerUrl && currentMovie.trailerUrl !== '#') {
                       window.open(currentMovie.trailerUrl, '_blank');
+                    } else if (currentMovie.id) {
+                      const res = await fetchTMDBDetails(currentMovie.id, currentMovie.mediaType);
+                      if (res.trailerUrl) {
+                        window.open(res.trailerUrl, '_blank');
+                      } else {
+                        alert('Trailer link is not available yet.');
+                      }
                     } else {
                       alert('Trailer link is not available yet.');
                     }
