@@ -11,7 +11,7 @@ import { movies, getFeaturedMovies, getTrendingMovies, getMoviesByCategory } fro
 import IntroAnimation from './components/IntroAnimation';
 
 import { useTMDB, searchTMDB } from './hooks/useTMDB';
-
+import InstallPWA from './components/InstallPWA';
 function App() {
   const [showIntro, setShowIntro] = useState(() => {
     // return !sessionStorage.getItem('introShown');
@@ -324,6 +324,7 @@ function App() {
       {showAdmin && (
         <AdminPanel onClose={() => setShowAdmin(false)} />
       )}
+      <InstallPWA />
     </div>
   );
 }
