@@ -219,7 +219,7 @@ const AdminPanel = ({ onClose }) => {
           download720p: link720.trim(),
           download1080p: link1080.trim(),
           updated_at: new Date().toISOString()
-        }, { onConflict: 'tmdb_id,media_type' });
+        }, { onConflict: 'id' });
 
       if (error) throw error;
 
@@ -230,7 +230,12 @@ const AdminPanel = ({ onClose }) => {
       setLink1080('');
       fetchCurrentLinks();
     } catch (err) {
-      console.error('Supabase save error:', err);
+      console.error('Supabase save error details:', {
+        code: err?.code,
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint
+      });
       setActionStatus({ type: 'error', message: 'Failed to update links in database.' });
     }
   };
