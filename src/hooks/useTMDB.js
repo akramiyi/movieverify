@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import downloadLinks from '../data/downloadLinks';
+import { supabase } from '../data/supabaseClient';
+import staticDownloadLinks from '../data/downloadLinks';
 import { movies as localMovies } from '../data/movies';
 
 const BASE_URL = 'https://api.themoviedb.org/3';
@@ -25,10 +26,12 @@ console.log(
   Boolean(import.meta.env.VITE_TMDB_TOKEN)
 );
 
+export const activeLinks = { ...staticDownloadLinks };
+
 // Helper to merge local download links with priority
 export const getDownloadLinks = (movieId, movieTitle) => {
-  if (downloadLinks[movieId]) {
-    return downloadLinks[movieId];
+  if (activeLinks[movieId]) {
+    return activeLinks[movieId];
   }
   
   const localMatch = localMovies.find(
@@ -181,6 +184,27 @@ export const useTMDB = () => {
     const fetchAllData = async () => {
       try {
         setIsLoading(true);
+
+        try {
+          const { data: dbData, error: dbErr } = await supabase
+            .from('download_links')
+            .select('*');
+          
+          if (dbErr) {
+            console.error('Supabase load error:', dbErr);
+          } else if (dbData) {
+            dbData.forEach(row => {
+              activeLinks[row.id] = {
+                download480p: row.download480p || null,
+                download720p: row.download720p || null,
+                download1080p: row.download1080p || null,
+                seasons: null
+              };
+            });
+          }
+        } catch (e) {
+          console.error('Supabase fetch failed, relying on local config:', e);
+        }
         
         const trendingRes = await fetchTMDB('/trending/all/week');
         const trendingList = (trendingRes.results || []).map(formatMovie);
@@ -243,9 +267,9 @@ export const useTMDB = () => {
           .sort(() => 0.5 - Math.random())
           .slice(0, 8);
 
-        // Resolve Download Available Movies (combines downloadLinks.js keys + local movies with links)
-        const downloadAvailableIds = Object.keys(downloadLinks).filter(id => {
-          const links = downloadLinks[id];
+        // Resolve Download Available Movies (combines activeLinks keys + local movies with links)
+        const downloadAvailableIds = Object.keys(activeLinks).filter(id => {
+          const links = activeLinks[id];
           return !!(links.download480p || links.download720p || links.download1080p);
         });
 

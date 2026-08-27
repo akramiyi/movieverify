@@ -6,6 +6,7 @@ import MovieRow from './components/MovieRow';
 import MovieCard from './components/MovieCard';
 import MovieDetailsModal from './components/MovieDetailsModal';
 import Footer from './components/Footer';
+import AdminPanel from './components/AdminPanel';
 import { movies, getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
 import IntroAnimation from './components/IntroAnimation';
 
@@ -20,6 +21,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('home');
   const [seeAllSection, setSeeAllSection] = useState(null);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   useEffect(() => {
     setSeeAllSection(null);
@@ -305,7 +307,7 @@ function App() {
         )}
       </main>
 
-      <Footer />
+      <Footer onAdminClick={() => setShowAdmin(true)} />
 
       <MovieDetailsModal 
         movie={selectedMovie} 
@@ -315,6 +317,10 @@ function App() {
         myList={myList}
         onToggleMyList={toggleMyList}
       />
+
+      {showAdmin && (
+        <AdminPanel onClose={() => setShowAdmin(false)} />
+      )}
     </div>
   );
 }
