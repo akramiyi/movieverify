@@ -6,6 +6,7 @@ import SkeletonCard from './SkeletonCard';
 const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyList, onSeeAll }) => {
   const rowRef = useRef(null);
   const [isMoved, setIsMoved] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
   const handleClick = (direction) => {
     setIsMoved(true);
@@ -46,7 +47,12 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
       <div className="overflow-hidden w-full relative md:-ml-2">
         <div 
           className={`${!isLoading ? 'animate-marquee' : 'flex'} flex items-center space-x-2 py-10 px-4 md:px-12`}
-          style={{ animationDuration: scrollDuration }}
+          style={{ 
+            animationDuration: scrollDuration,
+            animationPlayState: isPaused ? 'paused' : 'running'
+          }}
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={() => setIsPaused(false)}
         >
           {isLoading ? (
             Array.from({ length: 6 }).map((_, index) => (
