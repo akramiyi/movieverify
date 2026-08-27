@@ -86,12 +86,20 @@ const AdminPanel = ({ onClose }) => {
       }
 
       if (authData?.user) {
-        // 2. Query admin_users table to verify role
-        console.log('Authenticated user ID:', authData.user?.id);
+        // 2. Ensure session is established
+        const { data: { user }, error: getUserErr } = await supabase.auth.getUser();
+        
+        if (getUserErr || !user) {
+          setLoginError('Authentication session failed to establish.');
+          setIsAuthenticating(false);
+          return;
+        }
+
+        console.log('Authenticated user ID:', user.id);
         const { data: adminData, error: adminErr } = await supabase
           .from('admin_users')
           .select('user_id')
-          .eq('user_id', authData.user.id)
+          .eq('user_id', user.id)
           .maybeSingle();
 
         console.log('Admin record found:', adminData);
