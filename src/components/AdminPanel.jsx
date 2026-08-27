@@ -35,11 +35,19 @@ const AdminPanel = ({ onClose }) => {
           // Verify admin role in admin_users table
           const { data: adminData, error: adminErr } = await supabase
             .from('admin_users')
-            .select('*')
+            .select('user_id')
             .eq('user_id', session.user.id)
             .maybeSingle();
           
           console.log('Supabase session:', !!session);
+          console.log('Authenticated user ID (mount):', session.user?.id);
+          console.log('Admin record found (mount):', adminData);
+          console.log('Admin query error (mount):', adminErr);
+
+          if (adminErr) {
+             console.error('Admin authorization query failed (mount):', adminErr);
+          }
+
           const isAdmin = !!(adminData && !adminErr);
           console.log('Admin authorized:', isAdmin);
 
@@ -79,13 +87,25 @@ const AdminPanel = ({ onClose }) => {
 
       if (authData?.user) {
         // 2. Query admin_users table to verify role
+        console.log('Authenticated user ID:', authData.user?.id);
         const { data: adminData, error: adminErr } = await supabase
           .from('admin_users')
-          .select('*')
+          .select('user_id')
           .eq('user_id', authData.user.id)
           .maybeSingle();
 
-        if (adminErr || !adminData) {
+        console.log('Admin record found:', adminData);
+        console.log('Admin query error:', adminErr);
+
+        if (adminErr) {
+          console.error('Admin authorization query failed:', adminErr);
+          setLoginError('Unable to verify admin access. Please try again.');
+          await supabase.auth.signOut();
+          setIsAuthenticating(false);
+          return;
+        }
+
+        if (!adminData) {
           setLoginError('You are not authorized to access the Admin Panel.');
           await supabase.auth.signOut();
           setIsAuthenticating(false);
