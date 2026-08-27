@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Play, Plus, ThumbsUp, Download, Check } from 'lucide-react';
 import { movies } from '../data/movies';
-import { fetchTMDBDetails } from '../hooks/useTMDB';
+import { fetchTMDBDetails, getDownloadLinks } from '../hooks/useTMDB';
 
 const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie }) => {
   if (!movie) return null;
@@ -12,6 +12,12 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
     trailerUrl: '',
     runtime: null
   });
+
+  const liveLinks = movie ? getDownloadLinks(movie.id, movie.title) : {};
+  const download480p = liveLinks.download480p || movie?.download480p;
+  const download720p = liveLinks.download720p || movie?.download720p;
+  const download1080p = liveLinks.download1080p || movie?.download1080p;
+  const seasons = liveLinks.seasons || movie?.seasons;
 
   useEffect(() => {
     if (movie && movie.id) {
@@ -146,9 +152,9 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                 {/* Download Options */}
                 <div>
                   <h3 id="download-options" className="text-xl font-bold text-white mb-4">Download Options</h3>
-                  {movie.seasons ? (
+                  {seasons ? (
                      <div className="flex flex-col gap-4">
-                       {movie.seasons.map((s, idx) => {
+                       {seasons.map((s, idx) => {
                          const hasAnySeasonLink = s.parts.some(p => p.download480p || p.download720p || p.download1080p);
                          if (!hasAnySeasonLink) return null;
                          
@@ -173,24 +179,24 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                      </div>
                   ) : (
                     <div>
-                      {!(movie.download480p || movie.download720p || movie.download1080p) ? (
+                      {!(download480p || download720p || download1080p) ? (
                         <p className="text-gray-400 text-sm py-2">Download links unavailable</p>
                       ) : (
                         <div className="grid grid-cols-3 gap-4">
-                          {movie.download480p && (
-                            <button onClick={() => handleDownload('480p', movie.download480p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
+                          {download480p && (
+                            <button onClick={() => handleDownload('480p', download480p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
                               <span className="text-lg font-bold">480p</span>
                               <span className="text-xs text-gray-400 mt-1">~500 MB</span>
                             </button>
                           )}
-                          {movie.download720p && (
-                            <button onClick={() => handleDownload('720p', movie.download720p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-primary rounded-lg transition">
+                          {download720p && (
+                            <button onClick={() => handleDownload('720p', download720p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-primary rounded-lg transition">
                               <span className="text-lg font-bold">720p</span>
                               <span className="text-xs text-white/70 mt-1">~1.2 GB</span>
                             </button>
                           )}
-                          {movie.download1080p && (
-                            <button onClick={() => handleDownload('1080p', movie.download1080p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
+                          {download1080p && (
+                            <button onClick={() => handleDownload('1080p', download1080p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
                               <span className="text-lg font-bold">1080p</span>
                               <span className="text-xs text-gray-400 mt-1">~2.5 GB</span>
                             </button>

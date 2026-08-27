@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
-import { searchTMDB } from '../hooks/useTMDB';
+import { searchTMDB, activeLinks } from '../hooks/useTMDB';
 
 const AdminPanel = ({ onClose }) => {
   // Login State
@@ -154,6 +154,18 @@ const AdminPanel = ({ onClose }) => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      
+      if (data) {
+        data.forEach(row => {
+          activeLinks[row.id] = {
+            download480p: row.download480p || null,
+            download720p: row.download720p || null,
+            download1080p: row.download1080p || null,
+            seasons: null
+          };
+        });
+      }
+
       setActiveDbList(data || []);
     } catch (e) {
       console.error('Failed to load links from Supabase:', e);
@@ -255,6 +267,7 @@ const AdminPanel = ({ onClose }) => {
 
       if (error) throw error;
 
+      delete activeLinks[String(id)];
       setActionStatus({ type: 'success', message: `Links for "${title}" deleted.` });
       fetchCurrentLinks();
     } catch (err) {
