@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X } from 'lucide-react';
+import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Edit2 } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, activeLinks } from '../hooks/useTMDB';
 
@@ -195,6 +195,17 @@ const AdminPanel = ({ onClose }) => {
 
     return () => clearTimeout(delayDebounce);
   }, [searchQuery]);
+
+  // Load item into form for editing
+  const handleEditItem = (item) => {
+    const movieObj = {
+      id: item.tmdb_id || item.id,
+      title: item.title,
+      mediaType: item.media_type,
+      poster: null 
+    };
+    handleSelectMovie(movieObj);
+  };
 
   // Handle movie selection from dropdown
   const handleSelectMovie = (movie) => {
@@ -576,13 +587,22 @@ const AdminPanel = ({ onClose }) => {
                       ].filter(Boolean).join(', ') || 'None'}
                     </div>
                   </div>
-                  <button 
-                    onClick={() => handleDelete(item.id, item.title)}
-                    className="p-1.5 text-gray-500 hover:text-red-500 transition focus:outline-none flex-shrink-0"
-                    title="Delete entry"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => handleEditItem(item)}
+                      className="p-2 text-gray-500 hover:text-blue-400 hover:bg-white/5 rounded transition focus:outline-none"
+                      title="Edit Configuration"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(item.id, item.title)}
+                      className="p-2 text-gray-500 hover:text-red-400 hover:bg-white/5 rounded transition focus:outline-none"
+                      title="Delete Configuration"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
