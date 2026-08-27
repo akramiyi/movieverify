@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Bell, User, Menu, X } from 'lucide-react';
 
-const Navbar = ({ onSearch, searchQuery }) => {
+const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -37,7 +37,10 @@ const Navbar = ({ onSearch, searchQuery }) => {
             {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
 
-          <div className="flex items-center gap-1.5 cursor-pointer select-none font-black text-lg md:text-2xl">
+          <div 
+            onClick={() => { setActiveTab('home'); onSearch(''); }}
+            className="flex items-center gap-1.5 cursor-pointer select-none font-black text-lg md:text-2xl"
+          >
             <div className="flex items-center justify-center w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-[#FF3445] to-[#E50914] rounded-md shadow-[0_0_10px_rgba(229,9,20,0.5)] text-white text-sm md:text-base font-black">
               M
             </div>
@@ -47,11 +50,36 @@ const Navbar = ({ onSearch, searchQuery }) => {
           </div>
           
           <div className="hidden lg:flex items-center gap-5 text-sm font-medium text-gray-300">
-            <a href="#" className="text-white hover:text-gray-300 transition">Home</a>
-            <a href="#" className="hover:text-gray-300 transition">TV Shows</a>
-            <a href="#" className="hover:text-gray-300 transition">Movies</a>
-            <a href="#" className="hover:text-gray-300 transition">New & Popular</a>
-            <a href="#" className="hover:text-gray-300 transition">My List</a>
+            <button 
+              onClick={() => { setActiveTab('home'); onSearch(''); }}
+              className={`transition ${activeTab === 'home' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            >
+              Home
+            </button>
+            <button 
+              onClick={() => { setActiveTab('tv'); onSearch(''); }}
+              className={`transition ${activeTab === 'tv' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            >
+              TV Shows
+            </button>
+            <button 
+              onClick={() => { setActiveTab('movies'); onSearch(''); }}
+              className={`transition ${activeTab === 'movies' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            >
+              Movies
+            </button>
+            <button 
+              onClick={() => { setActiveTab('popular'); onSearch(''); }}
+              className={`transition ${activeTab === 'popular' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            >
+              New & Popular
+            </button>
+            <button 
+              onClick={() => { setActiveTab('mylist'); onSearch(''); }}
+              className={`transition ${activeTab === 'mylist' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            >
+              My List
+            </button>
           </div>
         </div>
 
@@ -92,11 +120,36 @@ const Navbar = ({ onSearch, searchQuery }) => {
       {/* Mobile Menu Dropdown Links */}
       {isMobileMenuOpen && (
         <div className="lg:hidden bg-[#141414] border-t border-white/10 px-6 py-4 flex flex-col gap-4 text-sm font-medium text-gray-300 transition-all duration-300">
-          <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="text-white hover:text-gray-300 transition">Home</a>
-          <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-gray-300 transition">TV Shows</a>
-          <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-gray-300 transition">Movies</a>
-          <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-gray-300 transition">New & Popular</a>
-          <a href="#" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-gray-300 transition">My List</a>
+          <button 
+            onClick={() => { setActiveTab('home'); onSearch(''); setIsMobileMenuOpen(false); }}
+            className={`text-left transition ${activeTab === 'home' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+          >
+            Home
+          </button>
+          <button 
+            onClick={() => { setActiveTab('tv'); onSearch(''); setIsMobileMenuOpen(false); }}
+            className={`text-left transition ${activeTab === 'tv' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+          >
+            TV Shows
+          </button>
+          <button 
+            onClick={() => { setActiveTab('movies'); onSearch(''); setIsMobileMenuOpen(false); }}
+            className={`text-left transition ${activeTab === 'movies' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+          >
+            Movies
+          </button>
+          <button 
+            onClick={() => { setActiveTab('popular'); onSearch(''); setIsMobileMenuOpen(false); }}
+            className={`text-left transition ${activeTab === 'popular' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+          >
+            New & Popular
+          </button>
+          <button 
+            onClick={() => { setActiveTab('mylist'); onSearch(''); setIsMobileMenuOpen(false); }}
+            className={`text-left transition ${activeTab === 'mylist' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+          >
+            My List
+          </button>
         </div>
       )}
     </nav>
