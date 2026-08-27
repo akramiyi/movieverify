@@ -387,7 +387,7 @@ export const searchTMDB = async (query) => {
 export const fetchTMDBDetails = async (id, mediaType) => {
   try {
     const type = mediaType === 'tv' ? 'tv' : 'movie';
-    const response = await fetch(`${BASE_URL}/${type}/${id}?append_to_response=credits,videos`, {
+    const response = await fetch(`${BASE_URL}/${type}/${id}?append_to_response=credits,videos&include_video_language=en,hi,te,ta,ml,null`, {
       headers
     });
     
@@ -398,9 +398,12 @@ export const fetchTMDBDetails = async (id, mediaType) => {
     const res = await response.json();
     
     let trailerUrl = '';
-    if (res.videos && res.videos.results) {
-      const trailer = res.videos.results.find(v => v.type === 'Trailer' && v.site === 'YouTube') || res.videos.results[0];
-      if (trailer) {
+    if (res.videos && res.videos.results && res.videos.results.length > 0) {
+      const youtubeVideos = res.videos.results.filter(v => v.site === 'YouTube');
+      if (youtubeVideos.length > 0) {
+        const trailer = youtubeVideos.find(v => v.type === 'Trailer') || 
+                        youtubeVideos.find(v => v.type === 'Teaser') || 
+                        youtubeVideos[0];
         trailerUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
       }
     }
