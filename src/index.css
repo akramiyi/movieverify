@@ -41,11 +41,11 @@ body {
 .animate-marquee {
   display: flex;
   width: max-content;
-  animation: marquee 60s linear infinite;
+  animation: marquee 35s linear infinite;
 }
 
 .animate-marquee:hover {
-  animation-play-state: paused;
+  animation-play-state: paused !important;
 }
 
 /* Custom Scrollbar for Rows */
