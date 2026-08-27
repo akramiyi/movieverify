@@ -22,15 +22,18 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
       <AnimatePresence initial={false}>
         <motion.div
           key={currentIndex}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 1.5 }}
+          initial={{ opacity: 0, x: 80 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -80 }}
+          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
           className="absolute inset-0"
         >
-          {/* Backdrop Image */}
-          <img 
-            className="absolute inset-0 w-full h-full object-cover scale-105"
+          {/* Backdrop Image with dynamic zoom effect */}
+          <motion.img 
+            initial={{ scale: 1.08 }}
+            animate={{ scale: 1.02 }}
+            transition={{ duration: 6, ease: "easeOut" }}
+            className="absolute inset-0 w-full h-full object-cover"
             src={currentMovie.backdrop || currentMovie.poster}
             alt={currentMovie.title}
             onError={(e) => {
