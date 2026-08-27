@@ -21,6 +21,10 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
 
   if (!isLoading && (!movies || movies.length === 0)) return null;
 
+  const marqueeMovies = movies && movies.length > 0 
+    ? [...movies, ...movies, ...movies, ...movies] 
+    : [];
+
   return (
     <div className="space-y-2 md:space-y-4 mb-8 overflow-visible">
       <div className="flex items-center justify-between px-4 md:px-12">
@@ -37,41 +41,25 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
         )}
       </div>
       
-      <div className="group relative md:-ml-2 overflow-visible">
-        {!isLoading && (
-          <ChevronLeft 
-            className={`absolute top-0 bottom-0 left-2 z-40 m-auto h-9 w-9 cursor-pointer opacity-0 transition hover:scale-125 group-hover:opacity-100 ${!isMoved && 'hidden'}`}
-            onClick={() => handleClick('left')}
-          />
-        )}
-        
-        <div 
-          ref={rowRef}
-          className="flex items-center space-x-2 overflow-x-scroll hide-scrollbar px-4 md:px-12 py-12"
-        >
+      <div className="overflow-hidden w-full relative md:-ml-2">
+        <div className={`${!isLoading ? 'animate-marquee' : 'flex'} flex items-center space-x-2 py-10 px-4 md:px-12`}>
           {isLoading ? (
             Array.from({ length: 6 }).map((_, index) => (
               <SkeletonCard key={index} />
             ))
           ) : (
-            movies.map((movie) => (
-              <MovieCard 
-                key={movie.id} 
-                movie={movie} 
-                onClick={() => onMovieClick(movie)} 
-                myList={myList}
-                onToggleMyList={onToggleMyList}
-              />
+            marqueeMovies.map((movie, idx) => (
+              <div key={`${movie.id}-${idx}`} className="flex-shrink-0">
+                <MovieCard 
+                  movie={movie} 
+                  onClick={() => onMovieClick(movie)} 
+                  myList={myList}
+                  onToggleMyList={onToggleMyList}
+                />
+              </div>
             ))
           )}
         </div>
-
-        {!isLoading && (
-          <ChevronRight 
-            className="absolute top-0 bottom-0 right-2 z-40 m-auto h-9 w-9 cursor-pointer opacity-0 transition hover:scale-125 group-hover:opacity-100"
-            onClick={() => handleClick('right')}
-          />
-        )}
       </div>
     </div>
   );
