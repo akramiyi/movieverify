@@ -236,7 +236,10 @@ const AdminPanel = ({ onClose }) => {
         details: err?.details,
         hint: err?.hint
       });
-      setActionStatus({ type: 'error', message: 'Failed to update links in database.' });
+      setActionStatus({ 
+        type: 'error', 
+        message: `DB Error: ${err?.message || err?.code || 'Failed to update links'}` 
+      });
     }
   };
 
