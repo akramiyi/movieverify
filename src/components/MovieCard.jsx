@@ -35,6 +35,8 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
     }
   }
 
+  const hasDownloadLink = !!(movie.download480p || movie.download720p || movie.download1080p || movie.seasons);
+
   return (
     <div 
       className="flex flex-col flex-none w-[160px] md:w-[240px] cursor-pointer overflow-visible gap-1.5"
@@ -65,6 +67,12 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
             e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(movie.title)}`;
           }}
         />
+        {hasDownloadLink && (
+          <div className="absolute top-1.5 right-1.5 bg-green-600/90 text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md uppercase tracking-wider backdrop-blur-sm z-10 flex items-center gap-0.5">
+            <Download className="w-2.5 h-2.5 stroke-[3]" />
+            Available
+          </div>
+        )}
       </div>
 
       <span className="text-[11px] md:text-xs font-semibold tracking-wider uppercase text-neutral-400 group-hover:text-[#E50914] transition-colors duration-300 mt-1 truncate px-1">

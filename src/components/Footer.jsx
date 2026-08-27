@@ -55,9 +55,12 @@ const Footer = () => {
           Service Code
         </button>
 
-        {/* Copyright */}
-        <div className="text-xs">
-          © 2024-2026 MovieVerify, Inc.
+        {/* Copyright & TMDB Attribution */}
+        <div className="text-xs flex flex-col gap-1.5">
+          <div>© 2024-2026 MovieVerify, Inc.</div>
+          <div className="text-gray-600 text-[10px] md:text-[11px] leading-relaxed">
+            This product uses the TMDB API but is not endorsed or certified by TMDB.
+          </div>
         </div>
       </div>
     </footer>

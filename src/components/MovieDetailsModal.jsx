@@ -1,10 +1,37 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Play, Plus, ThumbsUp, Download, Check } from 'lucide-react';
 import { movies } from '../data/movies';
+import { fetchTMDBDetails } from '../hooks/useTMDB';
 
 const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie }) => {
   if (!movie) return null;
+
+  const [details, setDetails] = useState({
+    cast: 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
+    trailerUrl: '',
+    runtime: null
+  });
+
+  useEffect(() => {
+    if (movie && movie.id) {
+      if (!isNaN(Number(movie.id))) {
+        fetchTMDBDetails(movie.id, movie.mediaType).then((res) => {
+          setDetails({
+            cast: res.cast || 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
+            trailerUrl: res.trailerUrl || '',
+            runtime: res.runtime || null
+          });
+        });
+      } else {
+        setDetails({
+          cast: movie.cast || 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
+          trailerUrl: movie.trailerUrl || '',
+          runtime: movie.runtime || null
+        });
+      }
+    }
+  }, [movie]);
 
   const isAddedToList = myList.some((m) => m.id === movie.id);
 
@@ -74,7 +101,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
               
               <div className="absolute bottom-10 left-10">
                 <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 drop-shadow-lg">{movie.title}</h2>
-                <div className="flex gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                   <button 
                     onClick={() => {
                       document.getElementById('download-options')?.scrollIntoView({ behavior: 'smooth' });
@@ -83,6 +110,14 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                   >
                     <Download className="w-6 h-6 stroke-[3]" /> Download
                   </button>
+                  {details.trailerUrl && (
+                    <button 
+                      onClick={() => window.open(details.trailerUrl, '_blank')}
+                      className="flex items-center gap-2 bg-[#6d6d6eb3] hover:bg-[#6d6d6e66] text-white px-6 py-2 md:px-8 md:py-3 rounded md:text-lg font-bold transition"
+                    >
+                      <Play className="w-5 h-5 fill-current" /> Watch Trailer
+                    </button>
+                  )}
                   <button 
                     onClick={() => onToggleMyList(movie)}
                     className="w-10 h-10 md:w-12 md:h-12 border-2 border-gray-400 bg-[#2a2a2a]/50 hover:border-white rounded-full flex items-center justify-center text-white transition"
@@ -113,38 +148,55 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                   <h3 id="download-options" className="text-xl font-bold text-white mb-4">Download Options</h3>
                   {movie.seasons ? (
                      <div className="flex flex-col gap-4">
-                       {movie.seasons.map((s, idx) => (
-                         <div key={idx} className="bg-[#242424] p-4 rounded-lg">
-                           <h4 className="font-bold text-gray-300 mb-3">Season {s.season}</h4>
-                           <div className="flex flex-col gap-2">
-                             {s.parts.map((part, pIdx) => (
-                               <div key={pIdx} className="flex flex-col sm:flex-row justify-between items-center bg-[#181818] p-3 rounded">
-                                 <span>{part.name}</span>
-                                 <div className="flex gap-2 mt-2 sm:mt-0">
-                                  <button onClick={() => handleDownload('480p', part.download480p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">480p</button>
-                                  <button onClick={() => handleDownload('720p', part.download720p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">720p</button>
-                                  <button onClick={() => handleDownload('1080p', part.download1080p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">1080p</button>
+                       {movie.seasons.map((s, idx) => {
+                         const hasAnySeasonLink = s.parts.some(p => p.download480p || p.download720p || p.download1080p);
+                         if (!hasAnySeasonLink) return null;
+                         
+                         return (
+                           <div key={idx} className="bg-[#242424] p-4 rounded-lg">
+                             <h4 className="font-bold text-gray-300 mb-3">Season {s.season}</h4>
+                             <div className="flex flex-col gap-2">
+                               {s.parts.map((part, pIdx) => (
+                                 <div key={pIdx} className="flex flex-col sm:flex-row justify-between items-center bg-[#181818] p-3 rounded">
+                                   <span>{part.name}</span>
+                                   <div className="flex gap-2 mt-2 sm:mt-0">
+                                     {part.download480p && <button onClick={() => handleDownload('480p', part.download480p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">480p</button>}
+                                     {part.download720p && <button onClick={() => handleDownload('720p', part.download720p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">720p</button>}
+                                     {part.download1080p && <button onClick={() => handleDownload('1080p', part.download1080p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">1080p</button>}
+                                   </div>
                                  </div>
-                               </div>
-                             ))}
+                               ))}
+                             </div>
                            </div>
-                         </div>
-                       ))}
+                         );
+                       })}
                      </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-4">
-                      <button onClick={() => handleDownload('480p', movie.download480p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
-                        <span className="text-lg font-bold">480p</span>
-                        <span className="text-xs text-gray-400 mt-1">~500 MB</span>
-                      </button>
-                      <button onClick={() => handleDownload('720p', movie.download720p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-primary rounded-lg transition">
-                        <span className="text-lg font-bold">720p</span>
-                        <span className="text-xs text-white/70 mt-1">~1.2 GB</span>
-                      </button>
-                      <button onClick={() => handleDownload('1080p', movie.download1080p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
-                        <span className="text-lg font-bold">1080p</span>
-                        <span className="text-xs text-gray-400 mt-1">~2.5 GB</span>
-                      </button>
+                    <div>
+                      {!(movie.download480p || movie.download720p || movie.download1080p) ? (
+                        <p className="text-gray-400 text-sm py-2">Download links unavailable</p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-4">
+                          {movie.download480p && (
+                            <button onClick={() => handleDownload('480p', movie.download480p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
+                              <span className="text-lg font-bold">480p</span>
+                              <span className="text-xs text-gray-400 mt-1">~500 MB</span>
+                            </button>
+                          )}
+                          {movie.download720p && (
+                            <button onClick={() => handleDownload('720p', movie.download720p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-primary rounded-lg transition">
+                              <span className="text-lg font-bold">720p</span>
+                              <span className="text-xs text-white/70 mt-1">~1.2 GB</span>
+                            </button>
+                          )}
+                          {movie.download1080p && (
+                            <button onClick={() => handleDownload('1080p', movie.download1080p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
+                              <span className="text-lg font-bold">1080p</span>
+                              <span className="text-xs text-gray-400 mt-1">~2.5 GB</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -154,9 +206,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
               <div className="text-sm text-gray-400">
                 <div className="mb-4">
                   <span className="text-gray-500">Cast: </span>
-                  <span className="hover:underline cursor-pointer">Placeholder Actor 1</span>,{' '}
-                  <span className="hover:underline cursor-pointer">Placeholder Actor 2</span>,{' '}
-                  <span className="hover:underline cursor-pointer">Placeholder Actor 3</span>
+                  <span className="text-gray-300">{details.cast}</span>
                 </div>
                 <div className="mb-4">
                   <span className="text-gray-500">Genres: </span>

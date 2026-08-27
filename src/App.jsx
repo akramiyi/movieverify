@@ -8,6 +8,8 @@ import Footer from './components/Footer';
 import { movies, getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
 import IntroAnimation from './components/IntroAnimation';
 
+import { useTMDB, searchTMDB } from './hooks/useTMDB';
+
 function App() {
   const [showIntro, setShowIntro] = useState(() => {
     // return !sessionStorage.getItem('introShown');
@@ -15,7 +17,21 @@ function App() {
   });
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  
+  const {
+    trending,
+    popular,
+    bollywood,
+    southIndian,
+    webSeries,
+    featured,
+    isLoading: isTMDBLoading,
+    error: tmdbError
+  } = useTMDB();
+
+  const [isTimerLoading, setIsTimerLoading] = useState(true);
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [myList, setMyList] = useState(() => {
     try {
       const saved = localStorage.getItem('movieverify_mylist');
@@ -26,20 +42,57 @@ function App() {
     }
   });
 
-  const featuredMovies = getFeaturedMovies();
-  const trendingMovies = getTrendingMovies();
-  const bollywoodMovies = getMoviesByCategory('Bollywood');
-  const southIndianMovies = getMoviesByCategory('South Indian');
-  const webSeries = getMoviesByCategory('Web Series');
-  const actionMovies = getMoviesByCategory('Action');
-
   useEffect(() => {
-    // Snappy loading screen
+    // Snappy loading screen timer
     const timer = setTimeout(() => {
-      setIsLoading(false);
+      setIsTimerLoading(false);
     }, 1200);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (!searchQuery || !searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const results = await searchTMDB(searchQuery);
+        if (results.length === 0) {
+          const localResults = movies.filter(m => 
+            m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.genre.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+          setSearchResults(localResults);
+        } else {
+          setSearchResults(results);
+        }
+      } catch (err) {
+        console.error('Search failed, falling back to local:', err);
+        const localResults = movies.filter(m => 
+          m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          m.genre.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setSearchResults(localResults);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  const appLoading = isTMDBLoading || isTimerLoading;
+
+  const displayFeatured = (tmdbError || !featured) ? getFeaturedMovies() : [featured];
+  const displayTrending = (tmdbError || trending.length === 0) ? getTrendingMovies() : trending;
+  const displayPopular = (tmdbError || popular.length === 0) ? getTrendingMovies() : popular;
+  const displayBollywood = (tmdbError || bollywood.length === 0) ? getMoviesByCategory('Bollywood') : bollywood;
+  const displaySouthIndian = (tmdbError || southIndian.length === 0) ? getMoviesByCategory('South Indian') : southIndian;
+  const displayWebSeries = (tmdbError || webSeries.length === 0) ? getMoviesByCategory('Web Series') : webSeries;
 
   const toggleMyList = (movie) => {
     if (!movie) return;
@@ -60,12 +113,6 @@ function App() {
     });
   };
 
-  // Filter movies for search
-  const allFilteredMovies = movies.filter(m => 
-    m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.genre.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   if (showIntro) {
     return <IntroAnimation onComplete={() => setShowIntro(false)} />;
   }
@@ -73,7 +120,7 @@ function App() {
   return (
     <div className="min-h-screen bg-[#141414] text-white">
       <AnimatePresence>
-        {isLoading && (
+        {appLoading && (
           <motion.div 
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -88,16 +135,22 @@ function App() {
 
       <Navbar onSearch={setSearchQuery} searchQuery={searchQuery} />
 
+      {tmdbError && (
+        <div className="bg-red-950/80 border border-red-800 text-red-200 py-3 px-6 mx-4 md:mx-12 rounded mt-24 text-center text-sm md:text-base font-semibold shadow-lg">
+          {tmdbError}
+        </div>
+      )}
+
       <main className="pb-20 min-h-screen">
         {!searchQuery ? (
           <>
-            {isLoading ? (
+            {appLoading ? (
               <div className="relative w-full h-[80vh] md:h-[90vh] bg-[#181818] animate-pulse overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
               </div>
             ) : (
               <FeaturedCarousel 
-                movies={featuredMovies}
+                movies={displayFeatured}
                 onPlayTrailer={setSelectedMovie}
               />
             )}
@@ -109,40 +162,44 @@ function App() {
                   title="My List" 
                   movies={myList} 
                   onMovieClick={setSelectedMovie} 
-                  isLoading={isLoading} 
+                  isLoading={appLoading} 
                   myList={myList} 
                   onToggleMyList={toggleMyList} 
                 />
               )}
 
-              <MovieRow title="Trending Now" movies={trendingMovies} onMovieClick={setSelectedMovie} isLoading={isLoading} myList={myList} onToggleMyList={toggleMyList} />
-              <MovieRow title="Bollywood Hits" movies={bollywoodMovies} onMovieClick={setSelectedMovie} isLoading={isLoading} myList={myList} onToggleMyList={toggleMyList} />
-              <MovieRow title="South Indian Action" movies={southIndianMovies} onMovieClick={setSelectedMovie} isLoading={isLoading} myList={myList} onToggleMyList={toggleMyList} />
-              <MovieRow title="Web Series" movies={webSeries} onMovieClick={setSelectedMovie} isLoading={isLoading} myList={myList} onToggleMyList={toggleMyList} />
-              <MovieRow title="Action Movies" movies={actionMovies} onMovieClick={setSelectedMovie} isLoading={isLoading} myList={myList} onToggleMyList={toggleMyList} />
+              <MovieRow title="Trending Now" movies={displayTrending} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} />
+              <MovieRow title="Bollywood Hits" movies={displayBollywood} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} />
+              <MovieRow title="South Indian Action" movies={displaySouthIndian} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} />
+              <MovieRow title="Web Series" movies={displayWebSeries} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} />
+              <MovieRow title="Popular Movies" movies={displayPopular} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} />
             </div>
           </>
         ) : (
           <div className="pt-32 px-4 md:px-12">
             <h2 className="text-2xl font-bold mb-6">Search Results for "{searchQuery}"</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {allFilteredMovies.map(movie => (
-                <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="cursor-pointer hover:scale-105 transition flex flex-col items-center">
-                  <img 
-                    src={movie.poster} 
-                    alt={movie.title} 
-                    className="w-full aspect-[2/3] object-cover rounded-md"
-                    onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/300x450/141414/E50914?text=No+Poster' }}
-                  />
-                  <div className="mt-2 text-sm font-semibold truncate w-full text-center text-gray-200 hover:text-white">
-                    {movie.title}
+            {isSearching ? (
+              <p className="text-gray-400">Searching...</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {searchResults.map(movie => (
+                  <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="cursor-pointer hover:scale-105 transition flex flex-col items-center">
+                    <img 
+                      src={movie.poster} 
+                      alt={movie.title} 
+                      className="w-full aspect-[2/3] object-cover rounded-md"
+                      onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/300x450/141414/E50914?text=No+Poster' }}
+                    />
+                    <div className="mt-2 text-sm font-semibold truncate w-full text-center text-gray-200 hover:text-white">
+                      {movie.title}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {allFilteredMovies.length === 0 && (
-                <p className="text-gray-400 col-span-full">No titles found.</p>
-              )}
-            </div>
+                ))}
+                {searchResults.length === 0 && (
+                  <p className="text-gray-400 col-span-full">No movies or series found</p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </main>
