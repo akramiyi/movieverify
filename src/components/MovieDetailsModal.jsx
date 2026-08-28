@@ -21,8 +21,12 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
 
   useEffect(() => {
     if (movie && movie.id) {
-      if (!isNaN(Number(movie.id))) {
-        fetchTMDBDetails(movie.id, movie.mediaType).then((res) => {
+      const idStr = String(movie.id);
+      const parsedId = parseInt(idStr.split('-')[0], 10);
+      const mediaType = movie.mediaType || (idStr.includes('-tv') ? 'tv' : 'movie');
+
+      if (!isNaN(parsedId)) {
+        fetchTMDBDetails(parsedId, mediaType).then((res) => {
           setDetails({
             cast: res.cast || 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
             trailerUrl: res.trailerUrl || '',

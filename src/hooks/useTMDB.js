@@ -395,7 +395,8 @@ export const searchTMDB = async (query) => {
 export const fetchTMDBDetails = async (id, mediaType) => {
   try {
     const type = mediaType === 'tv' ? 'tv' : 'movie';
-    const response = await fetch(`${BASE_URL}/${type}/${id}?append_to_response=credits,videos&include_video_language=en,hi,te,ta,ml,null`, {
+    const parsedId = parseInt(String(id).split('-')[0], 10);
+    const response = await fetch(`${BASE_URL}/${type}/${parsedId}?append_to_response=credits,videos&include_video_language=en,hi,te,ta,ml,null`, {
       headers
     });
     
