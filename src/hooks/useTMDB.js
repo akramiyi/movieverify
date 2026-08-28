@@ -121,6 +121,16 @@ export const formatMovie = (m) => {
   };
 };
 
+const prioritizeDownloads = (list) => {
+  return list.sort((a, b) => {
+    const aHas = !!(a.download480p || a.download720p || a.download1080p || a.seasons);
+    const bHas = !!(b.download480p || b.download720p || b.download1080p || b.seasons);
+    if (aHas && !bHas) return -1;
+    if (!aHas && bHas) return 1;
+    return 0;
+  });
+};
+
 // Reusable fetch helper
 const fetchTMDB = async (endpoint) => {
   const token = import.meta.env.VITE_TMDB_TOKEN;
@@ -305,12 +315,12 @@ export const useTMDB = () => {
 
         if (active) {
           setData({
-            trending: trendingList,
-            popular: popularList,
-            bollywood: bollywoodList,
-            southIndian: southIndianList,
-            webSeries: webSeriesList,
-            featured: featuredList,
+            trending: prioritizeDownloads(trendingList),
+            popular: prioritizeDownloads(popularList),
+            bollywood: prioritizeDownloads(bollywoodList),
+            southIndian: prioritizeDownloads(southIndianList),
+            webSeries: prioritizeDownloads(webSeriesList),
+            featured: prioritizeDownloads(featuredList),
             downloadAvailable: deduplicatedDownloads
           });
           setError(null);
@@ -370,12 +380,14 @@ export const searchTMDB = async (query) => {
       return [];
     }
 
-    return data.results
+    const results = data.results
       .filter(item =>
         item.media_type === 'movie' ||
         item.media_type === 'tv'
       )
       .map(formatMovie);
+
+    return prioritizeDownloads(results);
 
   } catch (error) {
     console.error('TMDB search request failed:', error);
