@@ -394,7 +394,8 @@ const AdminPanel = ({ onClose }) => {
         {/* Left Form Panel */}
         <div className="flex-1 space-y-6">
           <div>
-            <h2 className="text-xl md:text-3xl font-extrabold text-white">Manage Downloads</h2>
+            <h2 className="text-xl md:text-2xl font-black text-[#E50914] mb-4">{getGreeting()}</h2>
+            <h3 className="text-lg md:text-xl font-bold text-white">Manage Downloads</h3>
             <p className="text-gray-400 text-xs mt-1">Search TMDB movies/series and assign download URLs</p>
           </div>
 
