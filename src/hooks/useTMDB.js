@@ -149,33 +149,28 @@ const fetchTMDB = async (endpoint) => {
   return response.json();
 };
 
-// Fetch metadata for a specific ID dynamically, trying movie then tv
 const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
   const result = [];
   for (const idStr of ids) {
-    const id = Number(idStr);
-    if (isNaN(id)) continue;
+    const parsedId = parseInt(idStr.split('-')[0], 10);
+    const mediaType = idStr.includes('-tv') ? 'tv' : 'movie';
     
-    const existing = alreadyFetchedList.find(m => String(m.id) === String(id));
+    if (isNaN(parsedId)) continue;
+    
+    const existing = alreadyFetchedList.find(m => String(m.id) === String(parsedId));
     if (existing) {
       result.push(existing);
       continue;
     }
     
     try {
-      let item;
-      try {
-        item = await fetchTMDB(`/movie/${id}`);
-        item.media_type = 'movie';
-      } catch (err) {
-        item = await fetchTMDB(`/tv/${id}`);
-        item.media_type = 'tv';
-      }
+      let item = await fetchTMDB(`/${mediaType}/${parsedId}`);
       if (item) {
+        item.media_type = mediaType;
         result.push(formatMovie(item));
       }
     } catch (e) {
-      console.error(`Failed to fetch metadata for TMDB ID: ${id}`, e);
+      console.error(`Failed to fetch metadata for TMDB ID: ${parsedId} (${mediaType})`, e);
     }
   }
   return result;
@@ -286,7 +281,7 @@ export const useTMDB = () => {
         // Resolve Download Available Movies (combines activeLinks keys + local movies with links)
         const downloadAvailableIds = Object.keys(activeLinks).filter(id => {
           const links = activeLinks[id];
-          return !!(links.download480p || links.download720p || links.download1080p);
+          return !!(links.download480p || links.download720p || links.download1080p || links.seasons);
         });
 
         const resolvedList = await fetchMetadataForIds(downloadAvailableIds, allFetchedSoFar);
