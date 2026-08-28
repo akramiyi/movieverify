@@ -28,6 +28,8 @@ const AdminPanel = ({ onClose }) => {
   const [actionStatus, setActionStatus] = useState({ type: '', message: '' });
   const [activeDbList, setActiveDbList] = useState([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [qualityFilter, setQualityFilter] = useState('all');
 
   // Check active session on mount
   useEffect(() => {
@@ -393,6 +395,25 @@ const AdminPanel = ({ onClose }) => {
 
         {/* Left Form Panel */}
         <div className="flex-1 space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 text-center">
+              <div className="text-3xl font-black text-white">{totalMovies}</div>
+              <div className="text-xs text-gray-400 mt-1">Total Movies</div>
+            </div>
+            <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 text-center">
+              <div className="text-3xl font-black text-[#E50914]">{missing1080p}</div>
+              <div className="text-xs text-gray-400 mt-1">Missing 1080p</div>
+            </div>
+            <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 text-center">
+              <div className="text-3xl font-black text-yellow-400">{missing720p}</div>
+              <div className="text-xs text-gray-400 mt-1">Missing 720p</div>
+            </div>
+            <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 text-center flex flex-col justify-center">
+              <div className="text-xl font-black text-green-400">{lastUpdated}</div>
+              <div className="text-xs text-gray-400 mt-1">Last Updated</div>
+            </div>
+          </div>
+
           <div>
             <h2 className="text-xl md:text-2xl font-black text-[#E50914] mb-4">{getGreeting()}</h2>
             <h3 className="text-lg md:text-xl font-bold text-white">Manage Downloads</h3>
@@ -576,43 +597,80 @@ const AdminPanel = ({ onClose }) => {
             <p className="text-gray-400 text-xs">Total configured: {activeDbList.length}</p>
           </div>
 
+          <input
+            type="text"
+            placeholder="Search movies..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-[#E50914] transition mb-3"
+          />
+
+          <div className="flex gap-2 mb-3 flex-wrap">
+            <button
+              onClick={() => setQualityFilter('all')}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition ${qualityFilter === 'all' ? 'bg-[#E50914] text-white' : 'bg-[#2a2a2a] text-gray-400 hover:text-white'}`}
+            >
+              All Movies
+            </button>
+            <button
+              onClick={() => setQualityFilter('missing1080p')}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition ${qualityFilter === 'missing1080p' ? 'bg-[#E50914] text-white' : 'bg-[#2a2a2a] text-gray-400 hover:text-white'}`}
+            >
+              Missing 1080p
+            </button>
+            <button
+              onClick={() => setQualityFilter('missing720p')}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition ${qualityFilter === 'missing720p' ? 'bg-[#E50914] text-white' : 'bg-[#2a2a2a] text-gray-400 hover:text-white'}`}
+            >
+              Missing 720p
+            </button>
+            <button
+              onClick={() => setQualityFilter('complete')}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition ${qualityFilter === 'complete' ? 'bg-green-600 text-white' : 'bg-[#2a2a2a] text-gray-400 hover:text-white'}`}
+            >
+              ✓ Complete
+            </button>
+          </div>
+
           <div className="flex-1 overflow-y-auto max-h-[350px] md:max-h-[500px] space-y-3 pr-2">
             {isLoadingList ? (
               <p className="text-gray-500 text-xs">Loading downloads database...</p>
-            ) : activeDbList.length === 0 ? (
-              <p className="text-gray-500 text-xs">No active configurations found in database.</p>
+            ) : filteredSavedMovies.length === 0 ? (
+              <p className="text-gray-500 text-xs">No movies match your filters.</p>
             ) : (
-              activeDbList.map(item => (
-                <div key={item.id} className="p-3 bg-black/40 border border-white/5 rounded flex items-center justify-between gap-3">
-                  <div className="overflow-hidden">
-                    <div className="font-bold text-xs text-white truncate max-w-[200px]" title={item.title}>
+              filteredSavedMovies.map(item => (
+                <div key={item.id} className="flex items-center justify-between bg-[#1a1a1a] rounded-lg px-3 py-2 mb-2 group hover:bg-[#242424] transition border border-white/5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-medium truncate" title={item.title}>
                       {item.title}
-                    </div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">
-                      Resolutions: {[
-                        item.download480p && '480p',
-                        item.download720p && '720p',
-                        item.download1080p && '1080p'
-                      ].filter(Boolean).join(', ') || 'None'}
-                    </div>
-                    <div className="text-[9px] text-gray-500 mt-1 font-medium">
-                      Updated: {new Date(item.updated_at || item.created_at || Date.now()).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <div className="flex gap-1 mt-1">
+                      {item.download480p && item.download480p !== '#' && (
+                        <span className="text-[10px] bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded">480p</span>
+                      )}
+                      {item.download720p && item.download720p !== '#' && (
+                        <span className="text-[10px] bg-blue-900/50 text-blue-400 px-1.5 py-0.5 rounded">720p</span>
+                      )}
+                      {item.download1080p && item.download1080p !== '#' && (
+                        <span className="text-[10px] bg-purple-900/50 text-purple-400 px-1.5 py-0.5 rounded">1080p</span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button 
+
+                  <div className="flex items-center gap-2 ml-2">
+                    <button
                       onClick={() => handleEditItem(item)}
-                      className="p-2 text-gray-500 hover:text-blue-400 hover:bg-white/5 rounded transition focus:outline-none"
-                      title="Edit Configuration"
+                      className="w-7 h-7 rounded-lg bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white flex items-center justify-center transition"
+                      title="Edit"
                     >
-                      <Edit2 className="w-4 h-4" />
+                      ✏️
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleDelete(item.id, item.title)}
-                      className="p-2 text-gray-500 hover:text-red-400 hover:bg-white/5 rounded transition focus:outline-none"
-                      title="Delete Configuration"
+                      className="w-7 h-7 rounded-lg bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white flex items-center justify-center transition"
+                      title="Delete"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      🗑️
                     </button>
                   </div>
                 </div>
