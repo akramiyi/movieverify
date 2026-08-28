@@ -595,6 +595,9 @@ const AdminPanel = ({ onClose }) => {
                         item.download1080p && '1080p'
                       ].filter(Boolean).join(', ') || 'None'}
                     </div>
+                    <div className="text-[9px] text-gray-500 mt-1 font-medium">
+                      Updated: {new Date(item.updated_at || item.created_at || Date.now()).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <button 
