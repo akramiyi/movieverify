@@ -75,6 +75,10 @@ export const formatMovie = (m) => {
     ? `${IMG_BASE}/w780${m.backdrop_path}`
     : null;
 
+  const original_backdrop = m.backdrop_path
+    ? `${IMG_BASE}/original${m.backdrop_path}`
+    : null;
+
   const year =
     m.release_date?.slice(0, 4) ||
     m.first_air_date?.slice(0, 4) ||
@@ -107,6 +111,7 @@ export const formatMovie = (m) => {
     title,
     poster,
     backdrop,
+    original_backdrop,
     year,
     language,
     quality,

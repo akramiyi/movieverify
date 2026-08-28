@@ -101,8 +101,8 @@ function App() {
   const displayDownloadAvailable = (tmdbError || !downloadAvailable) ? [] : downloadAvailable;
 
   useEffect(() => {
-    if (displayFeatured && displayFeatured.length > 0 && displayFeatured[0].backdrop) {
-      const href = displayFeatured[0].backdrop;
+    if (displayFeatured && displayFeatured.length > 0 && (displayFeatured[0].original_backdrop || displayFeatured[0].backdrop)) {
+      const href = displayFeatured[0].original_backdrop || displayFeatured[0].backdrop;
       if (!document.querySelector(`link[href="${href}"]`)) {
         const link = document.createElement('link');
         link.rel = 'preload';

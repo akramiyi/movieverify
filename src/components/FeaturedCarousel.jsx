@@ -39,7 +39,7 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
           >
             <ImageWithFallback 
               className="w-full h-full object-cover"
-              src={currentMovie.backdrop}
+              src={currentMovie.original_backdrop || currentMovie.backdrop}
               backdropSrc={currentMovie.poster}
               alt={currentMovie.title}
               lazy={false}
