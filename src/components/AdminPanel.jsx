@@ -302,10 +302,18 @@ const AdminPanel = ({ onClose }) => {
     }
   };
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning, Akram 🌅';
+    if (hour < 17) return 'Good Afternoon, Akram ☀️';
+    return 'Good Evening, Akram 🌙';
+  };
+
   if (!isLoggedIn) {
     return (
-      <div className="fixed inset-0 z-[150] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md">
-        <div className="w-full max-w-md bg-[#181818] border border-white/10 rounded-lg p-8 shadow-2xl relative">
+      <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md">
+        <div className="w-full max-w-sm bg-[#181818] border border-white/10 rounded-lg p-6 shadow-2xl relative">
+          
           <button 
             onClick={onClose}
             className="absolute top-4 left-4 text-gray-400 hover:text-white transition text-xs font-semibold flex items-center gap-1.5 focus:outline-none"
@@ -313,12 +321,12 @@ const AdminPanel = ({ onClose }) => {
             <ArrowLeft className="w-4 h-4" /> Back to Site
           </button>
 
-          <div className="flex flex-col items-center mt-6 mb-8">
+          <div className="flex flex-col items-center mt-6 mb-8 text-center">
             <div className="w-12 h-12 bg-[#E50914]/20 border border-[#E50914] text-[#E50914] flex items-center justify-center rounded-full mb-4">
               <Key className="w-6 h-6" />
             </div>
-            <h2 className="text-2xl font-black text-white">MovieVerify Admin</h2>
-            <p className="text-gray-400 text-xs mt-1">Sign in with Supabase Auth credentials</p>
+            <h2 className="text-2xl font-black text-white leading-tight">{getGreeting()}</h2>
+            <p className="text-gray-400 text-xs mt-2">Sign in to MovieVerify Admin</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
