@@ -1,9 +1,9 @@
 export const movies = [
   {
-    id: 1,
+    id: 524,
     title: "Casino",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
-    backdrop: "https://placehold.co/1200x675/181818/333333?text=Movie",
+    poster_path: null,
+    backdrop_path: null,
     year: 1995,
     language: "English",
     quality: "1080p",
@@ -19,7 +19,7 @@ export const movies = [
     latest: false
   },
   {
-    id: 2,
+    id: 27205,
     title: "Inception",
     poster: "https://image.tmdb.org/t/p/w500/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg",
     backdrop: "https://image.tmdb.org/t/p/original/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg",
@@ -38,10 +38,10 @@ export const movies = [
     latest: false
   },
   {
-    id: 3,
+    id: 976573,
     title: "Jawan",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
-    backdrop: "https://placehold.co/1200x675/181818/333333?text=Movie",
+    poster_path: null,
+    backdrop_path: null,
     year: 2023,
     language: "Hindi",
     quality: "1080p",
@@ -57,9 +57,9 @@ export const movies = [
     latest: true
   },
   {
-    id: 4,
+    id: 848538,
     title: "Salaar",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
+    poster_path: null,
     backdrop: "https://image.tmdb.org/t/p/original/2wA3mGj6P6Fz8lYjY6H3O5I2K7h.jpg",
     year: 2023,
     language: "Telugu, Hindi",
@@ -76,10 +76,10 @@ export const movies = [
     latest: true
   },
   {
-    id: 5,
+    id: 76479,
     title: "The Boys",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
-    backdrop: "https://placehold.co/1200x675/181818/333333?text=Movie",
+    poster_path: null,
+    backdrop_path: null,
     year: 2024,
     language: "English, Hindi",
     quality: "4K",
@@ -129,10 +129,10 @@ export const movies = [
     latest: true
   },
   {
-    id: 6,
+    id: 1215162,
     title: "Toxic",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
-    backdrop: "https://placehold.co/1200x675/181818/333333?text=Movie",
+    poster_path: null,
+    backdrop_path: null,
     year: 2025,
     language: "Kannada, Hindi",
     quality: "TBA",
@@ -148,10 +148,10 @@ export const movies = [
     latest: true
   },
   {
-    id: 7,
+    id: 784651,
     title: "Animal",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
-    backdrop: "https://placehold.co/1200x675/181818/333333?text=Movie",
+    poster_path: null,
+    backdrop_path: null,
     year: 2023,
     language: "Hindi",
     quality: "1080p",
@@ -163,10 +163,10 @@ export const movies = [
     featured: false, trending: true, latest: false
   },
   {
-    id: 8,
+    id: 690957,
     title: "Pushpa: The Rise",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
-    backdrop: "https://placehold.co/1200x675/181818/333333?text=Movie",
+    poster_path: null,
+    backdrop_path: null,
     year: 2021,
     language: "Telugu, Hindi",
     quality: "1080p",
@@ -178,10 +178,10 @@ export const movies = [
     featured: false, trending: true, latest: false
   },
   {
-    id: 9,
+    id: 66732,
     title: "Stranger Things",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
-    backdrop: "https://placehold.co/1200x675/181818/333333?text=Movie",
+    poster_path: null,
+    backdrop_path: null,
     year: 2016,
     language: "English, Hindi",
     quality: "4K",
@@ -193,10 +193,10 @@ export const movies = [
     featured: true, trending: true, latest: false
   },
   {
-    id: 10,
+    id: 864692,
     title: "Pathaan",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
-    backdrop: "https://placehold.co/1200x675/181818/333333?text=Movie",
+    poster_path: null,
+    backdrop_path: null,
     year: 2023,
     language: "Hindi",
     quality: "1080p",
@@ -208,10 +208,10 @@ export const movies = [
     featured: false, trending: true, latest: false
   },
   {
-    id: 11,
+    id: 603692,
     title: "K.G.F: Chapter 2",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
-    backdrop: "https://placehold.co/1200x675/181818/333333?text=Movie",
+    poster_path: null,
+    backdrop_path: null,
     year: 2022,
     language: "Kannada, Hindi",
     quality: "4K",
@@ -223,10 +223,10 @@ export const movies = [
     featured: false, trending: true, latest: false
   },
   {
-    id: 12,
+    id: 71446,
     title: "Money Heist",
-    poster: "https://placehold.co/500x750/181818/333333?text=Movie",
-    backdrop: "https://placehold.co/1200x675/181818/333333?text=Movie",
+    poster_path: null,
+    backdrop_path: null,
     year: 2017,
     language: "Spanish, Hindi",
     quality: "1080p",

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Plus, Info, Play } from 'lucide-react';
 import { fetchTMDBDetails } from '../hooks/useTMDB';
+import ImageWithFallback from './ImageWithFallback';
 
 const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -30,24 +31,14 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
           className="absolute inset-0"
         >
           {/* Backdrop Image with dynamic zoom effect */}
-          <motion.img 
+          <ImageWithFallback 
             initial={{ scale: 1.08 }}
             animate={{ scale: 1.02 }}
             transition={{ duration: 6, ease: "easeOut" }}
             className="absolute inset-0 w-full h-full object-cover"
-            src={currentMovie.backdrop || currentMovie.poster}
+            src={currentMovie.backdrop}
+            backdropSrc={currentMovie.poster}
             alt={currentMovie.title}
-            onError={(e) => {
-              if (!e.target.dataset.triedFallback) {
-                e.target.dataset.triedFallback = 'true';
-                if (currentMovie.poster) {
-                  e.target.src = currentMovie.poster;
-                  return;
-                }
-              }
-              e.target.onerror = null;
-              e.target.src = 'https://via.placeholder.com/500x750/141414/E50914?text=MovieVerfy';
-            }}
           />
           
           {/* Netflix signature dark gradients */}

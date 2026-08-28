@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Play, Plus, ThumbsUp, Download, Check } from 'lucide-react';
 import { movies } from '../data/movies';
 import { fetchTMDBDetails, getDownloadLinks } from '../hooks/useTMDB';
+import ImageWithFallback from './ImageWithFallback';
 
 const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie }) => {
   if (!movie) return null;
@@ -90,21 +91,11 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
             <div className="overflow-y-auto flex-1 hide-scrollbar">
               {/* Top Banner Area */}
               <div className="relative w-full h-[300px] md:h-[450px] flex-none">
-              <img 
-                src={movie.backdrop || movie.poster} 
+              <ImageWithFallback 
+                src={movie.backdrop} 
+                backdropSrc={movie.poster} 
                 alt={movie.title}
                 className={`w-full h-full object-cover ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
-                onError={(e) => {
-                  if (!e.target.dataset.triedFallback) {
-                    e.target.dataset.triedFallback = 'true';
-                    if (movie.poster) {
-                      e.target.src = movie.poster;
-                      return;
-                    }
-                  }
-                  e.target.onerror = null;
-                  e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(movie.title)}`;
-                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-r from-[#181818]/80 to-transparent w-3/4" />
@@ -240,21 +231,11 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                     className="bg-[#242424] rounded-lg overflow-hidden group cursor-pointer"
                   >
                     <div className="relative aspect-video">
-                      <img 
-                        src={simMovie.backdrop || simMovie.poster} 
+                      <ImageWithFallback 
+                        src={simMovie.backdrop}
+                        backdropSrc={simMovie.poster} 
                         alt={simMovie.title} 
                         className={`w-full h-full object-cover ${simMovie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`} 
-                        onError={(e) => {
-                          if (!e.target.dataset.triedFallback) {
-                            e.target.dataset.triedFallback = 'true';
-                            if (simMovie.poster) {
-                              e.target.src = simMovie.poster;
-                              return;
-                            }
-                          }
-                          e.target.onerror = null;
-                          e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(simMovie.title)}`;
-                        }}
                       />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                          <Play className="w-10 h-10 text-white fill-current" />

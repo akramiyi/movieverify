@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Plus, ThumbsUp, ChevronDown, Check } from 'lucide-react';
+import ImageWithFallback from './ImageWithFallback';
 
 const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -55,22 +56,12 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
         {!imageLoaded && (
           <div className="absolute inset-0 bg-[#2a2a2a] animate-pulse rounded-md z-0" />
         )}
-        <img
-          src={movie.backdrop || movie.poster}
+        <ImageWithFallback
+          src={movie.poster}
+          backdropSrc={movie.backdrop}
           alt={movie.title}
           onLoad={() => setImageLoaded(true)}
           className={`w-full h-full object-cover rounded-md transition-opacity duration-500 z-10 relative ${imageLoaded ? 'opacity-100' : 'opacity-0'} ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
-          onError={(e) => {
-            if (!e.target.dataset.triedFallback) {
-              e.target.dataset.triedFallback = 'true';
-              if (movie.poster) {
-                e.target.src = movie.poster;
-                return;
-              }
-            }
-            e.target.onerror = null;
-            e.target.src = `https://placehold.co/500x280/141414/E50914?text=${encodeURIComponent(movie.title)}`;
-          }}
         />
         {hasDownloadLink && (
           <div className="absolute top-1.5 right-1.5 bg-green-600/90 text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md uppercase tracking-wider backdrop-blur-sm z-10 flex items-center gap-0.5">

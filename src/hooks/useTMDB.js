@@ -285,16 +285,27 @@ export const useTMDB = () => {
           return !!(links.download480p || links.download720p || links.download1080p || links.seasons);
         });
 
-        const resolvedList = await fetchMetadataForIds(downloadAvailableIds, allFetchedSoFar);
-
-        // Also add any local movies from movies.js that have download links
+        // Also add any local movies from movies.js that have download links to the fetch list
         localMovies.forEach(m => {
           const hasLocalLink = !!(m.download480p || m.download720p || m.download1080p || m.seasons);
-          if (hasLocalLink && !resolvedList.some(r => String(r.id) === String(m.id) || r.title.toLowerCase() === m.title.toLowerCase())) {
-            resolvedList.push({
-              ...m,
-              mediaType: m.seasons ? 'tv' : 'movie'
-            });
+          if (hasLocalLink && !downloadAvailableIds.some(id => String(id) === String(m.id) || String(id).startsWith(String(m.id) + '-'))) {
+            downloadAvailableIds.push(`${m.id}-${m.seasons ? 'tv' : 'movie'}`);
+          }
+        });
+
+        const resolvedList = await fetchMetadataForIds(downloadAvailableIds, allFetchedSoFar);
+
+        // Inject the download links for the local movies that were just fetched
+        localMovies.forEach(m => {
+          const hasLocalLink = !!(m.download480p || m.download720p || m.download1080p || m.seasons);
+          if (hasLocalLink) {
+            const fetchedItem = resolvedList.find(r => String(r.id) === String(m.id));
+            if (fetchedItem) {
+              fetchedItem.download480p = m.download480p || fetchedItem.download480p;
+              fetchedItem.download720p = m.download720p || fetchedItem.download720p;
+              fetchedItem.download1080p = m.download1080p || fetchedItem.download1080p;
+              fetchedItem.seasons = m.seasons || fetchedItem.seasons;
+            }
           }
         });
 
