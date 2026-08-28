@@ -150,30 +150,31 @@ const fetchTMDB = async (endpoint) => {
 };
 
 const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
-  const result = [];
-  for (const idStr of ids) {
+  const fetchPromises = ids.map(async (idStr) => {
     const parsedId = parseInt(idStr.split('-')[0], 10);
     const mediaType = idStr.includes('-tv') ? 'tv' : 'movie';
     
-    if (isNaN(parsedId)) continue;
+    if (isNaN(parsedId)) return null;
     
     const existing = alreadyFetchedList.find(m => String(m.id) === String(parsedId));
     if (existing) {
-      result.push(existing);
-      continue;
+      return existing;
     }
     
     try {
       let item = await fetchTMDB(`/${mediaType}/${parsedId}`);
       if (item) {
         item.media_type = mediaType;
-        result.push(formatMovie(item));
+        return formatMovie(item);
       }
     } catch (e) {
       console.error(`Failed to fetch metadata for TMDB ID: ${parsedId} (${mediaType})`, e);
     }
-  }
-  return result;
+    return null;
+  });
+
+  const results = await Promise.all(fetchPromises);
+  return results.filter(Boolean); // Filter out nulls
 };
 
 export const useTMDB = () => {
