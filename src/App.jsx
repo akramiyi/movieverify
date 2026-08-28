@@ -90,7 +90,7 @@ function App() {
     };
   }, [searchQuery]);
 
-  // appLoading variable removed
+  const appLoading = isTMDBLoading;
 
   const displayFeatured = (tmdbError || !featured || featured.length === 0) ? getFeaturedMovies() : featured;
   const displayTrending = (tmdbError || trending.length === 0) ? getTrendingMovies() : trending;
