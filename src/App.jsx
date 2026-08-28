@@ -39,7 +39,6 @@ function App() {
     error: tmdbError
   } = useTMDB();
 
-  const [isTimerLoading, setIsTimerLoading] = useState(true);
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [myList, setMyList] = useState(() => {
@@ -51,14 +50,6 @@ function App() {
       return [];
     }
   });
-
-  useEffect(() => {
-    // Snappy loading screen timer
-    const timer = setTimeout(() => {
-      setIsTimerLoading(false);
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -99,7 +90,7 @@ function App() {
     };
   }, [searchQuery]);
 
-  const appLoading = isTMDBLoading || isTimerLoading;
+  // appLoading variable removed
 
   const displayFeatured = (tmdbError || !featured || featured.length === 0) ? getFeaturedMovies() : featured;
   const displayTrending = (tmdbError || trending.length === 0) ? getTrendingMovies() : trending;
@@ -108,6 +99,19 @@ function App() {
   const displaySouthIndian = (tmdbError || southIndian.length === 0) ? getMoviesByCategory('South Indian') : southIndian;
   const displayWebSeries = (tmdbError || webSeries.length === 0) ? getMoviesByCategory('Web Series') : webSeries;
   const displayDownloadAvailable = (tmdbError || !downloadAvailable) ? [] : downloadAvailable;
+
+  useEffect(() => {
+    if (displayFeatured && displayFeatured.length > 0 && displayFeatured[0].backdrop) {
+      const href = displayFeatured[0].backdrop;
+      if (!document.querySelector(`link[href="${href}"]`)) {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'image';
+        link.href = href;
+        document.head.appendChild(link);
+      }
+    }
+  }, [displayFeatured]);
 
   const toggleMyList = (movie) => {
     if (!movie) return;
@@ -181,16 +185,10 @@ function App() {
             </div>
           ) : (
             <>
-              {appLoading ? (
-                <div className="relative w-full h-[80vh] md:h-[90vh] bg-[#181818] animate-pulse overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
-                </div>
-              ) : (
-                <FeaturedCarousel 
-                  movies={displayFeatured}
-                  onPlayTrailer={setSelectedMovie}
-                />
-              )}
+              <FeaturedCarousel 
+                movies={displayFeatured}
+                onPlayTrailer={setSelectedMovie}
+              />
               
               <div className="relative z-20 pb-10">
                 {/* Render My List row if user has saved items */}

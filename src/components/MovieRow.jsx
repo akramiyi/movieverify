@@ -20,10 +20,31 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
     }
   };
 
+  const [multiplier, setMultiplier] = useState(2);
+
+  React.useEffect(() => {
+    if (!movies || movies.length === 0) return;
+    const updateMultiplier = () => {
+      const cardWidth = 240; // Approx max width of MovieCard
+      const singleSetWidth = movies.length * cardWidth;
+      const viewportWidth = window.innerWidth;
+      
+      // To loop seamlessly with translateX(-50%), the container must shift by an integer number of sets.
+      // Therefore, the multiplier must be EVEN.
+      // And 50% of the container (minSets) must be >= viewport width so it doesn't show empty space.
+      const minSets = Math.max(1, Math.ceil(viewportWidth / singleSetWidth));
+      setMultiplier(minSets * 2);
+    };
+    
+    updateMultiplier();
+    window.addEventListener('resize', updateMultiplier);
+    return () => window.removeEventListener('resize', updateMultiplier);
+  }, [movies]);
+
   if (!isLoading && (!movies || movies.length === 0)) return null;
 
   const marqueeMovies = movies && movies.length > 0 
-    ? [...movies, ...movies, ...movies, ...movies] 
+    ? Array.from({ length: multiplier }).flatMap(() => movies)
     : [];
 
   const scrollDuration = movies && movies.length > 0 ? `${movies.length * 6.5}s` : '50s';
