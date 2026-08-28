@@ -373,6 +373,24 @@ const AdminPanel = ({ onClose }) => {
     );
   }
 
+  const filteredSavedMovies = activeDbList
+    .filter(m => m.title?.toLowerCase().includes(searchFilter.toLowerCase()))
+    .filter(m => {
+      if (qualityFilter === 'missing1080p') return !m.download1080p || m.download1080p === '#';
+      if (qualityFilter === 'missing720p') return !m.download720p || m.download720p === '#';
+      if (qualityFilter === 'complete') 
+        return m.download480p && m.download720p && m.download1080p && 
+               m.download480p !== '#' && m.download720p !== '#' && m.download1080p !== '#';
+      return true;
+    });
+
+  // Calculate Stats
+  const totalMovies = activeDbList.length;
+  const missing1080p = activeDbList.filter(m => !m.download1080p || m.download1080p === '#').length;
+  const missing720p = activeDbList.filter(m => !m.download720p || m.download720p === '#').length;
+  const latestUpdatedMovie = [...activeDbList].sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))[0];
+  const lastUpdated = latestUpdatedMovie ? new Date(latestUpdatedMovie.updated_at || latestUpdatedMovie.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A';
+
   return (
     <div className="fixed inset-0 z-[150] bg-black/95 flex flex-col p-4 md:p-8 overflow-y-auto backdrop-blur-md">
       <div className="w-full max-w-4xl mx-auto bg-[#181818] border border-white/10 rounded-lg p-6 md:p-8 shadow-2xl flex flex-col md:flex-row gap-8 relative mt-12">
