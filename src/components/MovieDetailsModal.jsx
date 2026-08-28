@@ -47,7 +47,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
 
   // Get similar movies based on genre intersection (excluding current movie itself)
   const similarMovies = movies
-    .filter(m => m.id !== movie.id && m.genre.split(',').some(g => movie.genre.includes(g.trim())))
+    .filter(m => m.id !== movie.id && (m.genre || '').split(',').some(g => (movie.genre || '').includes(g.trim())))
     .slice(0, 3);
 
   const handleDownload = (quality, link) => {
