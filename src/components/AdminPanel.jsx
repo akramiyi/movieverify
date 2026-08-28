@@ -673,6 +673,9 @@ const AdminPanel = ({ onClose }) => {
                         <span className="text-[10px] bg-purple-900/50 text-purple-400 px-1.5 py-0.5 rounded">1080p</span>
                       )}
                     </div>
+                    <div className="text-[9px] text-gray-500 mt-1.5 font-medium">
+                      Uploaded: {new Date(item.created_at || item.updated_at || Date.now()).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2 ml-2">
