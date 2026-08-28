@@ -60,6 +60,7 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
           src={movie.poster}
           backdropSrc={movie.backdrop}
           alt={movie.title}
+          lazy={true}
           onLoad={() => setImageLoaded(true)}
           className={`w-full h-full object-cover rounded-md transition-opacity duration-500 z-10 relative ${imageLoaded ? 'opacity-100' : 'opacity-0'} ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
         />

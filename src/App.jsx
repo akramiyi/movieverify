@@ -136,19 +136,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#141414] text-white">
-      <AnimatePresence>
-        {appLoading && (
-          <motion.div 
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-            className="fixed inset-0 z-[100] bg-[#141414] flex items-center justify-center"
-          >
-            {/* Netflix style loading spinner */}
-            <div className="w-16 h-16 border-4 border-t-primary border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
 
       <Navbar 
         onSearch={setSearchQuery} 

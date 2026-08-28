@@ -28,6 +28,10 @@ console.log(
 
 export const activeLinks = { ...staticDownloadLinks };
 
+const tmdbCache = new Map();
+let supabaseCachePromise = null;
+let supabaseCacheData = null;
+
 // Helper to merge local download links with priority
 export const getDownloadLinks = (movieId, movieTitle) => {
   if (activeLinks[movieId]) {
@@ -68,7 +72,7 @@ export const formatMovie = (m) => {
     : null;
 
   const backdrop = m.backdrop_path
-    ? `${IMG_BASE}/original${m.backdrop_path}`
+    ? `${IMG_BASE}/w780${m.backdrop_path}`
     : null;
 
   const year =
@@ -133,6 +137,10 @@ const prioritizeDownloads = (list) => {
 
 // Reusable fetch helper
 const fetchTMDB = async (endpoint) => {
+  if (tmdbCache.has(endpoint)) {
+    return tmdbCache.get(endpoint);
+  }
+
   const token = import.meta.env.VITE_TMDB_TOKEN;
   if (!token) {
     throw new Error('VITE_TMDB_TOKEN environment variable is not defined.');
@@ -146,7 +154,9 @@ const fetchTMDB = async (endpoint) => {
     throw new Error(`TMDB request failed with status: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  tmdbCache.set(endpoint, data);
+  return data;
 };
 
 const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
@@ -198,13 +208,18 @@ export const useTMDB = () => {
         setIsLoading(true);
 
         try {
-          const { data: dbData, error: dbErr } = await supabase
-            .from('download_links')
-            .select('*');
+          if (!supabaseCachePromise && !supabaseCacheData) {
+            supabaseCachePromise = supabase.from('download_links').select('*');
+          }
+          
+          const { data: dbData, error: dbErr } = supabaseCacheData 
+            ? { data: supabaseCacheData, error: null } 
+            : await supabaseCachePromise;
           
           if (dbErr) {
             console.error('Supabase load error:', dbErr);
           } else if (dbData) {
+            supabaseCacheData = dbData;
             dbData.forEach(row => {
               activeLinks[row.id] = {
                 download480p: row.download480p || null,
@@ -218,21 +233,29 @@ export const useTMDB = () => {
           console.error('Supabase fetch failed, relying on local config:', e);
         }
         
-        const trendingRes = await fetchTMDB('/trending/all/week');
-        const trendingList = (trendingRes.results || []).map(formatMovie);
-
-        const popularRes = await fetchTMDB('/movie/popular?language=en-US&page=1');
-        const popularList = (popularRes.results || []).map(formatMovie);
-
-        const bollywoodRes = await fetchTMDB('/discover/movie?with_original_language=hi&sort_by=popularity.desc&page=1');
-        const bollywoodList = (bollywoodRes.results || []).map(formatMovie);
-
-        const [teluguRes, tamilRes, kannadaRes, malayalamRes] = await Promise.all([
+        const [
+          trendingRes,
+          popularRes,
+          bollywoodRes,
+          teluguRes,
+          tamilRes,
+          kannadaRes,
+          malayalamRes,
+          webSeriesRes
+        ] = await Promise.all([
+          fetchTMDB('/trending/all/week'),
+          fetchTMDB('/movie/popular?language=en-US&page=1'),
+          fetchTMDB('/discover/movie?with_original_language=hi&sort_by=popularity.desc&page=1'),
           fetchTMDB('/discover/movie?with_original_language=te&sort_by=popularity.desc&page=1'),
           fetchTMDB('/discover/movie?with_original_language=ta&sort_by=popularity.desc&page=1'),
           fetchTMDB('/discover/movie?with_original_language=kn&sort_by=popularity.desc&page=1'),
-          fetchTMDB('/discover/movie?with_original_language=ml&sort_by=popularity.desc&page=1')
+          fetchTMDB('/discover/movie?with_original_language=ml&sort_by=popularity.desc&page=1'),
+          fetchTMDB('/tv/popular?language=en-US&page=1')
         ]);
+
+        const trendingList = (trendingRes.results || []).map(formatMovie);
+        const popularList = (popularRes.results || []).map(formatMovie);
+        const bollywoodList = (bollywoodRes.results || []).map(formatMovie);
         
         const mergedSouth = [
           ...(teluguRes.results || []),
@@ -250,7 +273,6 @@ export const useTMDB = () => {
           .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
           .map(formatMovie);
 
-        const webSeriesRes = await fetchTMDB('/tv/popular?language=en-US&page=1');
         const webSeriesList = (webSeriesRes.results || []).map(formatMovie);
 
         const allFetchedSoFar = [
@@ -407,15 +429,9 @@ export const fetchTMDBDetails = async (id, mediaType) => {
   try {
     const type = mediaType === 'tv' ? 'tv' : 'movie';
     const parsedId = parseInt(String(id).split('-')[0], 10);
-    const response = await fetch(`${BASE_URL}/${type}/${parsedId}?append_to_response=credits,videos&include_video_language=en,hi,te,ta,ml,null`, {
-      headers
-    });
+    const endpoint = `/${type}/${parsedId}?append_to_response=credits,videos&include_video_language=en,hi,te,ta,ml,null`;
     
-    if (!response.ok) {
-      throw new Error(`Details fetch failed: ${response.status}`);
-    }
-    
-    const res = await response.json();
+    const res = await fetchTMDB(endpoint);
     
     let trailerUrl = '';
     if (res.videos && res.videos.results && res.videos.results.length > 0) {

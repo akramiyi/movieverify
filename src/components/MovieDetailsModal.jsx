@@ -235,6 +235,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                         src={simMovie.backdrop}
                         backdropSrc={simMovie.poster} 
                         alt={simMovie.title} 
+                        lazy={true}
                         className={`w-full h-full object-cover ${simMovie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`} 
                       />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">

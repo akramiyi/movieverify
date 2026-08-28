@@ -31,15 +31,20 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
           className="absolute inset-0"
         >
           {/* Backdrop Image with dynamic zoom effect */}
-          <ImageWithFallback 
+          <motion.div
             initial={{ scale: 1.08 }}
             animate={{ scale: 1.02 }}
             transition={{ duration: 6, ease: "easeOut" }}
-            className="absolute inset-0 w-full h-full object-cover"
-            src={currentMovie.backdrop}
-            backdropSrc={currentMovie.poster}
-            alt={currentMovie.title}
-          />
+            className="absolute inset-0 w-full h-full"
+          >
+            <ImageWithFallback 
+              className="w-full h-full object-cover"
+              src={currentMovie.backdrop}
+              backdropSrc={currentMovie.poster}
+              alt={currentMovie.title}
+              lazy={false}
+            />
+          </motion.div>
           
           {/* Netflix signature dark gradients */}
           <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/40 to-transparent" />
