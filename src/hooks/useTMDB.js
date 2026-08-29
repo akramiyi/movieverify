@@ -169,6 +169,10 @@ const fetchTMDB = async (endpoint) => {
   });
 
   if (!response.ok) {
+    if (response.status === 404) {
+      console.warn(`TMDB ID not found at ${endpoint}, skipping`);
+      return null;
+    }
     throw new Error(`TMDB request failed with status: ${response.status}`);
   }
 
@@ -203,7 +207,7 @@ const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
         return formatMovie(item);
       }
     } catch (e) {
-      console.error(`Failed to fetch metadata for TMDB ID: ${parsedId} (${mediaType})`, e);
+      console.warn(`Failed to fetch metadata for TMDB ID: ${parsedId} (${mediaType})`, e.message);
     }
     return null;
   });

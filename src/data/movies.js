@@ -178,7 +178,7 @@ export const movies = [
     featured: false, trending: true, latest: false
   },
   {
-    id: 66732,
+    id: "66732-tv",
     title: "Stranger Things",
     poster_path: null,
     backdrop_path: null,
