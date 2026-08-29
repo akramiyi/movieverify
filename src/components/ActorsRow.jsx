@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ActorMovieCard from './ActorMovieCard';
 
-const ActorsRow = ({ title, actors, onActorSelect }) => {
+const ActorsRow = ({ title, actors, onActorSelect, onSeeAll }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [multiplier, setMultiplier] = useState(2);
 
@@ -33,7 +33,7 @@ const ActorsRow = ({ title, actors, onActorSelect }) => {
           {title}
         </h2>
         <button 
-          onClick={() => {}} // User hasn't asked for a specific See All modal yet, but wants the button there
+          onClick={onSeeAll}
           className="text-xs md:text-sm font-semibold text-gray-400 hover:text-[#E50914] transition duration-300 flex items-center gap-1 focus:outline-none"
         >
           See All <span className="text-[10px] md:text-xs">▸</span>

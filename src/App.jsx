@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 
 import Navbar from './components/Navbar';
 import FeaturedCarousel from './components/FeaturedCarousel';
@@ -15,11 +16,13 @@ import InstallPWA from './components/InstallPWA';
 import ActorsRow from './components/ActorsRow';
 import ActorModal from './components/ActorModal';
 import { actors } from './data/actors';
+import AllActorsPage from './pages/AllActorsPage';
 
 const getActors = () => actors.filter(a => a.type === 'actor');
 const getActresses = () => actors.filter(a => a.type === 'actress');
 
 function App() {
+  const navigate = useNavigate();
   const [showIntro, setShowIntro] = useState(() => {
     // return !sessionStorage.getItem('introShown');
     return true; // For testing on refresh
@@ -154,9 +157,10 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#141414] text-white">
-
-
-      <Navbar 
+      <Routes>
+        <Route path="/" element={
+          <>
+            <Navbar 
         onSearch={setSearchQuery} 
         searchQuery={searchQuery} 
         activeTab={activeTab} 
@@ -264,6 +268,7 @@ function App() {
                   title="Popular Actors"
                   actors={getActors()}
                   onActorSelect={handleActorSelect}
+                  onSeeAll={() => navigate('/actors')}
                 />
 
                 {/* Popular Actresses */}
@@ -271,6 +276,7 @@ function App() {
                   title="Popular Actresses"
                   actors={getActresses()}
                   onActorSelect={handleActorSelect}
+                  onSeeAll={() => navigate('/actresses')}
                 />
 
                 {/* Bollywood Hits */}
@@ -346,6 +352,11 @@ function App() {
         <AdminPanel onClose={() => setShowAdmin(false)} />
       )}
       <InstallPWA />
+          </>
+        } />
+        <Route path="/actors" element={<AllActorsPage />} />
+        <Route path="/actresses" element={<AllActorsPage />} />
+      </Routes>
     </div>
   );
 }
