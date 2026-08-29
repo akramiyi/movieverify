@@ -41,7 +41,7 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
 
   return (
     <div 
-      className="flex flex-col flex-none w-[160px] md:w-[240px] cursor-pointer overflow-visible gap-1.5"
+      className="flex flex-col flex-none w-[120px] md:w-[180px] cursor-pointer overflow-visible gap-1.5"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={() => {
@@ -51,7 +51,7 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
     >
       <div 
         ref={cardRef}
-        className="relative w-full h-[90px] md:h-[135px] overflow-visible rounded-md bg-[#222]"
+        className="relative w-full h-[180px] md:h-[270px] overflow-visible rounded-md bg-[#222]"
       >
         {!imageLoaded && (
           <div className="absolute inset-0 bg-[#2a2a2a] animate-pulse rounded-md z-0" />
@@ -62,7 +62,7 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
           alt={movie.title}
           lazy={true}
           onLoad={() => setImageLoaded(true)}
-          className={`w-full h-full object-cover rounded-md transition-opacity duration-500 z-10 relative ${imageLoaded ? 'opacity-100' : 'opacity-0'} ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
+          className={`w-full h-full object-cover object-top rounded-md transition-opacity duration-500 z-10 relative ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         />
         {hasDownloadLink && (
           <div className="absolute top-1.5 right-1.5 bg-green-600/90 text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md uppercase tracking-wider backdrop-blur-sm z-10 flex items-center gap-0.5">
@@ -97,9 +97,9 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
           >
             <div className="relative aspect-video">
               <img
-                src={movie.backdrop || movie.poster}
+                src={movie.poster || movie.backdrop}
                 alt={movie.title}
-                className={`w-full h-full object-cover ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
+                className="w-full h-full object-cover object-top"
                 onError={(e) => {
                   if (!e.target.dataset.triedFallback) {
                     e.target.dataset.triedFallback = 'true';
