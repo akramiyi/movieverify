@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const ImageWithFallback = ({ src, backdropSrc, alt, className, style, onClick, lazy = false, ...props }) => {
+const ImageWithFallback = ({ src, backdropSrc, alt, className, style, onClick, lazy = true, ...props }) => {
   const [errorLevel, setErrorLevel] = useState(0);
 
   const isFallback = errorLevel >= 2 || (!src && !backdropSrc);

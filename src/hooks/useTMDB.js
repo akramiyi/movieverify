@@ -68,15 +68,15 @@ export const formatMovie = (m) => {
   const title = m.title || m.name || 'Untitled';
 
   const poster = m.poster_path
-    ? `${IMG_BASE}/w500${m.poster_path}`
+    ? `${IMG_BASE}/w342${m.poster_path}`
     : null;
 
   const backdrop = m.backdrop_path
-    ? `${IMG_BASE}/w780${m.backdrop_path}`
+    ? `${IMG_BASE}/w1280${m.backdrop_path}`
     : null;
 
   const original_backdrop = m.backdrop_path
-    ? `${IMG_BASE}/original${m.backdrop_path}`
+    ? `${IMG_BASE}/w1280${m.backdrop_path}`
     : null;
 
   const year =
@@ -142,8 +142,21 @@ const prioritizeDownloads = (list) => {
 
 // Reusable fetch helper
 const fetchTMDB = async (endpoint) => {
+  const cacheKey = `tmdb_cache_${endpoint}`;
+  
   if (tmdbCache.has(endpoint)) {
     return tmdbCache.get(endpoint);
+  }
+
+  try {
+    const sessionCached = sessionStorage.getItem(cacheKey);
+    if (sessionCached) {
+      const data = JSON.parse(sessionCached);
+      tmdbCache.set(endpoint, data);
+      return data;
+    }
+  } catch (e) {
+    console.error('sessionStorage read failed', e);
   }
 
   const token = import.meta.env.VITE_TMDB_TOKEN;
@@ -161,6 +174,13 @@ const fetchTMDB = async (endpoint) => {
 
   const data = await response.json();
   tmdbCache.set(endpoint, data);
+  
+  try {
+    sessionStorage.setItem(cacheKey, JSON.stringify(data));
+  } catch (e) {
+    console.warn('sessionStorage set failed (quota exceeded?)', e);
+  }
+  
   return data;
 };
 

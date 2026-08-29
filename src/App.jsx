@@ -280,6 +280,7 @@ function App() {
                       src={movie.poster} 
                       alt={movie.title} 
                       className="w-full aspect-[2/3] object-cover rounded-md"
+                      loading="lazy"
                       onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/300x450/141414/E50914?text=No+Poster' }}
                     />
                     <div className="mt-2 text-sm font-semibold truncate w-full text-center text-gray-200 hover:text-white">

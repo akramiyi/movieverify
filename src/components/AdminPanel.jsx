@@ -471,7 +471,7 @@ const AdminPanel = ({ onClose }) => {
                     className="p-3 border-b border-white/5 hover:bg-white/5 cursor-pointer transition flex items-center gap-3 text-sm text-gray-200"
                   >
                     {item.poster ? (
-                      <img src={item.poster} alt={item.title} className="w-8 h-12 object-cover rounded" />
+                      <img src={item.poster} alt={item.title} className="w-8 h-12 object-cover rounded" loading="lazy" />
                     ) : (
                       <div className="w-8 h-12 bg-white/5 rounded flex items-center justify-center"><Film className="w-4 h-4 text-gray-500" /></div>
                     )}
@@ -490,7 +490,7 @@ const AdminPanel = ({ onClose }) => {
             <form onSubmit={handleSave} className="space-y-4 border-t border-white/5 pt-4">
               <div className="flex items-center gap-3 bg-white/5 p-3 rounded">
                 {selectedMovie.poster && (
-                  <img src={selectedMovie.poster} alt={selectedMovie.title} className="w-10 h-15 object-cover rounded" />
+                  <img src={selectedMovie.poster} alt={selectedMovie.title} className="w-10 h-15 object-cover rounded" loading="lazy" />
                 )}
                 <div>
                   <h3 className="font-bold text-white">{selectedMovie.title}</h3>
