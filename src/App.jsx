@@ -12,9 +12,12 @@ import IntroAnimation from './components/IntroAnimation';
 
 import { useTMDB, searchTMDB } from './hooks/useTMDB';
 import InstallPWA from './components/InstallPWA';
-import ActorRow from './components/ActorRow';
-import ActorMoviesModal from './components/ActorMoviesModal';
-import { getActors, getActresses } from './data/actors';
+import ActorsRow from './components/ActorsRow';
+import ActorModal from './components/ActorModal';
+import { actors } from './data/actors';
+
+const getActors = () => actors.filter(a => a.type === 'actor');
+const getActresses = () => actors.filter(a => a.type === 'actress');
 
 function App() {
   const [showIntro, setShowIntro] = useState(() => {
@@ -29,7 +32,7 @@ function App() {
   const [selectedActor, setSelectedActor] = useState(null);
   const [isActorModalOpen, setIsActorModalOpen] = useState(false);
 
-  const handleActorClick = (actor) => {
+  const handleActorSelect = (actor) => {
     setSelectedActor(actor);
     setIsActorModalOpen(true);
   };
@@ -257,17 +260,17 @@ function App() {
                 )}
 
                 {/* Popular Actors */}
-                <ActorRow
+                <ActorsRow
                   title="Popular Actors"
                   actors={getActors()}
-                  onActorClick={handleActorClick}
+                  onActorSelect={handleActorSelect}
                 />
 
                 {/* Popular Actresses */}
-                <ActorRow
+                <ActorsRow
                   title="Popular Actresses"
                   actors={getActresses()}
-                  onActorClick={handleActorClick}
+                  onActorSelect={handleActorSelect}
                 />
 
                 {/* Bollywood Hits */}
@@ -333,11 +336,10 @@ function App() {
         onToggleMyList={toggleMyList}
       />
 
-      <ActorMoviesModal
+      <ActorModal
         actor={selectedActor}
         isOpen={isActorModalOpen}
         onClose={() => setIsActorModalOpen(false)}
-        onMovieClick={setSelectedMovie}
       />
 
       {showAdmin && (
