@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search } from 'lucide-react';
+import { X, Search, Download } from 'lucide-react';
+import { getDownloadLinks } from '../hooks/useTMDB';
 
 const TMDB_IMG = 'https://image.tmdb.org/t/p/w342';
 const TMDB_BACKDROP = 'https://image.tmdb.org/t/p/w1280';
@@ -8,13 +9,15 @@ const TMDB_BACKDROP = 'https://image.tmdb.org/t/p/w1280';
 const ActorMoviesModal = ({ actor, isOpen, onClose, onMovieClick }) => {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [profilePic, setProfilePic] = useState(null);
 
   useEffect(() => {
     if (!actor || !isOpen) return;
     setLoading(true);
+    setProfilePic(actor.image);
     
     fetch(
-      `https://api.themoviedb.org/3/person/${actor.tmdb_id}/combined_credits`,
+      `https://api.themoviedb.org/3/person/${actor.tmdb_id}?append_to_response=combined_credits`,
       {
         headers: {
           Authorization: `Bearer ${import.meta.env.VITE_TMDB_TOKEN}`
@@ -23,26 +26,34 @@ const ActorMoviesModal = ({ actor, isOpen, onClose, onMovieClick }) => {
     )
     .then(r => r.json())
     .then(data => {
-      const sorted = (data.cast || [])
-        .filter(m => m.poster_path && m.vote_count > 100)
+      if (data.profile_path) {
+        setProfilePic(`https://image.tmdb.org/t/p/w342${data.profile_path}`);
+      }
+      
+      const cast = data.combined_credits?.cast || [];
+      const sorted = cast
+        .filter(m => m.poster_path && m.vote_count > 10)
         .sort((a, b) => b.popularity - a.popularity)
-        .slice(0, 20)
-        .map(m => ({
-          id: m.id,
-          title: m.title || m.name,
-          poster: m.poster_path ? `${TMDB_IMG}${m.poster_path}` : null,
-          backdrop: m.backdrop_path ? `${TMDB_BACKDROP}${m.backdrop_path}` : null,
-          year: new Date(m.release_date || m.first_air_date).getFullYear(),
-          rating: m.vote_average?.toFixed(1),
-          quality: '1080p',
-          genre: '',
-          language: '',
-          description: m.overview,
-          download480p: '#',
-          download720p: '#',
-          download1080p: '#',
-          mediaType: m.media_type
-        }));
+        .slice(0, 100)
+        .map(m => {
+          const links = getDownloadLinks(m.id, m.title || m.name);
+          return {
+            id: m.id,
+            title: m.title || m.name,
+            poster: m.poster_path ? `${TMDB_IMG}${m.poster_path}` : null,
+            backdrop: m.backdrop_path ? `${TMDB_BACKDROP}${m.backdrop_path}` : null,
+            year: new Date(m.release_date || m.first_air_date).getFullYear(),
+            rating: m.vote_average?.toFixed(1),
+            quality: '1080p',
+            genre: '',
+            language: '',
+            description: m.overview,
+            download480p: links?.download480p || null,
+            download720p: links?.download720p || null,
+            download1080p: links?.download1080p || null,
+            mediaType: m.media_type
+          };
+        });
       setMovies(sorted);
       setLoading(false);
     })
@@ -79,12 +90,12 @@ const ActorMoviesModal = ({ actor, isOpen, onClose, onMovieClick }) => {
               {/* Actor Info */}
               <div className="absolute bottom-6 left-6 flex items-end gap-4">
                 <img
-                  src={actor.image}
+                  src={profilePic || actor.image}
                   alt={actor.name}
                   className="w-20 h-20 md:w-28 md:h-28 rounded-full object-cover object-top border-2 border-[#E50914]"
                   onError={(e) => {
                     e.target.onerror = null;
-                    e.target.src = `https://placehold.co/112x112/141414/E50914?text=${actor.name[0]}`;
+                    e.target.src = `https://placehold.co/112x112/141414/E50914?text=${encodeURIComponent(actor.name[0])}`;
                   }}
                 />
                 <div>
@@ -129,7 +140,7 @@ const ActorMoviesModal = ({ actor, isOpen, onClose, onMovieClick }) => {
                       }}
                       className="cursor-pointer group"
                     >
-                      <div className="aspect-[2/3] rounded-lg overflow-hidden mb-1 group-hover:ring-2 group-hover:ring-[#E50914] transition">
+                      <div className="relative aspect-[2/3] rounded-lg overflow-hidden mb-1 group-hover:ring-2 group-hover:ring-[#E50914] transition">
                         <img
                           src={movie.poster}
                           alt={movie.title}
@@ -140,6 +151,12 @@ const ActorMoviesModal = ({ actor, isOpen, onClose, onMovieClick }) => {
                             e.target.src = `https://placehold.co/342x513/141414/E50914?text=${encodeURIComponent(movie.title)}`;
                           }}
                         />
+                        {!!(movie.download480p || movie.download720p || movie.download1080p || movie.seasons) && (
+                          <div className="absolute top-1.5 right-1.5 bg-green-600/90 text-white text-[8px] md:text-[9px] font-bold px-1 py-0.5 rounded shadow-md uppercase tracking-wider backdrop-blur-sm z-10 flex items-center gap-0.5">
+                            <Download className="w-2 h-2 stroke-[3]" />
+                            Available
+                          </div>
+                        )}
                       </div>
                       <p className="text-white text-xs font-medium truncate">
                         {movie.title}
