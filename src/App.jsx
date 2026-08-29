@@ -12,6 +12,10 @@ import IntroAnimation from './components/IntroAnimation';
 
 import { useTMDB, searchTMDB } from './hooks/useTMDB';
 import InstallPWA from './components/InstallPWA';
+import ActorRow from './components/ActorRow';
+import ActorMoviesModal from './components/ActorMoviesModal';
+import { getActors, getActresses } from './data/actors';
+
 function App() {
   const [showIntro, setShowIntro] = useState(() => {
     // return !sessionStorage.getItem('introShown');
@@ -22,6 +26,13 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [seeAllSection, setSeeAllSection] = useState(null);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [selectedActor, setSelectedActor] = useState(null);
+  const [isActorModalOpen, setIsActorModalOpen] = useState(false);
+
+  const handleActorClick = (actor) => {
+    setSelectedActor(actor);
+    setIsActorModalOpen(true);
+  };
 
   useEffect(() => {
     setSeeAllSection(null);
@@ -245,6 +256,20 @@ function App() {
                   <MovieRow title="Trending Now" movies={displayTrending} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
                 )}
 
+                {/* Popular Actors */}
+                <ActorRow
+                  title="Popular Actors"
+                  actors={getActors()}
+                  onActorClick={handleActorClick}
+                />
+
+                {/* Popular Actresses */}
+                <ActorRow
+                  title="Popular Actresses"
+                  actors={getActresses()}
+                  onActorClick={handleActorClick}
+                />
+
                 {/* Bollywood Hits */}
                 {(activeTab === 'home' || activeTab === 'movies') && (
                   <MovieRow title="Bollywood Hits" movies={displayBollywood} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
@@ -306,6 +331,13 @@ function App() {
         onSelectMovie={setSelectedMovie}
         myList={myList}
         onToggleMyList={toggleMyList}
+      />
+
+      <ActorMoviesModal
+        actor={selectedActor}
+        isOpen={isActorModalOpen}
+        onClose={() => setIsActorModalOpen(false)}
+        onMovieClick={setSelectedMovie}
       />
 
       {showAdmin && (
