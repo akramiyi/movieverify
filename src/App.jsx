@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import Navbar from './components/Navbar';
 import FeaturedCarousel from './components/FeaturedCarousel';
 import MovieRow from './components/MovieRow';
@@ -7,7 +7,7 @@ import MovieCard from './components/MovieCard';
 import MovieDetailsModal from './components/MovieDetailsModal';
 import Footer from './components/Footer';
 import AdminPanel from './components/AdminPanel';
-import { movies, getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
+import { getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
 import IntroAnimation from './components/IntroAnimation';
 
 import { useTMDB, searchTMDB } from './hooks/useTMDB';

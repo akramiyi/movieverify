@@ -6,7 +6,7 @@ import { fetchTMDBDetails, getDownloadLinks } from '../hooks/useTMDB';
 import ImageWithFallback from './ImageWithFallback';
 
 const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie }) => {
-  if (!movie) return null;
+
 
   const [details, setDetails] = useState({
     cast: 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
@@ -43,6 +43,8 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
       }
     }
   }, [movie]);
+
+  if (!movie) return null;
 
   const isAddedToList = myList.some((m) => m.id === movie.id);
 

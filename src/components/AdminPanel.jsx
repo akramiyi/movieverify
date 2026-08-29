@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Edit2 } from 'lucide-react';
+import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, activeLinks } from '../hooks/useTMDB';
 
@@ -389,7 +389,7 @@ const AdminPanel = ({ onClose }) => {
   const missing1080p = activeDbList.filter(m => !m.download1080p || m.download1080p === '#').length;
   const missing720p = activeDbList.filter(m => !m.download720p || m.download720p === '#').length;
   const latestUpdatedMovie = [...activeDbList].sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))[0];
-  const lastUpdated = latestUpdatedMovie ? new Date(latestUpdatedMovie.updated_at || latestUpdatedMovie.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A';
+  const lastUpdated = latestUpdatedMovie ? new Date(latestUpdatedMovie.updated_at || latestUpdatedMovie.created_at || 0).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A';
 
   return (
     <div className="fixed inset-0 z-[150] bg-black/95 flex flex-col p-4 md:p-8 overflow-y-auto backdrop-blur-md">
@@ -674,7 +674,7 @@ const AdminPanel = ({ onClose }) => {
                       )}
                     </div>
                     <div className="text-[9px] text-gray-500 mt-1.5 font-medium">
-                      Uploaded: {new Date(item.created_at || item.updated_at || Date.now()).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      Uploaded: {new Date(item.created_at || item.updated_at || 0).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
 

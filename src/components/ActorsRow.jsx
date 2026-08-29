@@ -1,98 +1,63 @@
-import React, { useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
 import ActorMovieCard from './ActorMovieCard';
 
 const ActorsRow = ({ title, actors, onActorSelect }) => {
-  const rowRef = useRef(null);
-  const [showLeftArrow, setShowLeftArrow] = useState(false);
-  const [showRightArrow, setShowRightArrow] = useState(true);
+  const [isPaused, setIsPaused] = useState(false);
+  const [multiplier, setMultiplier] = useState(2);
 
-  const scroll = (dir) => {
-    if (rowRef.current) {
-      const scrollAmount = 400;
-      rowRef.current.scrollBy({
-        left: dir === 'left' ? -scrollAmount : scrollAmount,
-        behavior: 'smooth'
-      });
+  React.useEffect(() => {
+    if (!actors || actors.length === 0) return;
+    const updateMultiplier = () => {
+      const cardWidth = 150; // Max width of ActorMovieCard
+      const singleSetWidth = actors.length * cardWidth;
+      const viewportWidth = window.innerWidth;
       
-      setTimeout(() => {
-        if (rowRef.current) {
-          setShowLeftArrow(rowRef.current.scrollLeft > 0);
-          setShowRightArrow(
-            rowRef.current.scrollLeft < 
-            rowRef.current.scrollWidth - rowRef.current.clientWidth
-          );
-        }
-      }, 100);
-    }
-  };
-
-  const handleScroll = () => {
-    if (rowRef.current) {
-      setShowLeftArrow(rowRef.current.scrollLeft > 0);
-      setShowRightArrow(
-        rowRef.current.scrollLeft < 
-        rowRef.current.scrollWidth - rowRef.current.clientWidth
-      );
-    }
-  };
+      const minSets = Math.max(1, Math.ceil(viewportWidth / singleSetWidth));
+      setMultiplier(minSets * 2);
+    };
+    
+    updateMultiplier();
+    window.addEventListener('resize', updateMultiplier);
+    return () => window.removeEventListener('resize', updateMultiplier);
+  }, [actors]);
 
   if (!actors || actors.length === 0) return null;
 
+  const marqueeActors = Array.from({ length: multiplier }).flatMap(() => actors);
+  const scrollDuration = `${actors.length * 6.5}s`;
+
   return (
-    <div className="mb-8 md:mb-12 px-4 md:px-12">
-      <h2 className="text-sm font-semibold text-[#e5e5e5] 
-                     hover:text-white md:text-2xl mb-4 
-                     cursor-pointer transition">
-        {title}
-      </h2>
-
-      <div className="group relative">
-        {/* Left Arrow */}
-        {showLeftArrow && (
-          <button
-            onClick={() => scroll('left')}
-            className="absolute -left-5 top-1/2 -translate-y-1/2 
-                       z-40 w-10 h-10 rounded-full 
-                       bg-black/70 hover:bg-[#E50914] 
-                       text-white flex items-center justify-center 
-                       transition opacity-100 lg:opacity-0 
-                       lg:group-hover:opacity-100 duration-300"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-        )}
-
-        {/* Scroll Container */}
-        <div
-          ref={rowRef}
-          onScroll={handleScroll}
-          className="flex items-center space-x-2 overflow-x-scroll 
-                     hide-scrollbar py-4"
+    <div className="space-y-2 md:space-y-4 mb-8 overflow-visible">
+      <div className="flex items-center justify-between px-4 md:px-12">
+        <h2 className="whitespace-nowrap cursor-pointer text-sm font-semibold text-[#e5e5e5] transition duration-200 hover:text-white md:text-2xl">
+          {title}
+        </h2>
+        <button 
+          onClick={() => {}} // User hasn't asked for a specific See All modal yet, but wants the button there
+          className="text-xs md:text-sm font-semibold text-gray-400 hover:text-[#E50914] transition duration-300 flex items-center gap-1 focus:outline-none"
         >
-          {actors.map(actor => (
+          See All <span className="text-[10px] md:text-xs">▸</span>
+        </button>
+      </div>
+
+      <div className="overflow-hidden w-full relative md:-ml-2">
+        <div 
+          className="animate-marquee flex items-center space-x-2 py-4 px-4 md:px-12"
+          style={{ 
+            animationDuration: scrollDuration,
+            animationPlayState: isPaused ? 'paused' : 'running'
+          }}
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={() => setIsPaused(false)}
+        >
+          {marqueeActors.map((actor, index) => (
             <ActorMovieCard
-              key={actor.id}
+              key={`${actor.id}-${index}`}
               actor={actor}
               onActorClick={onActorSelect}
             />
           ))}
         </div>
-
-        {/* Right Arrow */}
-        {showRightArrow && (
-          <button
-            onClick={() => scroll('right')}
-            className="absolute -right-5 top-1/2 -translate-y-1/2 
-                       z-40 w-10 h-10 rounded-full 
-                       bg-black/70 hover:bg-[#E50914] 
-                       text-white flex items-center justify-center 
-                       transition opacity-100 lg:opacity-0 
-                       lg:group-hover:opacity-100 duration-300"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </button>
-        )}
       </div>
     </div>
   );
