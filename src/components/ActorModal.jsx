@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download } from 'lucide-react';
 import { getDownloadLinks } from '../hooks/useTMDB';
 
-const ActorModal = ({ actor, isOpen, onClose }) => {
+const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -95,7 +95,7 @@ const ActorModal = ({ actor, isOpen, onClose }) => {
                 <div className="grid grid-cols-3 sm:grid-cols-4 
                                 md:grid-cols-5 lg:grid-cols-6 gap-3">
                   {movies.map(m => (
-                    <div key={m.id} className="cursor-pointer group">
+                    <div key={m.id} className="cursor-pointer group" onClick={() => onMovieClick && onMovieClick(m)}>
                       <div className="relative rounded-lg overflow-hidden">
                         <img
                           src={`https://image.tmdb.org/t/p/w342${m.poster_path}`}

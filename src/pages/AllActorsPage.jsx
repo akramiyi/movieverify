@@ -5,7 +5,7 @@ import ActorMovieCard from '../components/ActorMovieCard';
 import ActorModal from '../components/ActorModal';
 import { actors } from '../data/actors';
 
-const AllActorsPage = () => {
+const AllActorsPage = ({ onMovieSelect }) => {
   const navigate = useNavigate();
   const { type } = useParams(); // 'actors' or 'actresses'
   const [selectedActor, setSelectedActor] = useState(null);
@@ -56,6 +56,10 @@ const AllActorsPage = () => {
         actor={selectedActor}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        onMovieClick={(movie) => {
+          setIsModalOpen(false);
+          if (onMovieSelect) onMovieSelect(movie);
+        }}
       />
     </div>
   );

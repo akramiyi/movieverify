@@ -346,6 +346,10 @@ function App() {
         actor={selectedActor}
         isOpen={isActorModalOpen}
         onClose={() => setIsActorModalOpen(false)}
+        onMovieClick={(movie) => {
+          setIsActorModalOpen(false);
+          setSelectedMovie(movie);
+        }}
       />
 
       {showAdmin && (
@@ -354,8 +358,8 @@ function App() {
       <InstallPWA />
           </>
         } />
-        <Route path="/actors" element={<AllActorsPage />} />
-        <Route path="/actresses" element={<AllActorsPage />} />
+        <Route path="/actors" element={<AllActorsPage onMovieSelect={setSelectedMovie} />} />
+        <Route path="/actresses" element={<AllActorsPage onMovieSelect={setSelectedMovie} />} />
       </Routes>
     </div>
   );
