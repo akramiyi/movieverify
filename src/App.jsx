@@ -10,6 +10,7 @@ import Footer from './components/Footer';
 import AdminPanel from './components/AdminPanel';
 import { getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
 import IntroAnimation from './components/IntroAnimation';
+import SearchFilters from './components/SearchFilters';
 
 import { useTMDB, searchTMDB } from './hooks/useTMDB';
 import InstallPWA from './components/InstallPWA';
@@ -66,6 +67,59 @@ function App() {
 
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchFilters, setSearchFilters] = useState({
+    genre: 'All',
+    language: 'All',
+    minRating: 0,
+    sortBy: 'relevance',
+  });
+
+  const handleFilterChange = (key, value) => {
+    setSearchFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const resetFilters = () => {
+    setSearchFilters({
+      genre: 'All',
+      language: 'All',
+      minRating: 0,
+      sortBy: 'relevance',
+    });
+  };
+
+  const displayedSearchResults = React.useMemo(() => {
+    let result = [...searchResults];
+
+    if (searchFilters.genre !== 'All') {
+      result = result.filter((m) => 
+        m.genre?.toLowerCase().includes(searchFilters.genre.toLowerCase())
+      );
+    }
+
+    if (searchFilters.language !== 'All') {
+      result = result.filter((m) => 
+        m.language?.toLowerCase().includes(searchFilters.language.toLowerCase())
+      );
+    }
+
+    if (searchFilters.minRating > 0) {
+      result = result.filter((m) => 
+        parseFloat(m.rating) >= searchFilters.minRating
+      );
+    }
+
+    if (searchFilters.sortBy === 'rating_desc') {
+      result.sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
+    } else if (searchFilters.sortBy === 'rating_asc') {
+      result.sort((a, b) => parseFloat(a.rating) - parseFloat(b.rating));
+    } else if (searchFilters.sortBy === 'year_desc') {
+      result.sort((a, b) => (b.year || 0) - (a.year || 0));
+    } else if (searchFilters.sortBy === 'year_asc') {
+      result.sort((a, b) => (a.year || 0) - (b.year || 0));
+    }
+
+    return result;
+  }, [searchResults, searchFilters]);
   const [myList, setMyList] = useState(() => {
     try {
       const saved = localStorage.getItem('movieverify_mylist');
@@ -353,25 +407,33 @@ function App() {
             {searchLoading ? (
               <p className="text-gray-400">Searching...</p>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {searchResults.map(movie => (
-                  <div key={movie.id} onClick={() => handleMovieSelect(movie)} className="cursor-pointer hover:scale-105 transition flex flex-col items-center">
-                    <img 
-                      src={movie.poster} 
-                      alt={movie.title} 
-                      className="w-full aspect-[2/3] object-cover rounded-md"
-                      loading="lazy"
-                      onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/300x450/141414/E50914?text=No+Poster' }}
-                    />
-                    <div className="mt-2 text-sm font-semibold truncate w-full text-center text-gray-200 hover:text-white">
-                      {movie.title}
+              <>
+                <SearchFilters
+                  filters={searchFilters}
+                  onFilterChange={handleFilterChange}
+                  onReset={resetFilters}
+                  resultCount={displayedSearchResults.length}
+                />
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {displayedSearchResults.map(movie => (
+                    <div key={movie.id} onClick={() => handleMovieSelect(movie)} className="cursor-pointer hover:scale-105 transition flex flex-col items-center">
+                      <img 
+                        src={movie.poster} 
+                        alt={movie.title} 
+                        className="w-full aspect-[2/3] object-cover rounded-md"
+                        loading="lazy"
+                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/300x450/141414/E50914?text=No+Poster' }}
+                      />
+                      <div className="mt-2 text-sm font-semibold truncate w-full text-center text-gray-200 hover:text-white">
+                        {movie.title}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {searchResults.length === 0 && (
-                  <p className="text-gray-400 col-span-full">No titles found.</p>
-                )}
-              </div>
+                  ))}
+                  {displayedSearchResults.length === 0 && (
+                    <p className="text-gray-400 col-span-full">No titles found.</p>
+                  )}
+                </div>
+              </>
             )}
           </div>
         )}
