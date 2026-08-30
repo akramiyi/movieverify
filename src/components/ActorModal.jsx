@@ -13,7 +13,7 @@ const ActorModal = ({ actor, isOpen, onClose }) => {
     setLoading(true);
     
     fetch(
-      `https://api.themoviedb.org/3/person/${actor.tmdb_id}/combined_credits`,
+      `https://api.themoviedb.org/3/person/${actor.tmdb_id}/movie_credits`,
       {
         headers: {
           Authorization: `Bearer ${import.meta.env.VITE_TMDB_TOKEN}`
