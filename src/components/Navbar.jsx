@@ -1,5 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Bell, User, Menu, X } from 'lucide-react';
+import { Search, Bell, User, Menu, X, Clock } from 'lucide-react';
+
+const LiveTime = () => {
+  const [time, setTime] = useState(new Date());
+  
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="hidden sm:flex items-center gap-1.5 text-gray-300 font-mono text-sm tracking-wider mr-2">
+      <Clock className="w-4 h-4 text-[#E50914]" />
+      {time.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+    </div>
+  );
+};
 
 const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdminClick }) => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -106,6 +122,8 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
             />
           </div>
           
+          <LiveTime />
+
           <button className="text-white hidden sm:block">
             <Bell className="w-5 h-5 md:w-6 md:h-6" />
           </button>
