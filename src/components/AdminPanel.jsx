@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, activeLinks } from '../hooks/useTMDB';
+import ReportsPanel from './ReportsPanel';
 
 const AdminPanel = ({ onClose }) => {
+  const [activeTab, setActiveTab] = useState('manager'); // 'manager' | 'reports'
   // Login State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [emailVal, setEmailVal] = useState('');
@@ -402,6 +404,12 @@ const AdminPanel = ({ onClose }) => {
         {/* Logout and Close headers */}
         <div className="absolute top-4 right-4 flex items-center gap-2">
           <button 
+            onClick={() => setActiveTab(activeTab === 'manager' ? 'reports' : 'manager')}
+            className="bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
+          >
+            {activeTab === 'manager' ? 'View Reports' : 'Back to Manager'}
+          </button>
+          <button 
             onClick={handleLogout}
             className="bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
           >
@@ -415,8 +423,14 @@ const AdminPanel = ({ onClose }) => {
           </button>
         </div>
 
-        {/* Left Form Panel */}
-        <div className="flex-1 space-y-6">
+        {activeTab === 'reports' ? (
+          <div className="w-full flex-1">
+            <ReportsPanel />
+          </div>
+        ) : (
+          <>
+            {/* Left Form Panel */}
+            <div className="flex-1 space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 text-center">
               <div className="text-3xl font-black text-white">{totalMovies}</div>
@@ -715,6 +729,8 @@ const AdminPanel = ({ onClose }) => {
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

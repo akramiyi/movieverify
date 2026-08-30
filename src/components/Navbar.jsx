@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Bell, User, Menu, X, Clock } from 'lucide-react';
+import { supabase } from '../data/supabaseClient';
 
 const LiveTime = () => {
   const [time, setTime] = useState(new Date());
@@ -27,6 +28,22 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [pendingReports, setPendingReports] = useState(0);
+
+  useEffect(() => {
+    const checkReports = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return; // only fetch if admin is logged in
+      
+      const { count } = await supabase
+        .from('movie_reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      
+      setPendingReports(count || 0);
+    };
+    checkReports();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -130,8 +147,16 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
           
           <LiveTime />
 
-          <button className="text-white hidden sm:block">
+          <button className="text-white hidden sm:block relative">
             <Bell className="w-5 h-5 md:w-6 md:h-6" />
+            {pendingReports > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 
+                               bg-[#E50914] rounded-full text-[9px] 
+                               font-bold flex items-center justify-center 
+                               text-white">
+                {pendingReports > 9 ? '9+' : pendingReports}
+              </span>
+            )}
           </button>
           
           <button 

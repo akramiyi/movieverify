@@ -4,6 +4,7 @@ import { X, Play, Plus, ThumbsUp, Download, Check } from 'lucide-react';
 import { movies } from '../data/movies';
 import { fetchTMDBDetails, getDownloadLinks } from '../hooks/useTMDB';
 import ImageWithFallback from './ImageWithFallback';
+import ReportProblemButton from './ReportProblemButton';
 
 const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie }) => {
 
@@ -203,6 +204,11 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                     </div>
                   )}
                 </div>
+                
+                <ReportProblemButton 
+                  movieId={movie.id} 
+                  movieTitle={movie.title} 
+                />
               </div>
 
               {/* Cast & Info Column */}
