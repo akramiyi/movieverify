@@ -22,10 +22,8 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
     )
     .then(r => r.json())
     .then(data => {
-      const sorted = (data.cast || [])
+      const allMapped = (data.cast || [])
         .filter(m => m.poster_path)
-        .sort((a, b) => b.popularity - a.popularity)
-        .slice(0, 100) // Changed to 100 to support large uploads like the 80 Salman Khan movies
         .map(m => {
           const links = getDownloadLinks(m.id, m.title || m.name);
           return {
@@ -36,6 +34,15 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
             download1080p: links?.download1080p || null,
           };
         });
+
+      const sorted = allMapped.sort((a, b) => {
+        const aHas = !!(a.download480p || a.download720p || a.download1080p);
+        const bHas = !!(b.download480p || b.download720p || b.download1080p);
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
+        return b.popularity - a.popularity;
+      }).slice(0, 100);
+
       setMovies(sorted);
       setLoading(false);
     })
