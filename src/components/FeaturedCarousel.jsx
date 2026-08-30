@@ -47,16 +47,16 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
           </motion.div>
           
           {/* Netflix signature dark gradients */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/40 to-transparent pointer-events-none" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#141414] via-[#141414]/50 to-transparent w-full md:w-[70%] pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/40 to-transparent pointer-events-none z-10" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#141414] via-[#141414]/50 to-transparent w-full md:w-[70%] pointer-events-none z-10" />
 
           {/* Content */}
-          <div className="absolute inset-0 flex flex-col justify-end px-4 md:px-16 pb-20 md:pb-32 pointer-events-none">
+          <div className="absolute inset-0 flex flex-col justify-end px-4 md:px-16 pb-24 md:pb-32 z-20">
             <motion.div 
               initial={{ opacity: 0, x: -50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5, duration: 0.8 }}
-              className="max-w-2xl pointer-events-auto relative z-10"
+              className="max-w-2xl w-full"
             >
               {/* Fake Netflix Series/Movie badge */}
               <div className="flex items-center gap-2 mb-4">
@@ -82,10 +82,10 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
                 {currentMovie.description}
               </p>
 
-              <div className="flex flex-wrap items-center gap-4 relative z-20">
+              <div className="flex flex-wrap items-center gap-4 relative z-50 mt-4">
                 <button 
                   onClick={() => onPlayTrailer(currentMovie)}
-                  className="px-6 md:px-8 py-2 md:py-3 bg-white text-black rounded font-bold transition-all hover:bg-white/80 flex items-center gap-2 text-base md:text-xl active:scale-95"
+                  className="px-6 md:px-8 py-3 bg-white text-black rounded font-bold transition-all hover:bg-gray-200 flex items-center justify-center gap-2 text-base md:text-xl active:scale-95 shadow-xl w-full sm:w-auto"
                 >
                   <Download className="w-6 h-6 stroke-[3]" />
                   Download
