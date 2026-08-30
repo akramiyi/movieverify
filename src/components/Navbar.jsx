@@ -1,30 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Bell, User, Menu, X, Clock } from 'lucide-react';
+import { Search, Bell, User, Menu, X, Clock, Download } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 
 const LiveTime = () => {
   const [time, setTime] = useState(new Date());
   
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 50);
+    const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Format: HH:MM:SS:MS AM/PM
+  // Format: HH:MM:SS AM/PM
   const timeString = time.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const ms = time.getMilliseconds().toString().padStart(3, '0');
   const [timePart, ampm] = timeString.split(' ');
-  const formattedTime = `${timePart}:${ms} ${ampm}`;
+  const formattedTime = `${timePart} ${ampm}`;
 
   return (
-    <div className="hidden sm:flex items-center gap-1.5 text-gray-200 font-mono text-sm tracking-wider mr-2 w-40 font-bold">
+    <div className="hidden sm:flex items-center gap-1.5 text-gray-200 font-mono text-sm tracking-wider mr-2 w-32 font-bold">
       <Clock className="w-4 h-4 text-[#E50914]" />
       {formattedTime}
     </div>
   );
 };
 
-const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdminClick }) => {
+const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdminClick, onHistoryClick }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -146,6 +145,14 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
           </div>
           
           <LiveTime />
+
+          <button 
+            onClick={onHistoryClick}
+            className="text-white hidden sm:block hover:text-[#E50914] transition"
+            title="Download History"
+          >
+            <Download className="w-5 h-5 md:w-6 md:h-6" />
+          </button>
 
           <button className="text-white hidden sm:block relative">
             <Bell className="w-5 h-5 md:w-6 md:h-6" />

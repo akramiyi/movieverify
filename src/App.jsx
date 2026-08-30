@@ -95,7 +95,7 @@ function App() {
 
     if (searchFilters.genre !== 'All') {
       result = result.filter((m) => 
-        m.genre?.toLowerCase().includes(searchFilters.genre.toLowerCase())
+        !m.genre || m.genre.toLowerCase().includes(searchFilters.genre.toLowerCase())
       );
     }
 
@@ -231,6 +231,7 @@ function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         onAdminClick={() => setShowAdmin(true)}
+        onHistoryClick={() => setIsHistoryModalOpen(true)}
       />
 
       {tmdbError && (
