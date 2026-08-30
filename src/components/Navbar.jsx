@@ -5,14 +5,20 @@ const LiveTime = () => {
   const [time, setTime] = useState(new Date());
   
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
+    const timer = setInterval(() => setTime(new Date()), 50);
     return () => clearInterval(timer);
   }, []);
 
+  // Format: HH:MM:SS:MS AM/PM
+  const timeString = time.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const ms = time.getMilliseconds().toString().padStart(3, '0');
+  const [timePart, ampm] = timeString.split(' ');
+  const formattedTime = `${timePart}:${ms} ${ampm}`;
+
   return (
-    <div className="hidden sm:flex items-center gap-1.5 text-gray-300 font-mono text-sm tracking-wider mr-2">
+    <div className="hidden sm:flex items-center gap-1.5 text-gray-300 font-mono text-sm tracking-wider mr-2 w-40">
       <Clock className="w-4 h-4 text-[#E50914]" />
-      {time.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+      {formattedTime}
     </div>
   );
 };
