@@ -3,6 +3,7 @@ import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, L
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
+import AnalyticsDashboard from './AnalyticsDashboard';
 
 const AdminPanel = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('manager'); // 'manager' | 'reports'
@@ -404,6 +405,12 @@ const AdminPanel = ({ onClose }) => {
         {/* Logout and Close headers */}
         <div className="absolute top-4 right-4 flex items-center gap-2">
           <button 
+            onClick={() => setActiveTab(activeTab === 'analytics' ? 'manager' : 'analytics')}
+            className="bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
+          >
+            {activeTab === 'analytics' ? 'Back to Manager' : 'View Analytics'}
+          </button>
+          <button 
             onClick={() => setActiveTab(activeTab === 'manager' ? 'reports' : 'manager')}
             className="bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
           >
@@ -426,6 +433,10 @@ const AdminPanel = ({ onClose }) => {
         {activeTab === 'reports' ? (
           <div className="w-full flex-1">
             <ReportsPanel />
+          </div>
+        ) : activeTab === 'analytics' ? (
+          <div className="w-full flex-1">
+            <AnalyticsDashboard />
           </div>
         ) : (
           <>
