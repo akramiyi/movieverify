@@ -20,18 +20,22 @@ import { actors } from './data/actors';
 import AllActorsPage from './pages/AllActorsPage';
 import GenrePage from './pages/GenrePage';
 import { useRecentlyViewed } from './hooks/useRecentlyViewed';
+import { useDownloadHistory } from './hooks/useDownloadHistory';
+import DownloadHistoryModal from './components/DownloadHistoryModal';
 
 const getActors = () => actors.filter(a => a.type === 'actor');
 const getActresses = () => actors.filter(a => a.type === 'actress');
 
 function App() {
   const navigate = useNavigate();
+  const { recentlyViewed, addToRecentlyViewed } = useRecentlyViewed();
+  const { history, addToHistory, clearHistory } = useDownloadHistory();
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [showIntro, setShowIntro] = useState(() => {
     // return !sessionStorage.getItem('introShown');
     return true; // For testing on refresh
   });
   const [selectedMovie, setSelectedMovie] = useState(null);
-  const { recentlyViewed, addToRecentlyViewed } = useRecentlyViewed();
 
   const handleMovieSelect = (movie) => {
     setSelectedMovie(movie);
@@ -448,6 +452,14 @@ function App() {
         onSelectMovie={handleMovieSelect}
         myList={myList}
         onToggleMyList={toggleMyList}
+        onDownloadTracked={addToHistory}
+      />
+
+      <DownloadHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        history={history}
+        onClear={clearHistory}
       />
 
       <ActorModal

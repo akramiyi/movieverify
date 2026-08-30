@@ -5,9 +5,10 @@ import { movies } from '../data/movies';
 import { fetchTMDBDetails, getDownloadLinks } from '../hooks/useTMDB';
 import ImageWithFallback from './ImageWithFallback';
 import ReportProblemButton from './ReportProblemButton';
+import ShareButton from './ShareButton';
 import ReviewSection from './ReviewSection';
 
-const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie }) => {
+const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie, onDownloadTracked }) => {
 
 
   const [details, setDetails] = useState({
@@ -58,6 +59,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
   const handleDownload = (quality, link) => {
     if(link && link !== "#") {
       window.open(link, "_blank");
+      if (onDownloadTracked) onDownloadTracked(movie.title, quality);
     } else {
       alert(`${quality} download link is not available yet.`);
     }
@@ -206,10 +208,16 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                   )}
                 </div>
                 
-                <ReportProblemButton 
-                  movieId={movie.id} 
-                  movieTitle={movie.title} 
-                />
+                <div className="flex items-center gap-6">
+                  <ReportProblemButton 
+                    movieId={movie.id} 
+                    movieTitle={movie.title} 
+                  />
+                  <ShareButton 
+                    movieId={movie.id} 
+                    movieTitle={movie.title} 
+                  />
+                </div>
                 <ReviewSection 
                   movieId={movie.id} 
                   movieTitle={movie.title} 
