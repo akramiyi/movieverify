@@ -45,11 +45,13 @@ const ShareButton = ({ movieTitle, movieId }) => {
     <div className="relative inline-block">
       <button
         onClick={handleNativeShare}
-        className="flex items-center gap-2 text-gray-400 
-                   hover:text-[#E50914] text-sm transition"
+        className="flex items-center gap-2 text-gray-300 
+                   hover:text-[#E50914] text-sm font-medium 
+                   transition group"
       >
-        <Share2 className="w-4 h-4" />
-        Share
+        <Share2 className="w-[18px] h-[18px] flex-shrink-0 
+                           group-hover:scale-110 transition-transform" />
+        <span>Share</span>
       </button>
 
       {showMenu && (

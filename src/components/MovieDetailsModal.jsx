@@ -208,7 +208,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                   )}
                 </div>
                 
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-8 mt-4 pb-6 border-b border-white/10">
                   <ReportProblemButton 
                     movieId={movie.id} 
                     movieTitle={movie.title} 

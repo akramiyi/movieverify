@@ -41,11 +41,13 @@ const ReportProblemButton = ({ movieId, movieTitle }) => {
     <div className="mt-4">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 text-gray-400 
-                   hover:text-[#E50914] text-sm transition"
+        className="flex items-center gap-2 text-gray-300 
+                   hover:text-[#E50914] text-sm font-medium 
+                   transition group"
       >
-        <Flag className="w-4 h-4" />
-        Report a Problem
+        <Flag className="w-[18px] h-[18px] flex-shrink-0 
+                         group-hover:scale-110 transition-transform" />
+        <span>Report a Problem</span>
       </button>
 
       <AnimatePresence>
