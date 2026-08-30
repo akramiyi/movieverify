@@ -16,7 +16,7 @@ const LiveTime = () => {
   const formattedTime = `${timePart}:${ms} ${ampm}`;
 
   return (
-    <div className="hidden sm:flex items-center gap-1.5 text-gray-300 font-mono text-sm tracking-wider mr-2 w-40">
+    <div className="hidden sm:flex items-center gap-1.5 text-gray-200 font-mono text-sm tracking-wider mr-2 w-40 font-bold">
       <Clock className="w-4 h-4 text-[#E50914]" />
       {formattedTime}
     </div>
