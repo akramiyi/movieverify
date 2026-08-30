@@ -400,10 +400,10 @@ const AdminPanel = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[150] bg-black/95 flex flex-col p-4 md:p-8 overflow-y-auto backdrop-blur-md">
-      <div className="w-full max-w-4xl mx-auto bg-[#181818] border border-white/10 rounded-lg p-6 md:p-8 shadow-2xl flex flex-col md:flex-row gap-8 relative mt-12">
+      <div className="w-full max-w-4xl mx-auto bg-[#181818] border border-white/10 rounded-lg p-6 md:p-8 shadow-2xl relative mt-12 flex flex-col">
         
-        {/* Logout and Close headers */}
-        <div className="absolute top-4 right-4 flex items-center gap-2">
+        {/* Header Bar */}
+        <div className="flex flex-wrap items-center justify-end gap-2 mb-6 px-4 md:px-0">
           <button 
             onClick={() => setActiveTab(activeTab === 'analytics' ? 'manager' : 'analytics')}
             className="bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
@@ -430,18 +430,20 @@ const AdminPanel = ({ onClose }) => {
           </button>
         </div>
 
-        {activeTab === 'reports' ? (
-          <div className="w-full flex-1">
-            <ReportsPanel />
-          </div>
-        ) : activeTab === 'analytics' ? (
-          <div className="w-full flex-1">
-            <AnalyticsDashboard />
-          </div>
-        ) : (
-          <>
-            {/* Left Form Panel */}
-            <div className="flex-1 space-y-6">
+        {/* Main Content Area */}
+        <div className="flex flex-col md:flex-row gap-8 w-full">
+          {activeTab === 'reports' ? (
+            <div className="w-full flex-1">
+              <ReportsPanel />
+            </div>
+          ) : activeTab === 'analytics' ? (
+            <div className="w-full flex-1">
+              <AnalyticsDashboard />
+            </div>
+          ) : (
+            <>
+              {/* Left Form Panel */}
+              <div className="flex-1 space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 text-center">
               <div className="text-3xl font-black text-white">{totalMovies}</div>
@@ -742,6 +744,7 @@ const AdminPanel = ({ onClose }) => {
         </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );
