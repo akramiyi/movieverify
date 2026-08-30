@@ -17,6 +17,7 @@ import ActorsRow from './components/ActorsRow';
 import ActorModal from './components/ActorModal';
 import { actors } from './data/actors';
 import AllActorsPage from './pages/AllActorsPage';
+import GenrePage from './pages/GenrePage';
 import { useRecentlyViewed } from './hooks/useRecentlyViewed';
 
 const getActors = () => actors.filter(a => a.type === 'actor');
@@ -241,6 +242,32 @@ function App() {
                   />
                 )}
 
+                {/* Browse by Genre */}
+                <div className="px-4 md:px-12 mb-8 mt-4">
+                  <h2 className="text-sm font-semibold text-[#e5e5e5] 
+                                 md:text-2xl mb-4">
+                    Browse by Genre
+                  </h2>
+                  <div className="flex flex-wrap gap-3">
+                    {Object.entries({
+                      action: 'Action', comedy: 'Comedy', drama: 'Drama',
+                      horror: 'Horror', romance: 'Romance', scifi: 'Sci-Fi',
+                      thriller: 'Thriller', animation: 'Animation',
+                      crime: 'Crime', fantasy: 'Fantasy',
+                    }).map(([slug, label]) => (
+                      <button
+                        key={slug}
+                        onClick={() => navigate(`/genre/${slug}`)}
+                        className="px-4 py-2 bg-[#242424] hover:bg-[#E50914] 
+                                   text-white text-sm font-medium rounded-full 
+                                   transition"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Download Available Section */}
                 {(activeTab === 'home') && (
                   displayDownloadAvailable.length === 0 ? (
@@ -379,6 +406,16 @@ function App() {
         } />
         <Route path="/actors" element={<AllActorsPage onMovieSelect={handleMovieSelect} />} />
         <Route path="/actresses" element={<AllActorsPage onMovieSelect={handleMovieSelect} />} />
+        <Route 
+          path="/genre/:genreSlug" 
+          element={
+            <GenrePage 
+              onMovieClick={handleMovieSelect} 
+              myList={myList} 
+              onToggleMyList={toggleMyList} 
+            />
+          } 
+        />
       </Routes>
     </div>
   );
