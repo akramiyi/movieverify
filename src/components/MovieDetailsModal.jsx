@@ -5,6 +5,7 @@ import { movies } from '../data/movies';
 import { fetchTMDBDetails, getDownloadLinks } from '../hooks/useTMDB';
 import ImageWithFallback from './ImageWithFallback';
 import ReportProblemButton from './ReportProblemButton';
+import ReviewSection from './ReviewSection';
 
 const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie }) => {
 
@@ -206,6 +207,10 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                 </div>
                 
                 <ReportProblemButton 
+                  movieId={movie.id} 
+                  movieTitle={movie.title} 
+                />
+                <ReviewSection 
                   movieId={movie.id} 
                   movieTitle={movie.title} 
                 />
