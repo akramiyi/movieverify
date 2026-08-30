@@ -75,7 +75,7 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
                 <span className="text-green-500">{Math.round(currentMovie.rating * 10)}% Match</span>
                 <span>{currentMovie.year}</span>
                 <span className="border border-white/40 px-1 rounded text-xs">{currentMovie.quality}</span>
-                <span>{currentMovie.genre.split(',')[0]}</span>
+                <span>{(currentMovie.genre || 'N/A').split(',')[0]}</span>
               </div>
               
               <p className="text-gray-200 text-sm md:text-lg mb-8 max-w-xl line-clamp-3 md:line-clamp-4 drop-shadow-md font-medium">

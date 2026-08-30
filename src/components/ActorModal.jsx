@@ -30,6 +30,7 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
           const links = getDownloadLinks(m.id, m.title || m.name);
           return {
             ...m,
+            genre: '',
             download480p: links?.download480p || null,
             download720p: links?.download720p || null,
             download1080p: links?.download1080p || null,

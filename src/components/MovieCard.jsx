@@ -151,7 +151,7 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
               </div>
               
               <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-white/90">
-                {movie.genre.split(',').map((g, i, arr) => (
+                {(movie.genre || '').split(',').filter(Boolean).map((g, i, arr) => (
                   <React.Fragment key={i}>
                     <span>{g.trim()}</span>
                     {i < arr.length - 1 && <span className="text-gray-500">•</span>}
