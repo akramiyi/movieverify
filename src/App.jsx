@@ -17,6 +17,7 @@ import ActorsRow from './components/ActorsRow';
 import ActorModal from './components/ActorModal';
 import { actors } from './data/actors';
 import AllActorsPage from './pages/AllActorsPage';
+import { useRecentlyViewed } from './hooks/useRecentlyViewed';
 
 const getActors = () => actors.filter(a => a.type === 'actor');
 const getActresses = () => actors.filter(a => a.type === 'actress');
@@ -28,6 +29,12 @@ function App() {
     return true; // For testing on refresh
   });
   const [selectedMovie, setSelectedMovie] = useState(null);
+  const { recentlyViewed, addToRecentlyViewed } = useRecentlyViewed();
+
+  const handleMovieSelect = (movie) => {
+    setSelectedMovie(movie);
+    addToRecentlyViewed(movie);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('home');
   const [seeAllSection, setSeeAllSection] = useState(null);
@@ -194,7 +201,7 @@ function App() {
                   <MovieCard 
                     key={movie.id} 
                     movie={movie} 
-                    onClick={() => setSelectedMovie(movie)} 
+                    onClick={() => handleMovieSelect(movie)} 
                     myList={myList}
                     onToggleMyList={toggleMyList}
                   />
@@ -205,7 +212,7 @@ function App() {
             <>
               <FeaturedCarousel 
                 movies={displayFeatured}
-                onPlayTrailer={setSelectedMovie}
+                onPlayTrailer={handleMovieSelect}
               />
               
               <div className="relative z-20 pb-10">
@@ -214,11 +221,23 @@ function App() {
                   <MovieRow 
                     title="My List" 
                     movies={myList} 
-                    onMovieClick={setSelectedMovie} 
+                    onMovieClick={handleMovieSelect} 
                     isLoading={appLoading} 
                     myList={myList} 
                     onToggleMyList={toggleMyList} 
                     onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })}
+                  />
+                )}
+
+                {/* Continue Browsing */}
+                {recentlyViewed.length > 0 && (
+                  <MovieRow
+                    title="Continue Browsing"
+                    movies={recentlyViewed}
+                    onMovieClick={handleMovieSelect}
+                    isLoading={false}
+                    myList={myList}
+                    onToggleMyList={toggleMyList}
                   />
                 )}
 
@@ -249,7 +268,7 @@ function App() {
                         </span>
                       }
                       movies={displayDownloadAvailable} 
-                      onMovieClick={setSelectedMovie} 
+                      onMovieClick={handleMovieSelect} 
                       isLoading={appLoading} 
                       myList={myList} 
                       onToggleMyList={toggleMyList} 
@@ -260,7 +279,7 @@ function App() {
 
                 {/* Trending Now */}
                 {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
-                  <MovieRow title="Trending Now" movies={displayTrending} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                  <MovieRow title="Trending Now" movies={displayTrending} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
                 )}
 
                 {/* Popular Actors */}
@@ -281,22 +300,22 @@ function App() {
 
                 {/* Bollywood Hits */}
                 {(activeTab === 'home' || activeTab === 'movies') && (
-                  <MovieRow title="Bollywood Hits" movies={displayBollywood} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                  <MovieRow title="Bollywood Hits" movies={displayBollywood} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
                 )}
 
                 {/* South Indian Action */}
                 {(activeTab === 'home' || activeTab === 'movies') && (
-                  <MovieRow title="South Indian Action" movies={displaySouthIndian} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                  <MovieRow title="South Indian Action" movies={displaySouthIndian} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
                 )}
 
                 {/* Web Series / TV Shows */}
                 {(activeTab === 'home' || activeTab === 'tv') && (
-                  <MovieRow title="Web Series" movies={displayWebSeries} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                  <MovieRow title="Web Series" movies={displayWebSeries} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
                 )}
 
                 {/* Popular Movies */}
                 {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
-                  <MovieRow title="Popular Movies" movies={displayPopular} onMovieClick={setSelectedMovie} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                  <MovieRow title="Popular Movies" movies={displayPopular} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
                 )}
               </div>
             </>
@@ -309,7 +328,7 @@ function App() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {searchResults.map(movie => (
-                  <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="cursor-pointer hover:scale-105 transition flex flex-col items-center">
+                  <div key={movie.id} onClick={() => handleMovieSelect(movie)} className="cursor-pointer hover:scale-105 transition flex flex-col items-center">
                     <img 
                       src={movie.poster} 
                       alt={movie.title} 
@@ -337,7 +356,7 @@ function App() {
         movie={selectedMovie} 
         isOpen={!!selectedMovie} 
         onClose={() => setSelectedMovie(null)} 
-        onSelectMovie={setSelectedMovie}
+        onSelectMovie={handleMovieSelect}
         myList={myList}
         onToggleMyList={toggleMyList}
       />
@@ -348,7 +367,7 @@ function App() {
         onClose={() => setIsActorModalOpen(false)}
         onMovieClick={(movie) => {
           setIsActorModalOpen(false);
-          setSelectedMovie(movie);
+          handleMovieSelect(movie);
         }}
       />
 
@@ -358,8 +377,8 @@ function App() {
       <InstallPWA />
           </>
         } />
-        <Route path="/actors" element={<AllActorsPage onMovieSelect={setSelectedMovie} />} />
-        <Route path="/actresses" element={<AllActorsPage onMovieSelect={setSelectedMovie} />} />
+        <Route path="/actors" element={<AllActorsPage onMovieSelect={handleMovieSelect} />} />
+        <Route path="/actresses" element={<AllActorsPage onMovieSelect={handleMovieSelect} />} />
       </Routes>
     </div>
   );
