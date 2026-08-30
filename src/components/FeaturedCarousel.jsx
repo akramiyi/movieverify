@@ -82,10 +82,10 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
                 {currentMovie.description}
               </p>
 
-              <div className="flex flex-wrap items-center gap-4 relative z-50 mt-4">
+              <div className="flex flex-wrap items-center gap-4 relative z-50 mt-2 md:mt-4">
                 <button 
                   onClick={() => onPlayTrailer(currentMovie)}
-                  className="px-6 md:px-8 py-3 bg-white text-black rounded font-bold transition-all hover:bg-gray-200 flex items-center justify-center gap-2 text-base md:text-xl active:scale-95 shadow-xl w-full sm:w-auto"
+                  className="px-6 md:px-8 py-2 md:py-3 bg-white text-black rounded font-bold transition-all hover:bg-white/80 flex items-center gap-2 text-base md:text-xl active:scale-95 shadow-lg"
                 >
                   <Download className="w-6 h-6 stroke-[3]" />
                   Download
