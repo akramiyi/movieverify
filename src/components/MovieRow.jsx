@@ -65,17 +65,19 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
         )}
       </div>
       
-      <div className="overflow-hidden w-full relative md:-ml-2">
+      <div 
+        className="overflow-x-auto hide-scrollbar w-full relative md:-ml-2"
+        onTouchStart={() => setIsPaused(true)}
+        onTouchEnd={() => setTimeout(() => setIsPaused(false), 3000)}
+      >
         <div 
-          className={`${!isLoading ? 'animate-marquee' : 'flex'} flex items-center space-x-2 py-10 px-4 md:px-12 overflow-x-auto hide-scrollbar`}
+          className={`${!isLoading ? 'animate-marquee' : 'flex'} flex items-center space-x-2 py-10 px-4 md:px-12`}
           style={{ 
             animationDuration: scrollDuration,
             animationPlayState: isPaused ? 'paused' : 'running'
           }}
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
-          onTouchStart={() => setIsPaused(true)}
-          onTouchEnd={() => setTimeout(() => setIsPaused(false), 3000)}
         >
           {isLoading ? (
             Array.from({ length: 6 }).map((_, index) => (

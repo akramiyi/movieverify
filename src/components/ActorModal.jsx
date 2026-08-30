@@ -91,8 +91,14 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
                   Loading filmography...
                 </p>
               ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 
-                                md:grid-cols-5 lg:grid-cols-6 gap-3">
+                <>
+                  {movies.length === 0 && (
+                    <p className="text-gray-400 text-center py-8">
+                      No filmography data available for this actor.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-3 sm:grid-cols-4 
+                                  md:grid-cols-5 lg:grid-cols-6 gap-3">
                   {movies.map(m => (
                     <div key={m.id} className="cursor-pointer group" onClick={() => onMovieClick && onMovieClick(m)}>
                       <div className="relative rounded-lg overflow-hidden">
@@ -121,6 +127,7 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
                     </div>
                   ))}
                 </div>
+                </>
               )}
             </div>
           </motion.div>

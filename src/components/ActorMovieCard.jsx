@@ -19,6 +19,7 @@ const ActorMovieCard = ({ actor, onActorClick }) => {
   const tmdbId = actorData?.tmdb_id;
 
   const handleClick = () => {
+    if (!tmdbId) return; // don't open modal if actor lookup failed
     onActorClick({ ...actor, tmdb_id: tmdbId });
   };
 

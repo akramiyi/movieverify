@@ -151,7 +151,7 @@ const ReviewSection = ({ movieId, movieTitle }) => {
                   <div className="w-6 h-6 rounded-full bg-[#E50914] 
                                   flex items-center justify-center 
                                   text-white font-bold text-[10px]">
-                    {review.user_name[0].toUpperCase()}
+                    {(review.user_name || 'A')[0].toUpperCase()}
                   </div>
                   <span className="text-white text-xs font-semibold">
                     {review.user_name}
