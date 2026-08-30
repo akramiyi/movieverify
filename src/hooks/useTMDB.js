@@ -101,10 +101,9 @@ export const formatMovie = (m) => {
     typeof m.vote_average === 'number'
       ? m.vote_average.toFixed(1)
       : 'N/A';
-
-  const description = m.overview || '';
-
   const links = getDownloadLinks(id, title);
+
+  const description = links.description || m.overview || '';
 
   return {
     id,
@@ -254,6 +253,7 @@ export const useTMDB = () => {
                 download480p: row.download480p || null,
                 download720p: row.download720p || null,
                 download1080p: row.download1080p || null,
+                description: row.description || null,
                 seasons: row.seasons || null
               };
             });

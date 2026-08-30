@@ -20,6 +20,7 @@ const AdminPanel = ({ onClose }) => {
   const [link480, setLink480] = useState('');
   const [link720, setLink720] = useState('');
   const [link1080, setLink1080] = useState('');
+  const [descriptionVal, setDescriptionVal] = useState('');
   
   // Seasons Data for TV Shows
   const [seasonsData, setSeasonsData] = useState([]);
@@ -221,11 +222,13 @@ const AdminPanel = ({ onClose }) => {
       setLink480(existing.download480p || '');
       setLink720(existing.download720p || '');
       setLink1080(existing.download1080p || '');
+      setDescriptionVal(existing.description || '');
       setSeasonsData(existing.seasons || []);
     } else {
       setLink480('');
       setLink720('');
       setLink1080('');
+      setDescriptionVal('');
       setSeasonsData([]);
     }
   };
@@ -256,6 +259,7 @@ const AdminPanel = ({ onClose }) => {
           download480p: link480.trim() || null,
           download720p: link720.trim() || null,
           download1080p: link1080.trim() || null,
+          description: descriptionVal.trim() || null,
           seasons: seasonsData.length > 0 ? seasonsData : null,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
@@ -583,6 +587,18 @@ const AdminPanel = ({ onClose }) => {
                   </div>
                 </>
               )}
+
+              <div className="mt-4">
+                <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Custom Movie/Series Description (Optional)</label>
+                <textarea 
+                  placeholder="Enter custom description to override TMDB's default description..."
+                  value={descriptionVal}
+                  onChange={e => setDescriptionVal(e.target.value)}
+                  rows={4}
+                  className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm resize-none"
+                />
+                <p className="text-gray-500 text-[10px] mt-1">If left empty, the default TMDB description will be shown to users.</p>
+              </div>
 
               <div className="flex gap-2">
                 <button 
