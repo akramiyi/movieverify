@@ -42,13 +42,15 @@ const ActorsRow = ({ title, actors, onActorSelect, onSeeAll }) => {
 
       <div className="overflow-hidden w-full relative md:-ml-2">
         <div 
-          className="animate-marquee flex items-center space-x-2 py-4 px-4 md:px-12"
+          className="animate-marquee flex items-center space-x-2 py-4 px-4 md:px-12 overflow-x-auto hide-scrollbar"
           style={{ 
             animationDuration: scrollDuration,
             animationPlayState: isPaused ? 'paused' : 'running'
           }}
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
+          onTouchStart={() => setIsPaused(true)}
+          onTouchEnd={() => setTimeout(() => setIsPaused(false), 3000)}
         >
           {marqueeActors.map((actor, index) => (
             <ActorMovieCard

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download } from 'lucide-react';
-import { getDownloadLinks } from '../hooks/useTMDB';
+import { getDownloadLinks, formatMovie } from '../hooks/useTMDB';
 
 const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
   const [movies, setMovies] = useState([]);
@@ -24,16 +24,7 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
     .then(data => {
       const allMapped = (data.cast || [])
         .filter(m => m.poster_path)
-        .map(m => {
-          const links = getDownloadLinks(m.id, m.title || m.name);
-          return {
-            ...m,
-            genre: '',
-            download480p: links?.download480p || null,
-            download720p: links?.download720p || null,
-            download1080p: links?.download1080p || null,
-          };
-        });
+        .map(m => formatMovie(m));
 
       const sorted = allMapped.sort((a, b) => {
         const aHas = !!(a.download480p || a.download720p || a.download1080p);
@@ -106,14 +97,14 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
                     <div key={m.id} className="cursor-pointer group" onClick={() => onMovieClick && onMovieClick(m)}>
                       <div className="relative rounded-lg overflow-hidden">
                         <img
-                          src={`https://image.tmdb.org/t/p/w342${m.poster_path}`}
-                          alt={m.title || m.name}
+                          src={m.poster}
+                          alt={m.title}
                           className="w-full aspect-[2/3] object-cover 
                                      group-hover:scale-110 
                                      transition duration-300"
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = `https://placehold.co/342x513/1a1a1a/E50914?text=${encodeURIComponent((m.title||m.name)[0])}`;
+                            e.target.src = `https://placehold.co/342x513/1a1a1a/E50914?text=${encodeURIComponent((m.title)[0])}`;
                           }}
                         />
                         {!!(m.download480p || m.download720p || m.download1080p) && (
@@ -125,7 +116,7 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
                       </div>
                       <p className="text-white text-xs truncate mt-1 
                                     font-medium">
-                        {m.title || m.name}
+                        {m.title}
                       </p>
                     </div>
                   ))}

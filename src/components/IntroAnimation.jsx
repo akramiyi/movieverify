@@ -8,13 +8,10 @@ const IntroAnimation = ({ onComplete }) => {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    // Temporary disabled for testing so it plays on every refresh
-    /*
     if (sessionStorage.getItem('introShown')) {
       onComplete();
       return;
     }
-    */
 
     // Accessibility check
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');

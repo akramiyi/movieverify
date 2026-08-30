@@ -8,6 +8,11 @@ import ReportProblemButton from './ReportProblemButton';
 import ShareButton from './ShareButton';
 import ReviewSection from './ReviewSection';
 
+const getMatchPercent = (rating) => {
+  const num = parseFloat(rating);
+  return isNaN(num) ? 'N/A' : `${Math.round(num * 10)}%`;
+};
+
 const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie, onDownloadTracked }) => {
 
 
@@ -142,7 +147,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
             <div className="p-10 grid grid-cols-1 md:grid-cols-3 gap-8 text-white">
               <div className="md:col-span-2">
                 <div className="flex items-center gap-3 text-sm font-semibold mb-4">
-                  <span className="text-green-500">{Math.round(movie.rating * 10)}% Match</span>
+                  <span className="text-green-500">{getMatchPercent(movie.rating)} Match</span>
                   <span className="text-gray-300">{movie.year}</span>
                   <span className="border border-gray-500 text-gray-300 px-1 rounded text-xs">{movie.quality}</span>
                 </div>
@@ -265,7 +270,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                     </div>
                     <div className="p-4 text-white">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-green-500 text-xs font-bold">{Math.round(simMovie.rating * 10)}% Match</span>
+                        <span className="text-green-500 text-xs font-bold">{getMatchPercent(simMovie.rating)} Match</span>
                         <span className="border border-gray-500 text-gray-300 px-1 rounded text-[10px] uppercase">{simMovie.quality}</span>
                       </div>
                       <p className="text-sm font-bold truncate mb-1">{simMovie.title}</p>

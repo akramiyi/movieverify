@@ -4,6 +4,11 @@ import { Download, Plus, Info, Play } from 'lucide-react';
 import { fetchTMDBDetails } from '../hooks/useTMDB';
 import ImageWithFallback from './ImageWithFallback';
 
+const getMatchPercent = (rating) => {
+  const num = parseFloat(rating);
+  return isNaN(num) ? 'N/A' : `${Math.round(num * 10)}%`;
+};
+
 const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -72,7 +77,7 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
 
               {/* Tags */}
               <div className="flex items-center gap-3 text-sm md:text-base font-semibold text-white mb-6 drop-shadow-md">
-                <span className="text-green-500">{Math.round(currentMovie.rating * 10)}% Match</span>
+                <span className="text-green-500">{getMatchPercent(currentMovie.rating)} Match</span>
                 <span>{currentMovie.year}</span>
                 <span className="border border-white/40 px-1 rounded text-xs">{currentMovie.quality}</span>
                 <span>{(currentMovie.genre || 'N/A').split(',')[0]}</span>

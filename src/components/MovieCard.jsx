@@ -4,6 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Plus, ThumbsUp, ChevronDown, Check } from 'lucide-react';
 import ImageWithFallback from './ImageWithFallback';
 
+const getMatchPercent = (rating) => {
+  const num = parseFloat(rating);
+  return isNaN(num) ? 'N/A' : `${Math.round(num * 10)}%`;
+};
+
 const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [cardPos, setCardPos] = useState(null);
@@ -145,7 +150,7 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
               <h3 className="font-bold text-xs md:text-sm mb-1 truncate text-white">{movie.title}</h3>
 
               <div className="flex items-center gap-2 text-xs md:text-sm mb-1">
-                <span className="text-green-500 font-bold">{Math.round(movie.rating * 10)}% Match</span>
+                <span className="text-green-500 font-bold">{getMatchPercent(movie.rating)} Match</span>
                 <span className="text-gray-400">{movie.year}</span>
                 <span className="border border-gray-600 text-gray-300 px-1 rounded text-[10px] uppercase">{movie.quality}</span>
               </div>

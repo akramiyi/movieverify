@@ -411,10 +411,10 @@ const AdminPanel = ({ onClose }) => {
             {activeTab === 'analytics' ? 'Back to Manager' : 'View Analytics'}
           </button>
           <button 
-            onClick={() => setActiveTab(activeTab === 'manager' ? 'reports' : 'manager')}
+            onClick={() => setActiveTab(activeTab === 'reports' ? 'manager' : 'reports')}
             className="bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
           >
-            {activeTab === 'manager' ? 'View Reports' : 'Back to Manager'}
+            {activeTab === 'reports' ? 'Back to Manager' : 'View Reports'}
           </button>
           <button 
             onClick={handleLogout}
