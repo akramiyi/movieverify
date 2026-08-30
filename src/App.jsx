@@ -478,8 +478,8 @@ function App() {
       <InstallPWA />
           </>
         } />
-        <Route path="/actors" element={<AllActorsPage onMovieSelect={handleMovieSelect} />} />
-        <Route path="/actresses" element={<AllActorsPage onMovieSelect={handleMovieSelect} />} />
+        <Route path="/actors" element={<AllActorsPage onMovieSelect={handleMovieSelect} type="actors" />} />
+        <Route path="/actresses" element={<AllActorsPage onMovieSelect={handleMovieSelect} type="actresses" />} />
         <Route 
           path="/genre/:genreSlug" 
           element={
