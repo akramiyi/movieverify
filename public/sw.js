@@ -23,15 +23,30 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  
+  // Only handle same-origin GET requests. Let all cross-origin 
+  // requests (TMDB API, Supabase, image CDNs) pass through 
+  // untouched by not calling respondWith at all.
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin) {
+    return;
+  }
+
   e.respondWith(
     fetch(e.request)
       .then(res => {
         const clone = res.clone();
         caches.open(CACHE_NAME)
-          .then(cache => cache.put(e.request, clone));
+          .then(cache => cache.put(e.request, clone))
+          .catch(() => {});
         return res;
       })
-      .catch(() => caches.match(e.request))
+      .catch(async () => {
+        const cached = await caches.match(e.request);
+        return cached || new Response('Network error', { 
+          status: 503, 
+          statusText: 'Service Unavailable' 
+        });
+      })
   );
 });

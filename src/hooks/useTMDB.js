@@ -188,31 +188,52 @@ const fetchTMDB = async (endpoint) => {
 };
 
 const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
-  const fetchPromises = ids.map(async (idStr) => {
+  const BATCH_SIZE = 5;
+  const BATCH_DELAY_MS = 300;
+  const results = [];
+
+  const idsToFetch = [];
+  for (const idStr of ids) {
     const parsedId = parseInt(idStr.split('-')[0], 10);
-    const mediaType = idStr.includes('-tv') ? 'tv' : 'movie';
-    
-    if (isNaN(parsedId)) return null;
+    if (isNaN(parsedId)) continue;
     
     const existing = alreadyFetchedList.find(m => String(m.id) === String(parsedId));
     if (existing) {
-      return existing;
+      results.push(existing);
+    } else {
+      idsToFetch.push(idStr);
     }
-    
-    try {
-      let item = await fetchTMDB(`/${mediaType}/${parsedId}`);
-      if (item) {
-        item.media_type = mediaType;
-        return formatMovie(item);
-      }
-    } catch (e) {
-      console.warn(`Failed to fetch metadata for TMDB ID: ${parsedId} (${mediaType})`, e.message);
-    }
-    return null;
-  });
+  }
 
-  const results = await Promise.all(fetchPromises);
-  return results.filter(Boolean); // Filter out nulls
+  for (let i = 0; i < idsToFetch.length; i += BATCH_SIZE) {
+    const batch = idsToFetch.slice(i, i + BATCH_SIZE);
+    
+    const batchResults = await Promise.all(
+      batch.map(async (idStr) => {
+        const parsedId = parseInt(idStr.split('-')[0], 10);
+        const mediaType = idStr.includes('-tv') ? 'tv' : 'movie';
+
+        try {
+          let item = await fetchTMDB(`/${mediaType}/${parsedId}`);
+          if (item) {
+            item.media_type = mediaType;
+            return formatMovie(item);
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch metadata for TMDB ID: ${parsedId} (${mediaType})`, e.message);
+        }
+        return null;
+      })
+    );
+
+    results.push(...batchResults.filter(Boolean));
+
+    if (i + BATCH_SIZE < idsToFetch.length) {
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+    }
+  }
+
+  return results;
 };
 
 export const useTMDB = () => {
