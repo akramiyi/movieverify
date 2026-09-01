@@ -8,17 +8,6 @@ const ImageWithFallback = ({ src, backdropSrc, alt, className, style, onClick, l
   const isFallback = errorLevel >= 2 || (!src && !backdropSrc);
   const combinedClassName = `${className || ''} ${isFallback ? 'bg-[#1a1a1a]' : ''}`.trim();
 
-  if (isFallback) {
-    return (
-      <div 
-        className={combinedClassName} 
-        style={style} 
-        onClick={onClick}
-        {...props}
-      />
-    );
-  }
-
   const currentSrc = errorLevel === 0 && src ? src : backdropSrc;
 
   useEffect(() => {
@@ -34,6 +23,17 @@ const ImageWithFallback = ({ src, backdropSrc, alt, className, style, onClick, l
       imageManager.requestImage(currentSrc);
     }
   }, [shouldLoad, currentSrc]);
+
+  if (isFallback) {
+    return (
+      <div 
+        className={combinedClassName} 
+        style={style} 
+        onClick={onClick}
+        {...props}
+      />
+    );
+  }
 
   // If not supposed to load yet and not globally loaded, show placeholder structure
   if (!shouldLoad && imageState !== 'LOADED') {
