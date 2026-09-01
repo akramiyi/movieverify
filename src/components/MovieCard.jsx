@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Plus, ThumbsUp, ChevronDown, Check } from 'lucide-react';
 import ImageWithFallback from './ImageWithFallback';
+import { useViewportIntersection } from '../hooks/useViewportIntersection';
 
 const getMatchPercent = (rating) => {
   const num = parseFloat(rating);
@@ -14,6 +15,8 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
   const [cardPos, setCardPos] = useState(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const cardRef = useRef(null);
+  const isNearViewport = useViewportIntersection(cardRef);
+  
   const isAddedToList = myList.some((m) => m.id === movie.id);
 
   const handleMouseEnter = () => {
@@ -53,9 +56,9 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
         setIsHovered(false);
         onClick(movie);
       }}
+      ref={cardRef}
     >
       <div 
-        ref={cardRef}
         className="relative w-full h-[180px] md:h-[270px] overflow-visible rounded-md bg-[#222]"
       >
         {!imageLoaded && (
@@ -66,6 +69,7 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
           backdropSrc={movie.backdrop}
           alt={movie.title}
           lazy={true}
+          shouldLoad={isNearViewport}
           onLoad={() => setImageLoaded(true)}
           className={`w-full h-full object-cover object-top rounded-md transition-opacity duration-500 z-10 relative ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         />
