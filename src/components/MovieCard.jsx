@@ -10,12 +10,13 @@ const getMatchPercent = (rating) => {
   return isNaN(num) ? 'N/A' : `${Math.round(num * 10)}%`;
 };
 
-const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
+const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [cardPos, setCardPos] = useState(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const cardRef = useRef(null);
   const isNearViewport = useViewportIntersection(cardRef);
+  const shouldLoad = isNearViewport || index < 6;
   
   const isAddedToList = myList.some((m) => m.id === movie.id);
 
@@ -68,8 +69,8 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList }) => {
           src={movie.poster}
           backdropSrc={movie.backdrop}
           alt={movie.title}
-          lazy={true}
-          shouldLoad={isNearViewport}
+          lazy={false}
+          shouldLoad={shouldLoad}
           onLoad={() => setImageLoaded(true)}
           className={`w-full h-full object-cover object-top rounded-md transition-opacity duration-500 z-10 relative ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         />

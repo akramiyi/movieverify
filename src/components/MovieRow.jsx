@@ -91,6 +91,7 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
                   onClick={() => onMovieClick(movie)} 
                   myList={myList}
                   onToggleMyList={onToggleMyList}
+                  index={idx}
                 />
               </div>
             ))
