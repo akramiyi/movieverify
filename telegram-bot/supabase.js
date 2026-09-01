@@ -2,7 +2,15 @@ const { createClient } = require('@supabase/supabase-js');
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = require('./config');
 
 // Service Role client — bypasses RLS (server-side only, NEVER expose)
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  },
+  db: {
+    schema: 'public'
+  }
+});
 
 /**
  * Get download config for a specific movie/TV show

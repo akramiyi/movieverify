@@ -717,7 +717,7 @@ const AdminPanel = ({ onClose }) => {
                       )}
                     </div>
                     <div className="text-[9px] text-gray-500 mt-1.5 font-medium">
-                      Uploaded: {new Date(item.created_at || item.updated_at || 0).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      Uploaded: {(() => { const d = new Date(item.created_at || item.updated_at || 0); return `${d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}.${String(d.getMilliseconds()).padStart(3,'0')}`; })()}
                     </div>
                   </div>
 
