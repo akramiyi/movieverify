@@ -365,6 +365,20 @@ export const useTMDB = () => {
           }
         });
 
+        // Unblock UI immediately by setting the core lists
+        if (active) {
+          setData({
+            trending: prioritizeDownloads(trendingList),
+            popular: prioritizeDownloads(popularList),
+            bollywood: prioritizeDownloads(bollywoodList),
+            southIndian: prioritizeDownloads(southIndianList),
+            webSeries: prioritizeDownloads(webSeriesList),
+            featured: prioritizeDownloads(featuredList),
+            downloadAvailable: []
+          });
+          setIsLoading(false);
+        }
+
         const resolvedList = await fetchMetadataForIds(downloadAvailableIds, allFetchedSoFar);
 
         // Inject the download links for the local movies that were just fetched
@@ -393,15 +407,10 @@ export const useTMDB = () => {
         });
 
         if (active) {
-          setData({
-            trending: prioritizeDownloads(trendingList),
-            popular: prioritizeDownloads(popularList),
-            bollywood: prioritizeDownloads(bollywoodList),
-            southIndian: prioritizeDownloads(southIndianList),
-            webSeries: prioritizeDownloads(webSeriesList),
-            featured: prioritizeDownloads(featuredList),
+          setData(prev => ({
+            ...prev,
             downloadAvailable: deduplicatedDownloads
-          });
+          }));
           setError(null);
         }
       } catch (err) {
