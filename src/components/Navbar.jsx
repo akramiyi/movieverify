@@ -6,17 +6,18 @@ const LiveTime = () => {
   const [time, setTime] = useState(new Date());
   
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
+    const timer = setInterval(() => setTime(new Date()), 10);
     return () => clearInterval(timer);
   }, []);
 
-  // Format: HH:MM:SS AM/PM
-  const timeString = time.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const [timePart, ampm] = timeString.split(' ');
-  const formattedTime = `${timePart} ${ampm}`;
+  // Format: HH:MM:SS.mmm AM/PM
+  const h = time.getHours();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  const formattedTime = `${String(h12).padStart(2,'0')}:${String(time.getMinutes()).padStart(2,'0')}:${String(time.getSeconds()).padStart(2,'0')}.${String(time.getMilliseconds()).padStart(3,'0')} ${ampm}`;
 
   return (
-    <div className="hidden sm:flex items-center gap-1.5 text-gray-200 font-mono text-sm tracking-wider mr-2 w-32 font-bold">
+    <div className="hidden sm:flex items-center gap-1.5 text-gray-200 font-mono text-xs tracking-wider mr-2 w-48 font-bold">
       <Clock className="w-4 h-4 text-[#E50914]" />
       {formattedTime}
     </div>
