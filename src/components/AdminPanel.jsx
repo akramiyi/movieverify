@@ -1,9 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X } from 'lucide-react';
+import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
 import AnalyticsDashboard from './AnalyticsDashboard';
+
+const AdminLiveClock = () => {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 10);
+    return () => clearInterval(timer);
+  }, []);
+
+  const h = now.getHours();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  const time = `${String(h12).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}.${String(now.getMilliseconds()).padStart(3,'0')} ${ampm}`;
+  const date = now.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+  return (
+    <div className="flex items-center gap-2 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2">
+      <Clock className="w-4 h-4 text-[#E50914]" />
+      <div className="flex flex-col">
+        <span className="font-mono text-xs font-bold text-white tracking-wider">{time}</span>
+        <span className="text-[9px] text-gray-400">{date}</span>
+      </div>
+    </div>
+  );
+};
 
 const AdminPanel = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('manager'); // 'manager' | 'reports'
@@ -403,7 +428,9 @@ const AdminPanel = ({ onClose }) => {
       <div className="w-full max-w-4xl mx-auto bg-[#181818] border border-white/10 rounded-lg p-6 md:p-8 shadow-2xl relative mt-12 flex flex-col">
         
         {/* Header Bar */}
-        <div className="flex flex-wrap items-center justify-end gap-2 mb-6 px-4 md:px-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-6 px-4 md:px-0">
+          <AdminLiveClock />
+          <div className="flex flex-wrap items-center gap-2">
           <button 
             onClick={() => setActiveTab(activeTab === 'analytics' ? 'manager' : 'analytics')}
             className="bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
@@ -428,6 +455,7 @@ const AdminPanel = ({ onClose }) => {
           >
             Close Manager
           </button>
+          </div>
         </div>
 
         {/* Main Content Area */}
