@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Telegram Bot secrets (NEVER commit)
+telegram-bot/.env
+telegram-bot/node_modules
