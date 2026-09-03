@@ -87,11 +87,15 @@ const registerAdminHandlers = (bot) => {
   });
 
   // /searchadmin <query>
-  bot.onText(/\/searchadmin\s+(.+)/, async (msg, match) => {
+  bot.onText(/\/searchadmin(?:\s+(.+))?/, async (msg, match) => {
     if (!adminGuard(bot, msg)) return;
 
     const chatId = msg.chat.id;
-    const query = match[1].trim();
+    const query = match[1] ? match[1].trim() : '';
+
+    if (!query) {
+      return bot.sendMessage(chatId, '❌ Please provide a movie/show name to search.\n\nExample: `/searchadmin Jawan`', { parse_mode: 'Markdown' });
+    }
 
     const searching = await bot.sendMessage(chatId, `🔍 Admin search: "${query}"...`);
 

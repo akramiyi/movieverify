@@ -37,9 +37,9 @@ const registerUserHandlers = (bot) => {
   });
 
   // /search <query>
-  bot.onText(/\/search\s+(.+)/, async (msg, match) => {
+  bot.onText(/\/search(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
-    const query = match[1].trim();
+    const query = match[1] ? match[1].trim() : '';
 
     if (!query) {
       return bot.sendMessage(chatId, '❌ Please provide a search query.\n\nExample: `/search Jawan`', { parse_mode: 'Markdown' });
