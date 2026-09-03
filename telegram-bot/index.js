@@ -38,3 +38,15 @@ process.on('SIGTERM', () => {
 
 console.log('✅ MovieVerify Telegram Bot is running!');
 console.log('📡 Listening for messages...');
+
+// Dummy HTTP server for Render Free Tier (Web Service)
+const http = require('http');
+const PORT = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('MovieVerify Bot is running!\n');
+});
+
+server.listen(PORT, () => {
+  console.log(`🌐 Dummy Web Server running on port ${PORT} (for Render Health Check)`);
+});
