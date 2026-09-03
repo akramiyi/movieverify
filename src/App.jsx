@@ -328,7 +328,7 @@ function App() {
 
                 {/* Download Available Section */}
                 {(activeTab === 'home') && (
-                  displayDownloadAvailable.length === 0 ? (
+                  (displayDownloadAvailable.length === 0 && !appLoading) ? (
                     <div className="space-y-2 md:space-y-4 mb-8">
                       <h2 className="text-sm font-semibold text-[#e5e5e5] md:text-2xl px-4 md:px-12 flex items-center gap-2">
                         Download Available
@@ -354,10 +354,10 @@ function App() {
                       }
                       movies={displayDownloadAvailable} 
                       onMovieClick={handleMovieSelect} 
-                      isLoading={appLoading} 
+                      isLoading={appLoading && displayDownloadAvailable.length === 0}
                       myList={myList} 
                       onToggleMyList={toggleMyList} 
-                      onSeeAll={(title, list) => setSeeAllSection({ title: "Download Available", movies: list })}
+                      onSeeAll={(title, movies) => setSeeAllSection({ title, movies })}
                     />
                   )
                 )}
