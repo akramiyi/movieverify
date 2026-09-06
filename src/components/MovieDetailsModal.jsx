@@ -7,6 +7,8 @@ import ImageWithFallback from './ImageWithFallback';
 import ReportProblemButton from './ReportProblemButton';
 import ShareButton from './ShareButton';
 import ReviewSection from './ReviewSection';
+import { useNotifyList } from '../hooks/useNotifyList';
+import { Bell, BellRing } from 'lucide-react';
 
 const getMatchPercent = (rating) => {
   const num = parseFloat(rating);
@@ -14,8 +16,8 @@ const getMatchPercent = (rating) => {
 };
 
 const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie, onDownloadTracked }) => {
-
-
+  const { toggleNotify, isNotifying } = useNotifyList();
+  const notifying = movie ? isNotifying(movie.id) : false;
   const [details, setDetails] = useState({
     cast: 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
     trailerUrl: '',
@@ -186,7 +188,20 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                   ) : (
                     <div>
                       {!(download480p || download720p || download1080p) ? (
-                        <p className="text-gray-400 text-sm py-2">Download links unavailable</p>
+                        <div className="py-2">
+                          <p className="text-gray-400 text-sm mb-3">Download links unavailable yet</p>
+                          <button
+                            onClick={() => toggleNotify(movie)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                              notifying 
+                                ? 'bg-[#E50914]/20 text-[#E50914] border border-[#E50914]' 
+                                : 'bg-[#242424] text-gray-300 hover:bg-[#333]'
+                            }`}
+                          >
+                            {notifying ? <BellRing className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                            {notifying ? "You'll be notified" : "Notify Me When Available"}
+                          </button>
+                        </div>
                       ) : (
                         <div className="grid grid-cols-3 gap-4">
                           {download480p && (

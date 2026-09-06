@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Star } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
+import { moderateText } from '../utils/moderateText';
 
 const ReviewSection = ({ movieId, movieTitle }) => {
   const [reviews, setReviews] = useState([]);
@@ -9,6 +10,7 @@ const ReviewSection = ({ movieId, movieTitle }) => {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [moderationError, setModerationError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -30,6 +32,14 @@ const ReviewSection = ({ movieId, movieTitle }) => {
 
   const handleSubmit = async () => {
     if (!rating || !comment.trim() || submitting) return;
+    
+    const check = moderateText(comment);
+    if (!check.allowed) {
+      setModerationError(check.reason);
+      return;
+    }
+    setModerationError('');
+    
     setSubmitting(true);
 
     try {
@@ -122,6 +132,10 @@ const ReviewSection = ({ movieId, movieTitle }) => {
                      outline-none focus:border-[#E50914] transition 
                      resize-none"
         />
+
+        {moderationError && (
+          <p className="text-red-400 text-xs mb-3">{moderationError}</p>
+        )}
 
         <button
           onClick={handleSubmit}

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Bell, User, Menu, X, Clock, Download } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
+import SearchSuggestions from './SearchSuggestions';
+import { searchTMDB } from '../hooks/useTMDB';
 
 const LiveTime = () => {
   const [time, setTime] = useState(new Date());
@@ -29,6 +31,27 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pendingReports, setPendingReports] = useState(0);
+
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    if (!searchQuery.trim() || searchQuery.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchTMDB(searchQuery);
+        setSuggestions(results.slice(0, 5));
+      } catch (err) {
+        console.warn('Suggestion fetch failed:', err.message);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     const checkReports = async () => {
@@ -124,7 +147,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
 
         {/* Right Side - Search & Profile */}
         <div className="flex items-center gap-4 md:gap-6">
-          <div className={`flex items-center transition-all duration-300 ${isSearchExpanded ? 'bg-black border border-white px-3 py-1.5' : 'bg-transparent'}`}>
+          <div className={`relative flex items-center transition-all duration-300 ${isSearchExpanded ? 'bg-black border border-white px-3 py-1.5' : 'bg-transparent'}`}>
             <button 
               onClick={() => setIsSearchExpanded(!isSearchExpanded)}
               className="text-white focus:outline-none flex items-center justify-center"
@@ -142,6 +165,14 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
               className={`bg-transparent text-white text-sm outline-none transition-all duration-300 placeholder-gray-400 ${
                 isSearchExpanded ? 'w-36 md:w-52 ml-3 opacity-100' : 'w-0 opacity-0'
               }`}
+            />
+            <SearchSuggestions 
+              suggestions={suggestions}
+              visible={isSearchExpanded && searchQuery.length >= 2}
+              onSelect={(movie) => {
+                onSearch(movie.title);
+                setSuggestions([]);
+              }}
             />
           </div>
           
