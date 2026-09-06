@@ -60,6 +60,41 @@ const AdminPanel = ({ onClose }) => {
   const [searchFilter, setSearchFilter] = useState('');
   const [qualityFilter, setQualityFilter] = useState('all');
 
+  const [siteLockStatus, setSiteLockStatus] = useState(false);
+  const [lockKeyInput, setLockKeyInput] = useState('');
+  const [lockToggling, setLockToggling] = useState(false);
+
+  const fetchSiteLockStatus = async () => {
+    const { data } = await supabase
+      .from('site_settings')
+      .select('is_locked, lock_password')
+      .eq('id', 1)
+      .single();
+    if (data) {
+      setSiteLockStatus(data.is_locked);
+      setLockKeyInput(data.lock_password || '');
+    }
+  };
+
+  const handleToggleSiteLock = async () => {
+    setLockToggling(true);
+    const newStatus = !siteLockStatus;
+    
+    const { error } = await supabase
+      .from('site_settings')
+      .update({ 
+        is_locked: newStatus, 
+        lock_password: lockKeyInput.trim(),
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', 1);
+
+    if (!error) {
+      setSiteLockStatus(newStatus);
+    }
+    setLockToggling(false);
+  };
+
   // Check active session on mount
   useEffect(() => {
     const checkSession = async () => {
@@ -88,6 +123,7 @@ const AdminPanel = ({ onClose }) => {
           if (isAdmin) {
             setIsLoggedIn(true);
             fetchCurrentLinks();
+            fetchSiteLockStatus();
           } else {
             // Not authorized
             await supabase.auth.signOut();
@@ -156,6 +192,7 @@ const AdminPanel = ({ onClose }) => {
 
         setIsLoggedIn(true);
         fetchCurrentLinks();
+        fetchSiteLockStatus();
       }
     } catch (err) {
       console.error('Authentication process failed:', err);
@@ -489,6 +526,39 @@ const AdminPanel = ({ onClose }) => {
               <div className="text-xl font-black text-green-400">{lastUpdated}</div>
               <div className="text-xs text-gray-400 mt-1">Last Updated</div>
             </div>
+          </div>
+
+          <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h4 className="text-white font-bold text-sm">Site Lock</h4>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  {siteLockStatus ? 'Site is currently locked' : 'Site is currently public'}
+                </p>
+              </div>
+              <button
+                onClick={handleToggleSiteLock}
+                disabled={lockToggling}
+                className={`px-4 py-2 rounded-full text-xs font-bold transition ${
+                  siteLockStatus 
+                    ? 'bg-red-600 hover:bg-red-700 text-white' 
+                    : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
+              >
+                {lockToggling ? 'Updating...' : siteLockStatus ? 'Unlock Site' : 'Lock Site'}
+              </button>
+            </div>
+            
+            <input
+              type="text"
+              placeholder="Set access key"
+              value={lockKeyInput}
+              onChange={(e) => setLockKeyInput(e.target.value)}
+              className="w-full bg-black/50 border border-white/10 rounded p-2 text-white text-sm outline-none focus:border-[#E50914] transition"
+            />
+            <p className="text-gray-500 text-[10px] mt-1">
+              This is the key visitors will need to enter to access the site while locked.
+            </p>
           </div>
 
           <div>

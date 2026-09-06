@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
+import SiteLockScreen from './components/SiteLockScreen';
+import { supabase } from './data/supabaseClient';
 
 import Navbar from './components/Navbar';
 import FeaturedCarousel from './components/FeaturedCarousel';
@@ -46,11 +48,36 @@ function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [selectedActor, setSelectedActor] = useState(null);
   const [isActorModalOpen, setIsActorModalOpen] = useState(false);
+  const [siteLocked, setSiteLocked] = useState(false);
+  const [checkingLock, setCheckingLock] = useState(true);
 
   const handleActorSelect = (actor) => {
     setSelectedActor(actor);
     setIsActorModalOpen(true);
   };
+
+  useEffect(() => {
+    const checkLock = async () => {
+      try {
+        const { data } = await supabase
+          .from('site_settings')
+          .select('is_locked')
+          .eq('id', 1)
+          .single();
+
+        const alreadyUnlocked = sessionStorage.getItem('movieverify_unlocked');
+        
+        if (data?.is_locked && !alreadyUnlocked) {
+          setSiteLocked(true);
+        }
+      } catch (err) {
+        console.warn('Site lock check failed:', err.message);
+      } finally {
+        setCheckingLock(false);
+      }
+    };
+    checkLock();
+  }, []);
 
   useEffect(() => {
     setSeeAllSection(null);
@@ -216,6 +243,14 @@ function App() {
 
   if (showIntro) {
     return <IntroAnimation onComplete={() => setShowIntro(false)} />;
+  }
+
+  if (checkingLock) {
+    return <div className="min-h-screen bg-[#141414]" />;
+  }
+
+  if (siteLocked) {
+    return <SiteLockScreen onUnlock={() => setSiteLocked(false)} />;
   }
 
   console.log('showAdmin:', showAdmin);
