@@ -32,7 +32,7 @@ function App() {
   const { history, addToHistory, clearHistory } = useDownloadHistory();
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [showIntro, setShowIntro] = useState(() => {
-    return !sessionStorage.getItem('introShown');
+    return !localStorage.getItem('introShown');
   });
   const [selectedMovie, setSelectedMovie] = useState(null);
 

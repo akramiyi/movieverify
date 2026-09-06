@@ -8,7 +8,7 @@ const IntroAnimation = ({ onComplete }) => {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (sessionStorage.getItem('introShown')) {
+    if (localStorage.getItem('introShown')) {
       onComplete();
       return;
     }
@@ -39,7 +39,7 @@ const IntroAnimation = ({ onComplete }) => {
     ];
 
     const completeTimer = setTimeout(() => {
-      sessionStorage.setItem('introShown', 'true');
+      localStorage.setItem('introShown', 'true');
       onComplete();
     }, 4700); // 4.7s total duration
 
