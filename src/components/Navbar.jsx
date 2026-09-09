@@ -37,13 +37,13 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [logoAnimated, setLogoAnimated] = useState(() => {
-    return !sessionStorage.getItem('movieverify_logo_animated');
+    return !localStorage.getItem('movieverify_logo_animated');
   });
 
   useEffect(() => {
     if (logoAnimated) {
       const timer = setTimeout(() => {
-        sessionStorage.setItem('movieverify_logo_animated', 'true');
+        localStorage.setItem('movieverify_logo_animated', 'true');
       }, 1500);
       return () => clearTimeout(timer);
     }
