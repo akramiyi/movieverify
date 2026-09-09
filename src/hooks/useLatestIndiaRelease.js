@@ -34,20 +34,25 @@ export const useLatestIndiaRelease = () => {
         );
 
         const responses = await Promise.all(requests);
-        const merged = responses.flatMap((r) => r.results || []);
+
+        const perLanguageTop = responses.map((r) => 
+          (r.results || [])
+            .filter((m) => m.backdrop_path && m.overview)
+            .sort((a, b) => new Date(b.release_date) - new Date(a.release_date))
+            .slice(0, 4)
+        );
+
+        const merged = perLanguageTop.flat();
 
         const uniqueMap = new Map();
         merged.forEach((m) => {
-          if (m.backdrop_path && m.overview) {
-            uniqueMap.set(m.id, m);
-          }
+          uniqueMap.set(m.id, m);
         });
 
         const sorted = Array.from(uniqueMap.values())
           .sort((a, b) => 
             new Date(b.release_date) - new Date(a.release_date)
           )
-          .slice(0, 15)
           .map(formatMovie);
 
         setPool(sorted);
