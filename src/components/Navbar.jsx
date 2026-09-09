@@ -3,6 +3,7 @@ import { Search, Bell, User, Menu, X, Clock, Download } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import SearchSuggestions from './SearchSuggestions';
 import { searchTMDB } from '../hooks/useTMDB';
+import { motion } from 'framer-motion';
 
 const LiveTime = () => {
   const [time, setTime] = useState(new Date());
@@ -34,6 +35,19 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
 
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const [logoAnimated, setLogoAnimated] = useState(() => {
+    return !sessionStorage.getItem('movieverify_logo_animated');
+  });
+
+  useEffect(() => {
+    if (logoAnimated) {
+      const timer = setTimeout(() => {
+        sessionStorage.setItem('movieverify_logo_animated', 'true');
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [logoAnimated]);
 
   useEffect(() => {
     if (!searchQuery.trim() || searchQuery.length < 2) {
@@ -103,12 +117,22 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
             onClick={() => { setActiveTab('home'); onSearch(''); }}
             className="flex items-center gap-1.5 cursor-pointer select-none font-black text-lg md:text-2xl"
           >
-            <div className="flex items-center justify-center w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-[#FF3445] to-[#E50914] rounded-md shadow-[0_0_10px_rgba(229,9,20,0.5)] text-white text-sm md:text-base font-black">
+            <motion.div 
+              initial={logoAnimated ? { rotate: -360, opacity: 0, scale: 0.5 } : false}
+              animate={{ rotate: 0, opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="flex items-center justify-center w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-[#FF3445] to-[#E50914] rounded-md shadow-[0_0_10px_rgba(229,9,20,0.5)] text-white text-sm md:text-base font-black"
+            >
               M
-            </div>
-            <span className="text-white tracking-tighter font-sans uppercase">
+            </motion.div>
+            <motion.span 
+              initial={logoAnimated ? { x: -20, opacity: 0 } : false}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.6, ease: "easeOut" }}
+              className="text-white tracking-tighter font-sans uppercase"
+            >
               Ovie<span className="text-[#E50914]">verify</span>
-            </span>
+            </motion.span>
           </div>
           
           <div className="hidden lg:flex items-center gap-5 text-sm font-medium text-gray-300">
