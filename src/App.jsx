@@ -15,6 +15,7 @@ import IntroAnimation from './components/IntroAnimation';
 import SearchFilters from './components/SearchFilters';
 
 import { useTMDB, searchTMDB } from './hooks/useTMDB';
+import { useLatestIndiaRelease } from './hooks/useLatestIndiaRelease';
 import InstallPWA from './components/InstallPWA';
 import ActorsRow from './components/ActorsRow';
 import ActorModal from './components/ActorModal';
@@ -94,6 +95,8 @@ function App() {
     isLoading: isTMDBLoading,
     error: tmdbError
   } = useTMDB();
+
+  const { currentMovie: latestIndiaMovie, pool: latestIndiaPool } = useLatestIndiaRelease();
 
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -400,6 +403,18 @@ function App() {
                 {/* Trending Now */}
                 {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
                   <MovieRow title="Trending Now" movies={displayTrending} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                )}
+
+                {latestIndiaPool.length > 0 && (
+                  <MovieRow 
+                    title="India's Latest Releases (This Week's Pick First)" 
+                    movies={latestIndiaMovie ? [latestIndiaMovie, ...latestIndiaPool.filter(m => m.id !== latestIndiaMovie.id)] : latestIndiaPool}
+                    onMovieClick={handleMovieSelect} 
+                    isLoading={false} 
+                    myList={myList} 
+                    onToggleMyList={toggleMyList} 
+                    onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })}
+                  />
                 )}
 
                 {/* Popular Actors */}
