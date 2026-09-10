@@ -68,18 +68,27 @@ if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
 }
 
 app.post('/api/razorpay/create-order', async (req, res) => {
+  console.log(`[Diagnostic] POST /api/razorpay/create-order called`);
   try {
+    const hasKeyId = !!process.env.RAZORPAY_KEY_ID;
+    const hasKeySecret = !!process.env.RAZORPAY_KEY_SECRET;
+    console.log(`[Diagnostic] RAZORPAY_KEY_ID exists: ${hasKeyId}`);
+    console.log(`[Diagnostic] RAZORPAY_KEY_SECRET exists: ${hasKeySecret}`);
+
     if (!razorpay) {
+      console.log(`[Diagnostic] Razorpay instance is null or undefined.`);
       return res.status(503).json({ error: 'Razorpay is not configured on the server.' });
     }
 
     const { amount } = req.body;
+    console.log(`[Diagnostic] Requested amount: ${amount}`);
 
     if (!amount || isNaN(amount) || amount <= 0) {
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
     const amountInPaise = Math.round(amount * 100);
+    console.log(`[Diagnostic] Amount in paise: ${amountInPaise}`);
 
     const options = {
       amount: amountInPaise,
@@ -87,7 +96,9 @@ app.post('/api/razorpay/create-order', async (req, res) => {
       receipt: `receipt_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
     };
 
+    console.log(`[Diagnostic] Calling razorpay.orders.create with currency: INR, amount: ${amountInPaise}`);
     const order = await razorpay.orders.create(options);
+    console.log(`[Diagnostic] Order created successfully: ${order.id}`);
 
     res.json({
       order_id: order.id,
@@ -96,8 +107,15 @@ app.post('/api/razorpay/create-order', async (req, res) => {
       key_id: process.env.RAZORPAY_KEY_ID.trim(),
     });
   } catch (error) {
-    console.error('Razorpay Create Order Error:', error);
-    res.status(500).json({ error: 'Failed to create order' });
+    console.error('[Diagnostic] Razorpay API Error Details:');
+    if (error.statusCode) console.error(`- HTTP Status: ${error.statusCode}`);
+    if (error.error) {
+      console.error(`- Code: ${error.error.code}`);
+      console.error(`- Description: ${error.error.description}`);
+    } else {
+      console.error(`- Message: ${error.message}`);
+    }
+    res.status(500).json({ error: 'Razorpay order creation failed' });
   }
 });
 
