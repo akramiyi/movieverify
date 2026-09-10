@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Coffee } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
 
 const SupportSection = () => {
   const [selectedAmount, setSelectedAmount] = useState(10);
@@ -73,6 +73,12 @@ const SupportSection = () => {
         body: JSON.stringify({ amount: finalAmount })
       });
 
+      // Check if response is JSON
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Payment service is temporarily unavailable. Please try again.');
+      }
+
       const orderData = await res.json();
       if (!res.ok) throw new Error(orderData.error || 'Failed to create order');
 
@@ -100,6 +106,11 @@ const SupportSection = () => {
               })
             });
             
+            const verifyContentType = verifyRes.headers.get('content-type');
+            if (!verifyContentType || !verifyContentType.includes('application/json')) {
+              throw new Error('Payment verification failed. Please contact support.');
+            }
+
             const verifyData = await verifyRes.json();
             if (verifyData.success) {
               setMessage('Payment successful. Thank you for supporting MovieVerify! ❤️');

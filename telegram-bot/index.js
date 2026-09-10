@@ -62,8 +62,8 @@ app.get('/', (req, res) => {
 let razorpay;
 if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
   razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
+    key_id: process.env.RAZORPAY_KEY_ID.trim(),
+    key_secret: process.env.RAZORPAY_KEY_SECRET.trim(),
   });
 }
 
@@ -93,7 +93,7 @@ app.post('/api/razorpay/create-order', async (req, res) => {
       order_id: order.id,
       amount: order.amount,
       currency: order.currency,
-      key_id: process.env.RAZORPAY_KEY_ID,
+      key_id: process.env.RAZORPAY_KEY_ID.trim(),
     });
   } catch (error) {
     console.error('Razorpay Create Order Error:', error);
@@ -115,7 +115,7 @@ app.post('/api/razorpay/verify-payment', (req, res) => {
 
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET.trim())
       .update(body.toString())
       .digest('hex');
 
