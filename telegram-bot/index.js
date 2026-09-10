@@ -130,6 +130,10 @@ app.post('/api/razorpay/verify-payment', (req, res) => {
   }
 });
 
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 app.listen(PORT, () => {
   console.log(`🌐 API Server running on port ${PORT} (Health Check & Payments)`);
 });
