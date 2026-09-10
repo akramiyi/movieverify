@@ -9,7 +9,10 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
+    "cors": "^2.8.6",
     "dotenv": "^16.4.5",
-    "node-telegram-bot-api": "^0.66.0"
+    "express": "^5.2.1",
+    "node-telegram-bot-api": "^0.66.0",
+    "razorpay": "^2.9.8"
   }
 }
