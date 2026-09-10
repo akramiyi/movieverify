@@ -13,6 +13,7 @@ import AdminPanel from './components/AdminPanel';
 import { getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
 import IntroAnimation from './components/IntroAnimation';
 import SearchFilters from './components/SearchFilters';
+import SupportSection from './components/SupportSection';
 
 import { useTMDB, searchTMDB } from './hooks/useTMDB';
 import { useLatestIndiaRelease } from './hooks/useLatestIndiaRelease';
@@ -493,6 +494,7 @@ function App() {
         )}
       </main>
 
+      <SupportSection />
       <Footer onAdminClick={() => setShowAdmin(true)} />
 
       <MovieDetailsModal 
