@@ -152,6 +152,35 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// TMDB Proxy to bypass ISP blocking in India
+app.get('/api/tmdb/*', async (req, res) => {
+  try {
+    const tmdbPath = req.params[0];
+    const query = req.url.split('?')[1] ? `?${req.url.split('?')[1]}` : '';
+    const tmdbUrl = `https://api.themoviedb.org/3/${tmdbPath}${query}`;
+    
+    const headers = {
+      'Accept': 'application/json'
+    };
+    
+    // Pass along Authorization header if the client sent it
+    if (req.headers.authorization) {
+      headers['Authorization'] = req.headers.authorization;
+    } else if (process.env.TMDB_TOKEN) {
+      // Or use server's token if available
+      headers['Authorization'] = `Bearer ${process.env.TMDB_TOKEN}`;
+    }
+
+    const response = await fetch(tmdbUrl, { headers });
+    const data = await response.json();
+    
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('TMDB Proxy Error:', error);
+    res.status(500).json({ error: 'Failed to fetch from TMDB' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🌐 API Server running on port ${PORT} (Health Check & Payments)`);
 });

@@ -3,7 +3,8 @@ import { supabase } from '../data/supabaseClient';
 import staticDownloadLinks from '../data/downloadLinks';
 import { movies as localMovies } from '../data/movies';
 
-const BASE_URL = 'https://api.themoviedb.org/3';
+const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
+const BASE_URL = `${API_URL}/api/tmdb`;
 const IMG_BASE = 'https://image.tmdb.org/t/p';
 
 const GENRE_MAP = {
