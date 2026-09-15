@@ -153,9 +153,10 @@ app.get('/health', (req, res) => {
 });
 
 // TMDB Proxy to bypass ISP blocking in India
-app.get('/api/tmdb/*', async (req, res) => {
+app.get('/api/tmdb/*path', async (req, res) => {
   try {
-    const tmdbPath = req.params[0];
+    const pathParam = req.params.path;
+    const tmdbPath = Array.isArray(pathParam) ? pathParam.join('/') : pathParam;
     const query = req.url.split('?')[1] ? `?${req.url.split('?')[1]}` : '';
     const tmdbUrl = `https://api.themoviedb.org/3/${tmdbPath}${query}`;
     
