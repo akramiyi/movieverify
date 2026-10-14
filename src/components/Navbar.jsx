@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Bell, User, Menu, X, Clock, Download } from 'lucide-react';
+import { Search, Bell, User, Menu, X, Clock, Download, LogOut, ShieldCheck, Check, ChevronDown } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import SearchSuggestions from './SearchSuggestions';
 import { searchTMDB } from '../hooks/useTMDB';
@@ -27,11 +27,14 @@ const LiveTime = () => {
   );
 };
 
-const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdminClick, onHistoryClick }) => {
+const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onProfileClick, onAdminClick, onHistoryClick }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pendingReports, setPendingReports] = useState(0);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -100,6 +103,77 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Track session and admin status
+  useEffect(() => {
+    let isMounted = true;
+
+    const verifyAdmin = async (userId) => {
+      try {
+        const { data, error } = await supabase
+          .from('admin_users')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (isMounted) {
+          setIsAdminUser(!error && !!data);
+        }
+      } catch {
+        if (isMounted) setIsAdminUser(false);
+      }
+    };
+
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
+      setCurrentUser(session?.user ?? null);
+      if (session?.user?.id) {
+        verifyAdmin(session.user.id);
+      } else {
+        setIsAdminUser(false);
+      }
+    });
+
+    // Listen to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      setCurrentUser(session?.user ?? null);
+      if (session?.user?.id) {
+        verifyAdmin(session.user.id);
+      } else {
+        setIsAdminUser(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    if (!isProfileMenuOpen) return;
+    const handleOutsideClick = (e) => {
+      if (!e.target.closest('#navbar-profile-container')) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isProfileMenuOpen]);
+
+  const handleSignOut = async () => {
+    setIsProfileMenuOpen(false);
+    try {
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      setIsAdminUser(false);
+    } catch (err) {
+      console.warn('Sign out error:', err?.message);
+    }
+  };
 
   return (
     <nav 
@@ -228,19 +302,134 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
             )}
           </button>
           
-          <button 
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              if (onAdminClick) onAdminClick();
-            }} 
-            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
-          >
-            <div className="w-8 h-8 rounded bg-blue-600 flex items-center justify-center text-white pointer-events-none">
-              <User className="w-5 h-5" />
-            </div>
-            <span className="hidden sm:block text-white text-xs pointer-events-none">&#9662;</span>
-          </button>
+          {/* Profile & Auth Section */}
+          <div id="navbar-profile-container" className="relative">
+            {currentUser ? (
+              <button
+                type="button"
+                onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+                aria-expanded={isProfileMenuOpen}
+                aria-label="User profile menu"
+                className="flex items-center gap-2 cursor-pointer p-0.5 rounded-lg hover:ring-2 hover:ring-white/30 transition-all focus:outline-none"
+              >
+                {currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture ? (
+                  <img
+                    src={currentUser.user_metadata.avatar_url || currentUser.user_metadata.picture}
+                    alt={currentUser.user_metadata?.full_name || 'Profile'}
+                    referrerPolicy="no-referrer"
+                    className="w-8 h-8 rounded-lg object-cover ring-1 ring-white/20"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#E50914] to-red-800 flex items-center justify-center text-white font-bold text-xs shadow-md">
+                    {(currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase()}
+                  </div>
+                )}
+                <ChevronDown className={`w-3.5 h-3.5 text-gray-400 hidden sm:block transition-transform duration-200 ${isProfileMenuOpen ? 'rotate-180 text-white' : ''}`} />
+              </button>
+            ) : (
+              <button 
+                type="button"
+                onClick={() => {
+                  if (onProfileClick) {
+                    onProfileClick();
+                  } else if (onAdminClick) {
+                    onAdminClick();
+                  }
+                }} 
+                aria-label="Sign in"
+                className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity focus:outline-none group"
+                title="Sign In / Admin Login"
+              >
+                <div className="w-8 h-8 rounded bg-[#E50914] group-hover:bg-[#b80710] transition flex items-center justify-center text-white shadow-md">
+                  <User className="w-5 h-5 pointer-events-none" />
+                </div>
+                <span className="hidden sm:block text-white text-xs pointer-events-none">&#9662;</span>
+              </button>
+            )}
+
+            {/* Profile Dropdown Menu */}
+            {isProfileMenuOpen && currentUser && (
+              <div className="absolute right-0 top-full mt-3 w-72 bg-[#181818] border border-white/10 rounded-2xl shadow-2xl p-4 text-white z-[120] animate-in fade-in zoom-in-95 duration-150">
+                {/* User Info Header */}
+                <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                  {currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture ? (
+                    <img
+                      src={currentUser.user_metadata.avatar_url || currentUser.user_metadata.picture}
+                      alt="User avatar"
+                      referrerPolicy="no-referrer"
+                      className="w-10 h-10 rounded-xl object-cover ring-2 ring-white/10 flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#E50914] to-red-800 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-md">
+                      {(currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-white truncate">
+                      {currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || 'Viewer'}
+                    </div>
+                    <div className="text-xs text-gray-400 truncate">
+                      {currentUser.email}
+                    </div>
+                    <div className="mt-1">
+                      {isAdminUser ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950/80 text-red-400 border border-red-800/60">
+                          <ShieldCheck className="w-3 h-3" /> Administrator
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950/80 text-emerald-400 border border-emerald-800/50">
+                          <Check className="w-3 h-3" /> Verified Account
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="pt-3 space-y-1">
+                  {isAdminUser ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        if (onAdminClick) onAdminClick();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg bg-red-950/40 hover:bg-red-900/50 text-red-200 hover:text-white transition cursor-pointer text-left"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-red-400" />
+                      <span>Admin Control Panel</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        if (onAdminClick) onAdminClick();
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg hover:bg-white/5 text-gray-300 hover:text-white transition cursor-pointer text-left"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <ShieldCheck className="w-4 h-4 text-gray-400" />
+                        <span>Admin Login</span>
+                      </div>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-gray-400">
+                        Staff
+                      </span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg hover:bg-red-950/30 text-gray-400 hover:text-red-400 transition cursor-pointer text-left"
+                  >
+                    <LogOut className="w-4 h-4 text-gray-400 hover:text-red-400" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -277,6 +466,52 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
           >
             My List
           </button>
+
+          {/* Mobile Auth Quick Row */}
+          <div className="pt-3 mt-1 border-t border-white/10 flex items-center justify-between">
+            {currentUser ? (
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  {currentUser.user_metadata?.avatar_url ? (
+                    <img
+                      src={currentUser.user_metadata.avatar_url}
+                      alt="Avatar"
+                      referrerPolicy="no-referrer"
+                      className="w-7 h-7 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-[#E50914] flex items-center justify-center text-xs font-bold text-white">
+                      {(currentUser.user_metadata?.full_name || currentUser.email || 'U')[0]}
+                    </div>
+                  )}
+                  <span className="text-xs text-gray-200 truncate max-w-[140px]">
+                    {currentUser.user_metadata?.full_name || currentUser.email}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handleSignOut();
+                  }}
+                  className="text-xs text-red-400 hover:text-red-300 font-semibold"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  if (onProfileClick) onProfileClick();
+                }}
+                className="w-full py-2 bg-[#E50914] hover:bg-[#b80710] text-white text-center rounded font-semibold text-xs"
+              >
+                Sign In / Admin Login
+              </button>
+            )}
+          </div>
         </div>
       )}
     </nav>

@@ -10,6 +10,7 @@ import MovieCard from './components/MovieCard';
 import MovieDetailsModal from './components/MovieDetailsModal';
 import Footer from './components/Footer';
 import AdminPanel from './components/AdminPanel';
+import AuthModal from './components/AuthModal';
 import { getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
 import IntroAnimation from './components/IntroAnimation';
 import SearchFilters from './components/SearchFilters';
@@ -48,6 +49,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [seeAllSection, setSeeAllSection] = useState(null);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [selectedActor, setSelectedActor] = useState(null);
   const [isActorModalOpen, setIsActorModalOpen] = useState(false);
   const [siteLocked, setSiteLocked] = useState(false);
@@ -264,13 +266,14 @@ function App() {
         <Route path="/" element={
           <>
             <Navbar 
-        onSearch={setSearchQuery} 
-        searchQuery={searchQuery} 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        onAdminClick={() => setShowAdmin(true)}
-        onHistoryClick={() => setIsHistoryModalOpen(true)}
-      />
+              onSearch={setSearchQuery} 
+              searchQuery={searchQuery} 
+              activeTab={activeTab} 
+              setActiveTab={setActiveTab} 
+              onProfileClick={() => setShowAuthModal(true)}
+              onAdminClick={() => setShowAdmin(true)}
+              onHistoryClick={() => setIsHistoryModalOpen(true)}
+            />
 
       {tmdbError && (
         <div className="bg-red-950/80 border border-red-800 text-red-200 py-3 px-6 mx-4 md:mx-12 rounded mt-24 text-center text-sm md:text-base font-semibold shadow-lg">
@@ -520,6 +523,15 @@ function App() {
         onMovieClick={(movie) => {
           setIsActorModalOpen(false);
           handleMovieSelect(movie);
+        }}
+      />
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onOpenAdmin={() => {
+          setShowAuthModal(false);
+          setShowAdmin(true);
         }}
       />
 

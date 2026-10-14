@@ -168,7 +168,8 @@ const AdminPanel = ({ onClose }) => {
             fetchCurrentLinks();
             fetchSiteLockStatus();
           } else {
-            await supabase.auth.signOut();
+            setIsLoggedIn(false);
+            setLoginError(`Signed in as viewer (${session.user.email}). Administrator credentials required.`);
           }
         }
       } catch (err) {
