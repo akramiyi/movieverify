@@ -23,8 +23,10 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// High-resolution posters matching reference collage composition (All verified 200 OK)
-const POSTER_COLUMN_1 = [
+import { movies as localMovies } from '../data/movies';
+
+// High-resolution fallback posters matching reference collage composition (All verified 200 OK)
+const FALLBACK_COLUMN_1 = [
   { title: 'Jawan', img: 'https://image.tmdb.org/t/p/w500/4Y1WNkd88JXmGfhtWR7dmDAo1T2.jpg' },
   { title: 'Casino', img: 'https://image.tmdb.org/t/p/w500/gziIkUSnYuj9ChCi8qOu2ZunpSC.jpg' },
   { title: 'Inception', img: 'https://image.tmdb.org/t/p/w500/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg' },
@@ -33,7 +35,7 @@ const POSTER_COLUMN_1 = [
   { title: 'Avengers', img: 'https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9sl16pB3iy.jpg' },
 ];
 
-const POSTER_COLUMN_2 = [
+const FALLBACK_COLUMN_2 = [
   { title: 'Dune Part Two', img: 'https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg' },
   { title: 'Animal', img: 'https://image.tmdb.org/t/p/w500/zqFuriKJ6pYDvf72kXNLONnuE8k.jpg' },
   { title: 'Spider-Man', img: 'https://image.tmdb.org/t/p/w500/1g0dhYtq4irTY1GPXvft6k4YLjm.jpg' },
@@ -42,7 +44,7 @@ const POSTER_COLUMN_2 = [
   { title: 'Pushpa', img: 'https://image.tmdb.org/t/p/w500/h6Pd89ngvl9quPVsx3KoJlQsvk9.jpg' },
 ];
 
-const POSTER_COLUMN_3 = [
+const FALLBACK_COLUMN_3 = [
   { title: 'The Boys', img: 'https://image.tmdb.org/t/p/w500/in1R2dDc421JxsoRWaIIAqVI2KE.jpg' },
   { title: 'Stranger Things', img: 'https://image.tmdb.org/t/p/w500/uOOtwVbSr4QDjAGIifLDwpb2Pdl.jpg' },
   { title: 'John Wick 4', img: 'https://image.tmdb.org/t/p/w500/vZloFAK7NmvMGKE7VkF5UHaz0I.jpg' },
@@ -50,6 +52,95 @@ const POSTER_COLUMN_3 = [
   { title: 'The Godfather', img: 'https://image.tmdb.org/t/p/w500/3bhkrj58Vtu7enYsRolD1fZdja1.jpg' },
   { title: 'Ratsasan', img: 'https://image.tmdb.org/t/p/w500/velWPhVMQeQKcxggNEU8YmIo52R.jpg' },
 ];
+
+// Module-level cache for TMDB movie posters so we never re-parse or re-fetch during animation
+let cachedTMDBPosterPool = null;
+
+const getAvailableTMDBPosters = () => {
+  if (cachedTMDBPosterPool && cachedTMDBPosterPool.length > 50) {
+    return cachedTMDBPosterPool;
+  }
+
+  const pool = [];
+  const seen = new Set();
+
+  const add = (title, img) => {
+    if (!img || typeof img !== 'string') return;
+    const fullUrl = img.startsWith('http')
+      ? img
+      : `https://image.tmdb.org/t/p/w500${img}`;
+    if (!seen.has(fullUrl)) {
+      seen.add(fullUrl);
+      pool.push({ title: title || 'Movie', img: fullUrl });
+    }
+  };
+
+  // 1. Read existing TMDB data cached in sessionStorage by useTMDB
+  try {
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k && k.startsWith('tmdb_cache_')) {
+        const raw = sessionStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const list = Array.isArray(parsed) ? parsed : (parsed?.results || []);
+          list.forEach((m) => {
+            if (m && (m.poster_path || m.poster)) {
+              add(m.title || m.name, m.poster_path || m.poster);
+            }
+          });
+        }
+      }
+    }
+  } catch {
+    // sessionStorage read failed or disabled
+  }
+
+  // 2. Add local movie database posters
+  if (Array.isArray(localMovies)) {
+    localMovies.forEach((m) => {
+      if (m && (m.poster || m.poster_path)) {
+        add(m.title, m.poster || m.poster_path);
+      }
+    });
+  }
+
+  // 3. Add existing verified fallback posters
+  FALLBACK_COLUMN_1.forEach((m) => add(m.title, m.img));
+  FALLBACK_COLUMN_2.forEach((m) => add(m.title, m.img));
+  FALLBACK_COLUMN_3.forEach((m) => add(m.title, m.img));
+
+  if (pool.length >= 18) {
+    cachedTMDBPosterPool = pool;
+  }
+
+  return pool;
+};
+
+// Shuffles pool and returns 3 distinct columns of 6 posters each (18 unique posters)
+const getRandomPosterColumns = () => {
+  const pool = getAvailableTMDBPosters();
+  if (pool.length < 18) {
+    return {
+      col1: FALLBACK_COLUMN_1,
+      col2: FALLBACK_COLUMN_2,
+      col3: FALLBACK_COLUMN_3,
+    };
+  }
+
+  // Fisher-Yates shuffle
+  const shuffled = [...pool];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  return {
+    col1: shuffled.slice(0, 6),
+    col2: shuffled.slice(6, 12),
+    col3: shuffled.slice(12, 18),
+  };
+};
 
 const PosterCard = ({ title, img }) => {
   const [hasError, setHasError] = useState(false);
@@ -75,7 +166,13 @@ const PosterCard = ({ title, img }) => {
 };
 
 // Continuous vertical scrolling poster collage (from top to bottom)
-const MoviePosterCollage = () => {
+const MoviePosterCollage = ({ columns }) => {
+  const { col1, col2, col3 } = columns || {
+    col1: FALLBACK_COLUMN_1,
+    col2: FALLBACK_COLUMN_2,
+    col3: FALLBACK_COLUMN_3,
+  };
+
   return (
     <div className="relative w-full h-full overflow-hidden bg-black select-none pointer-events-none flex items-start justify-center">
       {/* Edge gradient overlays for seamless blending into form & edges */}
@@ -87,21 +184,21 @@ const MoviePosterCollage = () => {
       <div className="transform -rotate-12 origin-top scale-110 sm:scale-125 flex gap-4 -mt-6">
         {/* Column 1: Smooth continuous vertical scroll */}
         <div className="flex flex-col gap-4 poster-scroll-col-1">
-          {[...POSTER_COLUMN_1, ...POSTER_COLUMN_1, ...POSTER_COLUMN_1, ...POSTER_COLUMN_1].map((poster, idx) => (
+          {[...col1, ...col1, ...col1, ...col1].map((poster, idx) => (
             <PosterCard key={`c1-${idx}`} title={poster.title} img={poster.img} />
           ))}
         </div>
 
         {/* Column 2: Smooth continuous vertical scroll */}
         <div className="flex flex-col gap-4 poster-scroll-col-2">
-          {[...POSTER_COLUMN_2, ...POSTER_COLUMN_2, ...POSTER_COLUMN_2, ...POSTER_COLUMN_2].map((poster, idx) => (
+          {[...col2, ...col2, ...col2, ...col2].map((poster, idx) => (
             <PosterCard key={`c2-${idx}`} title={poster.title} img={poster.img} />
           ))}
         </div>
 
         {/* Column 3: Smooth continuous vertical scroll */}
         <div className="flex flex-col gap-4 poster-scroll-col-3">
-          {[...POSTER_COLUMN_3, ...POSTER_COLUMN_3, ...POSTER_COLUMN_3, ...POSTER_COLUMN_3].map((poster, idx) => (
+          {[...col3, ...col3, ...col3, ...col3].map((poster, idx) => (
             <PosterCard key={`c3-${idx}`} title={poster.title} img={poster.img} />
           ))}
         </div>
@@ -115,11 +212,13 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [animKey, setAnimKey] = useState(0);
+  const [posterColumns, setPosterColumns] = useState(() => getRandomPosterColumns());
 
-  // Restart poster animation from t=0 whenever modal opens or re-opens
+  // Restart poster animation from t=0 and randomize poster collection whenever modal opens
   useEffect(() => {
     if (isOpen) {
       setAnimKey((prev) => prev + 1);
+      setPosterColumns(getRandomPosterColumns());
     }
   }, [isOpen]);
 
@@ -462,7 +561,7 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
 
         {/* RIGHT COLUMN: Tilted Movie Poster Collage with continuous vertical scroll */}
         <div className="hidden md:flex md:w-[52%] relative overflow-hidden bg-black items-start justify-center">
-          <MoviePosterCollage key={`collage-${animKey}`} />
+          <MoviePosterCollage key={`collage-${animKey}`} columns={posterColumns} />
         </div>
       </div>
     </div>
