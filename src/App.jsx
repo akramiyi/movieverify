@@ -61,6 +61,8 @@ function App() {
     setIsActorModalOpen(true);
   };
 
+  const [authPopupDismissed, setAuthPopupDismissed] = useState(false);
+
   const handleOpenAdmin = () => {
     setShowAuthModal(false);
     setShowAdmin(true);
@@ -76,6 +78,7 @@ function App() {
 
   const handleCloseAuthModal = () => {
     setShowAuthModal(false);
+    setAuthPopupDismissed(true);
     try {
       sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
     } catch {}
@@ -88,61 +91,40 @@ function App() {
     }
   };
 
-  // Automatic 5-second Google Sign-In welcome popup for unauthenticated visitors
+  // Immediate Google Sign-In / Signup welcome popup for unauthenticated visitors on website open
   useEffect(() => {
     if (showIntro || siteLocked || showAdmin || location.pathname === '/admin') return;
 
+    // Do not show if dismissed during this active browsing session
+    if (authPopupDismissed) return;
+
     let isMounted = true;
-    let timerId = null;
 
-    // Do not show if dismissed during this page session
-    try {
-      if (sessionStorage.getItem('movieverify_auth_popup_dismissed')) {
-        return;
-      }
-    } catch {}
-
-    const initAuthAndTimer = async () => {
+    const initAuth = async () => {
       try {
-        // Asynchronously check Supabase session before starting timer
+        // Asynchronously check Supabase session
         const { data: { session } } = await supabase.auth.getSession();
         
         // Authenticated users must never see the automatic login popup
-        if (!isMounted || session?.user) {
+        if (!isMounted || session?.user || showAdmin || location.pathname === '/admin') {
           return;
         }
 
-        // Wait exactly 5 seconds before showing the welcome login modal
-        timerId = setTimeout(async () => {
-          if (!isMounted) return;
-          if (showAdmin || location.pathname === '/admin') return;
-
-          try {
-            const { data: { session: activeSession } } = await supabase.auth.getSession();
-            const alreadyDismissed = sessionStorage.getItem('movieverify_auth_popup_dismissed');
-
-            if (!activeSession?.user && !alreadyDismissed) {
-              setShowAuthModal(true);
-              sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
-            }
-          } catch {
-            if (!sessionStorage.getItem('movieverify_auth_popup_dismissed')) {
-              setShowAuthModal(true);
-              sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
-            }
-          }
-        }, 5000);
+        // Open signup modal immediately on website open from any link
+        setShowAuthModal(true);
       } catch (err) {
-        console.warn('Auth check error for welcome popup:', err?.message);
+        console.warn('Auth check error for immediate signup popup:', err?.message);
+        if (isMounted && !showAdmin && location.pathname !== '/admin') {
+          setShowAuthModal(true);
+        }
       }
     };
 
-    initAuthAndTimer();
+    initAuth();
 
-    // Listen for auth state changes: cancel timer if user logs in
+    // Listen for auth state changes: automatically dismiss modal on OAuth sign-in
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        if (timerId) clearTimeout(timerId);
         // Dismiss welcome auth popup automatically only for OAuth sign-ins (e.g. Google),
         // leaving AuthModal's admin password check to manage its own lifecycle.
         if (event === 'SIGNED_IN' && session.user.app_metadata?.provider !== 'email') {
@@ -153,10 +135,9 @@ function App() {
 
     return () => {
       isMounted = false;
-      if (timerId) clearTimeout(timerId);
       subscription?.unsubscribe();
     };
-  }, [showIntro, siteLocked, showAdmin, location.pathname]);
+  }, [showIntro, siteLocked, showAdmin, location.pathname, authPopupDismissed]);
 
   useEffect(() => {
     const checkLock = async () => {
@@ -624,16 +605,6 @@ function App() {
         }}
       />
 
-      <AuthModal
-        isOpen={showAuthModal && !showAdmin && location.pathname !== '/admin'}
-        onClose={handleCloseAuthModal}
-        onOpenAdmin={handleOpenAdmin}
-      />
-
-      {showAdmin && (
-        <AdminPanel onClose={handleCloseAdmin} />
-      )}
-      <InstallPWA />
           </>
         } />
         <Route path="/admin" element={<AdminPanel onClose={handleCloseAdmin} />} />
@@ -650,6 +621,17 @@ function App() {
           } 
         />
       </Routes>
+
+      <AuthModal
+        isOpen={showAuthModal && !showAdmin && location.pathname !== '/admin'}
+        onClose={handleCloseAuthModal}
+        onOpenAdmin={handleOpenAdmin}
+      />
+
+      {showAdmin && (
+        <AdminPanel onClose={handleCloseAdmin} />
+      )}
+      <InstallPWA />
     </div>
   );
 }

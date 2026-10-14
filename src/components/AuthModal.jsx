@@ -207,12 +207,31 @@ const MoviePosterCollage = ({ columns }) => {
   );
 };
 
+// Time-based dynamic greeting for Akram (Morning, Afternoon, Evening, Night)
+export const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour >= 4 && hour < 12) return 'Good Morning, Akram 🌅';
+  if (hour >= 12 && hour < 17) return 'Good Afternoon, Akram ☀️';
+  if (hour >= 17 && hour < 21) return 'Good Evening, Akram 🌇';
+  return 'Good Night, Akram 🌙';
+};
+
 const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
   const [activeTab, setActiveTab] = useState('user'); // 'user' | 'admin'
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [animKey, setAnimKey] = useState(0);
   const [posterColumns, setPosterColumns] = useState(() => getRandomPosterColumns());
+  const [greeting, setGreeting] = useState(() => getGreeting());
+
+  // Update greeting every minute and whenever modal opens
+  useEffect(() => {
+    setGreeting(getGreeting());
+    const interval = setInterval(() => {
+      setGreeting(getGreeting());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [isOpen]);
 
   // Restart poster animation from t=0 and randomize poster collection whenever modal opens
   useEffect(() => {
@@ -380,12 +399,25 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
             </div>
 
             {/* Heading */}
-            <h2 id="auth-modal-title" className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-1.5">
-              Sign in to <span className="text-[#E50914]">continue</span>
-            </h2>
-            <p className="text-xs sm:text-sm text-gray-400 mb-6">
-              Get access to exclusive content, verified links and more.
-            </p>
+            {activeTab === 'admin' ? (
+              <div className="mb-6 animate-in fade-in duration-200">
+                <h2 id="auth-modal-title" className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-1.5">
+                  {greeting}
+                </h2>
+                <p className="text-xs sm:text-sm text-gray-400">
+                  Sign in to MovieVerify Admin Control Panel
+                </p>
+              </div>
+            ) : (
+              <div className="mb-6 animate-in fade-in duration-200">
+                <h2 id="auth-modal-title" className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-1.5">
+                  Sign in to <span className="text-[#E50914]">continue</span>
+                </h2>
+                <p className="text-xs sm:text-sm text-gray-400">
+                  Get access to exclusive content, verified links and more.
+                </p>
+              </div>
+            )}
 
             {/* Segmented Toggle: User Login / Admin Login */}
             <div className="bg-[#141414] border border-white/10 rounded-xl p-1 flex items-center gap-1 mb-6 max-w-sm">

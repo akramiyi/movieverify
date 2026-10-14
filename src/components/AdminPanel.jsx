@@ -418,10 +418,21 @@ const AdminPanel = ({ onClose }) => {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning, Akram 🌅';
-    if (hour < 17) return 'Good Afternoon, Akram ☀️';
-    return 'Good Evening, Akram 🌙';
+    if (hour >= 4 && hour < 12) return 'Good Morning, Akram 🌅';
+    if (hour >= 12 && hour < 17) return 'Good Afternoon, Akram ☀️';
+    if (hour >= 17 && hour < 21) return 'Good Evening, Akram 🌇';
+    return 'Good Night, Akram 🌙';
   };
+
+  const [greeting, setGreeting] = useState(() => getGreeting());
+
+  useEffect(() => {
+    setGreeting(getGreeting());
+    const timer = setInterval(() => {
+      setGreeting(getGreeting());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   if (isCheckingSession) {
     return (
@@ -451,7 +462,7 @@ const AdminPanel = ({ onClose }) => {
             <div className="w-12 h-12 bg-[#E50914]/20 border border-[#E50914] text-[#E50914] flex items-center justify-center rounded-full mb-4">
               <Key className="w-6 h-6" />
             </div>
-            <h2 className="text-2xl font-black text-white leading-tight">{getGreeting()}</h2>
+            <h2 className="text-2xl font-black text-white leading-tight">{greeting}</h2>
             <p className="text-gray-400 text-xs mt-2">Sign in to MovieVerify Admin</p>
           </div>
 
