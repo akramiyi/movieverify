@@ -254,10 +254,6 @@ function App() {
     return <IntroAnimation onComplete={() => setShowIntro(false)} />;
   }
 
-  if (checkingLock) {
-    return <div className="min-h-screen bg-[#141414]" />;
-  }
-
   if (siteLocked) {
     return <SiteLockScreen onUnlock={() => setSiteLocked(false)} />;
   }
