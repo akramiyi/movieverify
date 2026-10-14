@@ -1,24 +1,9 @@
-import React, { useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
 import MovieCard from './MovieCard';
 import SkeletonCard from './SkeletonCard';
 
 const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyList, onSeeAll }) => {
-  const rowRef = useRef(null);
-  const [isMoved, setIsMoved] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-
-  const handleClick = (direction) => {
-    setIsMoved(true);
-    if (rowRef.current) {
-      const { scrollLeft, clientWidth } = rowRef.current;
-      const scrollTo = direction === 'left' 
-        ? scrollLeft - clientWidth 
-        : scrollLeft + clientWidth;
-      
-      rowRef.current.scrollTo({ left: scrollTo, behavior: 'smooth' });
-    }
-  };
 
   const [multiplier, setMultiplier] = useState(2);
 

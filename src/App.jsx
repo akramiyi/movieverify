@@ -61,19 +61,24 @@ function App() {
   useEffect(() => {
     const checkLock = async () => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('site_settings')
           .select('is_locked')
           .eq('id', 1)
           .single();
+
+        if (error) {
+          setCheckingLock(false);
+          return;
+        }
 
         const alreadyUnlocked = sessionStorage.getItem('movieverify_unlocked');
         
         if (data?.is_locked && !alreadyUnlocked) {
           setSiteLocked(true);
         }
-      } catch (err) {
-        console.warn('Site lock check failed:', err.message);
+      } catch {
+        // Silently continue if database is paused/unreachable
       } finally {
         setCheckingLock(false);
       }
@@ -256,8 +261,6 @@ function App() {
   if (siteLocked) {
     return <SiteLockScreen onUnlock={() => setSiteLocked(false)} />;
   }
-
-  console.log('showAdmin:', showAdmin);
 
   return (
     <div className="min-h-screen bg-[#141414] text-white">

@@ -69,15 +69,21 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
 
   useEffect(() => {
     const checkReports = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return; // only fetch if admin is logged in
-      
-      const { count } = await supabase
-        .from('movie_reports')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-      
-      setPendingReports(count || 0);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return; // only fetch if admin is logged in
+        
+        const { count, error } = await supabase
+          .from('movie_reports')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending');
+        
+        if (!error) {
+          setPendingReports(count || 0);
+        }
+      } catch {
+        // Silently ignore if database is unreachable
+      }
     };
     checkReports();
   }, []);
@@ -226,7 +232,6 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onAdm
             type="button"
             onClick={(e) => {
               e.preventDefault();
-              console.log('MOVIEVERIFY ADMIN ICON CLICKED');
               if (onAdminClick) onAdminClick();
             }} 
             className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"

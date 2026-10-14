@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock } from 'lucide-react';
+import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
@@ -64,15 +64,50 @@ const AdminPanel = ({ onClose }) => {
   const [lockKeyInput, setLockKeyInput] = useState('');
   const [lockToggling, setLockToggling] = useState(false);
 
+  // Fetch all link configurations from Supabase
+  const fetchCurrentLinks = async () => {
+    setIsLoadingList(true);
+    try {
+      const { data, error } = await supabase
+        .from('download_links')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      if (data) {
+        data.forEach(row => {
+          activeLinks[row.id] = {
+            download480p: row.download480p || null,
+            download720p: row.download720p || null,
+            download1080p: row.download1080p || null,
+            description: row.description || null,
+            seasons: row.seasons || null
+          };
+        });
+      }
+
+      setActiveDbList(data || []);
+    } catch (e) {
+      console.warn('Failed to load links from Supabase:', e.message);
+    } finally {
+      setIsLoadingList(false);
+    }
+  };
+
   const fetchSiteLockStatus = async () => {
-    const { data } = await supabase
-      .from('site_settings')
-      .select('is_locked, lock_password')
-      .eq('id', 1)
-      .single();
-    if (data) {
-      setSiteLockStatus(data.is_locked);
-      setLockKeyInput(data.lock_password || '');
+    try {
+      const { data } = await supabase
+        .from('site_settings')
+        .select('is_locked, lock_password')
+        .eq('id', 1)
+        .single();
+      if (data) {
+        setSiteLockStatus(data.is_locked);
+        setLockKeyInput(data.lock_password || '');
+      }
+    } catch (e) {
+      console.warn('Failed to fetch site lock status:', e.message);
     }
   };
 
@@ -80,19 +115,35 @@ const AdminPanel = ({ onClose }) => {
     setLockToggling(true);
     const newStatus = !siteLockStatus;
     
-    const { error } = await supabase
-      .from('site_settings')
-      .update({ 
-        is_locked: newStatus, 
-        lock_password: lockKeyInput.trim(),
-        updated_at: new Date().toISOString() 
-      })
-      .eq('id', 1);
+    try {
+      const { error } = await supabase
+        .from('site_settings')
+        .update({ 
+          is_locked: newStatus, 
+          lock_password: lockKeyInput.trim(),
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', 1);
 
-    if (!error) {
-      setSiteLockStatus(newStatus);
+      if (!error) {
+        setSiteLockStatus(newStatus);
+      }
+    } catch (e) {
+      console.warn('Failed to update site lock:', e.message);
     }
     setLockToggling(false);
+  };
+
+  // Clear stale auth tokens from localStorage
+  const handleClearSession = () => {
+    try {
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('sb-') || key.includes('supabase')) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch {}
+    window.location.reload();
   };
 
   // Check active session on mount
@@ -101,36 +152,27 @@ const AdminPanel = ({ onClose }) => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          // Verify admin role in admin_users table
           const { data: adminData, error: adminErr } = await supabase
             .from('admin_users')
             .select('user_id')
             .eq('user_id', session.user.id)
             .maybeSingle();
-          
-          console.log('Supabase session:', !!session);
-          console.log('Authenticated user ID (mount):', session.user?.id);
-          console.log('Admin record found (mount):', adminData);
-          console.log('Admin query error (mount):', adminErr);
 
           if (adminErr) {
-             console.error('Admin authorization query failed (mount):', adminErr);
+            console.warn('Admin check skipped due to network/database error:', adminErr.message);
+            return;
           }
 
-          const isAdmin = !!(adminData && !adminErr);
-          console.log('Admin authorized:', isAdmin);
-
-          if (isAdmin) {
+          if (adminData) {
             setIsLoggedIn(true);
             fetchCurrentLinks();
             fetchSiteLockStatus();
           } else {
-            // Not authorized
             await supabase.auth.signOut();
           }
         }
       } catch (err) {
-        console.error('Session check failed:', err);
+        console.warn('Session check failed:', err.message);
       }
     };
     checkSession();
@@ -150,7 +192,19 @@ const AdminPanel = ({ onClose }) => {
       });
 
       if (authErr) {
-        setLoginError(authErr.message || 'Invalid login credentials');
+        const msg = authErr.message || '';
+        const isNetworkErr = 
+          msg.toLowerCase().includes('failed to fetch') ||
+          msg.toLowerCase().includes('network') ||
+          msg.toLowerCase().includes('load failed') ||
+          msg.toLowerCase().includes('resolve') ||
+          msg.toLowerCase().includes('abort');
+
+        if (isNetworkErr) {
+          setLoginError('database_unreachable');
+        } else {
+          setLoginError(msg || 'Invalid login credentials');
+        }
         setIsAuthenticating(false);
         return;
       }
@@ -165,20 +219,15 @@ const AdminPanel = ({ onClose }) => {
           return;
         }
 
-        console.log('Authenticated user ID:', user.id);
         const { data: adminData, error: adminErr } = await supabase
           .from('admin_users')
           .select('user_id')
           .eq('user_id', user.id)
           .maybeSingle();
 
-        console.log('Admin record found:', adminData);
-        console.log('Admin query error:', adminErr);
-
         if (adminErr) {
-          console.error('Admin authorization query failed:', adminErr);
-          setLoginError('Unable to verify admin access. Please try again.');
-          await supabase.auth.signOut();
+          console.warn('Admin authorization query failed:', adminErr.message);
+          setLoginError('Unable to verify admin access. Check database status.');
           setIsAuthenticating(false);
           return;
         }
@@ -195,8 +244,19 @@ const AdminPanel = ({ onClose }) => {
         fetchSiteLockStatus();
       }
     } catch (err) {
-      console.error('Authentication process failed:', err);
-      setLoginError('Server authentication error. Please try again.');
+      const msg = err?.message || '';
+      const isNetworkErr = 
+        msg.toLowerCase().includes('failed to fetch') ||
+        msg.toLowerCase().includes('network') ||
+        msg.toLowerCase().includes('load failed') ||
+        msg.toLowerCase().includes('resolve') ||
+        msg.toLowerCase().includes('abort');
+
+      if (isNetworkErr) {
+        setLoginError('database_unreachable');
+      } else {
+        setLoginError(msg || 'Server authentication error. Please try again.');
+      }
     } finally {
       setIsAuthenticating(false);
     }
@@ -211,37 +271,7 @@ const AdminPanel = ({ onClose }) => {
       setEmailVal('');
       setPassVal('');
     } catch (e) {
-      console.error('Logout failed:', e);
-    }
-  };
-
-  // Fetch all link configurations from Supabase
-  const fetchCurrentLinks = async () => {
-    setIsLoadingList(true);
-    try {
-      const { data, error } = await supabase
-        .from('download_links')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      if (data) {
-        data.forEach(row => {
-          activeLinks[row.id] = {
-            download480p: row.download480p || null,
-            download720p: row.download720p || null,
-            download1080p: row.download1080p || null,
-            seasons: row.seasons || null
-          };
-        });
-      }
-
-      setActiveDbList(data || []);
-    } catch (e) {
-      console.error('Failed to load links from Supabase:', e);
-    } finally {
-      setIsLoadingList(false);
+      console.warn('Logout failed:', e.message);
     }
   };
 
@@ -422,7 +452,45 @@ const AdminPanel = ({ onClose }) => {
               />
             </div>
 
-            {loginError && (
+            {loginError === 'database_unreachable' ? (
+              <div className="bg-red-950/40 border border-red-500/50 p-3.5 rounded-lg text-left space-y-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-red-400">Database Connection Failed (ERR_NAME_NOT_RESOLVED)</h4>
+                    <p className="text-[11px] text-gray-300 mt-0.5 leading-relaxed">
+                      Supabase server se connect nahi ho pa raha hai. Free Tier inactivity ki wajah se Supabase project <strong>PAUSED</strong> ho gaya hai.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="bg-black/50 border border-white/10 rounded p-2.5 text-[11px] text-gray-300 space-y-1.5">
+                  <div className="font-semibold text-white">Theek karne ke steps:</div>
+                  <ol className="list-decimal list-inside space-y-1 text-gray-300 text-[10px]">
+                    <li>Supabase Dashboard kholein:</li>
+                    <a 
+                      href="https://supabase.com/dashboard/project/jbfqwxcymldhyembzjpv" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[#E50914] hover:underline font-mono text-[10px] break-all my-0.5 font-bold"
+                    >
+                      <span>supabase.com/dashboard/project/jbfqwxcymldhyembzjpv</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                    <li>Wahan <strong className="text-green-400">"Restore project"</strong> par click karein (1-2 min me active ho jayega).</li>
+                    <li>Ya agar aapne naya project banaya hai, to Vercel settings me URL update karein.</li>
+                  </ol>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleClearSession}
+                  className="w-full text-center py-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded text-[11px] font-medium transition flex items-center justify-center gap-1.5"
+                >
+                  <RefreshCw className="w-3 h-3" /> Clear Stored Session & Refresh
+                </button>
+              </div>
+            ) : loginError && (
               <div className="flex items-center gap-2 text-red-500 text-xs bg-red-950/30 border border-red-900/50 p-3 rounded">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{loginError}</span>

@@ -9,18 +9,23 @@ const ReportsPanel = () => {
 
   const fetchReports = async () => {
     setLoading(true);
-    const query = supabase
-      .from('movie_reports')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (filter !== 'all') {
-      query.eq('status', filter);
+    try {
+      const query = supabase
+        .from('movie_reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (filter !== 'all') {
+        query.eq('status', filter);
+      }
+      
+      const { data, error } = await query;
+      if (!error && data) setReports(data);
+    } catch {
+      // Silently handle if database is unreachable
+    } finally {
+      setLoading(false);
     }
-    
-    const { data, error } = await query;
-    if (!error && data) setReports(data);
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -28,25 +33,33 @@ const ReportsPanel = () => {
   }, [filter]);
 
   const markResolved = async (id) => {
-    const { error } = await supabase
-      .from('movie_reports')
-      .update({ status: 'resolved' })
-      .eq('id', id);
-    
-    if (!error) {
-      setReports(prev => prev.filter(r => r.id !== id));
+    try {
+      const { error } = await supabase
+        .from('movie_reports')
+        .update({ status: 'resolved' })
+        .eq('id', id);
+      
+      if (!error) {
+        setReports(prev => prev.filter(r => r.id !== id));
+      }
+    } catch {
+      // Silently handle
     }
   };
 
   const deleteReport = async (id) => {
     if (!window.confirm('Delete this report?')) return;
-    const { error } = await supabase
-      .from('movie_reports')
-      .delete()
-      .eq('id', id);
-    
-    if (!error) {
-      setReports(prev => prev.filter(r => r.id !== id));
+    try {
+      const { error } = await supabase
+        .from('movie_reports')
+        .delete()
+        .eq('id', id);
+      
+      if (!error) {
+        setReports(prev => prev.filter(r => r.id !== id));
+      }
+    } catch {
+      // Silently handle
     }
   };
 

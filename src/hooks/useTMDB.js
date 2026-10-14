@@ -21,11 +21,7 @@ const headers = {
   'Content-Type': 'application/json'
 };
 
-// Console audit for production credentials validation
-console.log(
-  'TMDB token configured:',
-  Boolean(import.meta.env.VITE_TMDB_TOKEN)
-);
+
 
 export const activeLinks = { ...staticDownloadLinks };
 
@@ -266,9 +262,7 @@ export const useTMDB = () => {
             ? { data: supabaseCacheData, error: null } 
             : await supabaseCachePromise;
           
-          if (dbErr) {
-            console.error('Supabase load error:', dbErr);
-          } else if (dbData) {
+          if (!dbErr && dbData) {
             supabaseCacheData = dbData;
             dbData.forEach(row => {
               activeLinks[row.id] = {
@@ -280,8 +274,8 @@ export const useTMDB = () => {
               };
             });
           }
-        } catch (e) {
-          console.error('Supabase fetch failed, relying on local config:', e);
+        } catch {
+          // Gracefully relying on static local download links
         }
         
         const [
@@ -444,28 +438,21 @@ export const searchTMDB = async (query) => {
     `${BASE_URL}/search/multi?query=${encodeURIComponent(query.trim())}` +
     `&language=en-US&page=1&include_adult=false`;
 
-  console.log('TMDB search query:', query);
-
   try {
     const res = await fetch(url, {
       method: 'GET',
       headers
     });
 
-    console.log('TMDB response status:', res.status);
-
     if (!res.ok) {
       const errorText = await res.text();
-      console.error('TMDB Search Error:', res.status, errorText);
+      console.warn('TMDB Search Warning:', res.status, errorText);
       return [];
     }
 
     const data = await res.json();
 
-    console.log('TMDB results count:', data.results?.length);
-
     if (!Array.isArray(data.results)) {
-      console.error('Invalid TMDB search response:', data);
       return [];
     }
 

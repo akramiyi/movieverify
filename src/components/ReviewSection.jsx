@@ -16,14 +16,19 @@ const ReviewSection = ({ movieId, movieTitle }) => {
 
   const fetchReviews = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('movie_reviews')
-      .select('*')
-      .eq('movie_id', String(movieId))
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (!error && data) setReviews(data);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from('movie_reviews')
+        .select('*')
+        .eq('movie_id', String(movieId))
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (!error && data) setReviews(data);
+    } catch {
+      // Silently ignore if database is unreachable
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

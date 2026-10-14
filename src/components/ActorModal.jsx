@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download } from 'lucide-react';
-import { getDownloadLinks, formatMovie } from '../hooks/useTMDB';
+import { formatMovie } from '../hooks/useTMDB';
 
 const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
   const [movies, setMovies] = useState([]);
