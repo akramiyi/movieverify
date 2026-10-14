@@ -146,7 +146,7 @@ const PosterCard = ({ title, img }) => {
   const [hasError, setHasError] = useState(false);
 
   return (
-    <div className="w-28 sm:w-32 md:w-36 aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border border-white/10 flex-shrink-0 bg-neutral-900 group">
+    <div className="w-24 xs:w-28 sm:w-32 md:w-36 aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border border-white/10 flex-shrink-0 bg-neutral-900 group">
       {hasError ? (
         <div className="w-full h-full bg-gradient-to-br from-neutral-800 to-neutral-950 flex flex-col items-center justify-center p-2 text-center">
           <div className="w-6 h-6 rounded-full bg-red-600/30 flex items-center justify-center text-red-500 mb-1">MV</div>
@@ -176,12 +176,12 @@ const MoviePosterCollage = ({ columns }) => {
   return (
     <div className="relative w-full h-full overflow-hidden bg-black select-none pointer-events-none flex items-start justify-center">
       {/* Edge gradient overlays for seamless blending into form & edges */}
-      <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#0e0e0e] via-[#0e0e0e]/80 to-transparent z-10" />
+      <div className="hidden md:block absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#0e0e0e] via-[#0e0e0e]/80 to-transparent z-10" />
       <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#0e0e0e] to-transparent z-10" />
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0e0e0e] to-transparent z-10" />
 
       {/* Angled and scaled collage container anchored at top */}
-      <div className="transform -rotate-12 origin-top scale-110 sm:scale-125 flex gap-4 -mt-6">
+      <div className="transform -rotate-12 origin-top scale-105 xs:scale-110 sm:scale-125 flex gap-3.5 sm:gap-4 -mt-6">
         {/* Column 1: Smooth continuous vertical scroll */}
         <div className="flex flex-col gap-4 poster-scroll-col-1">
           {[...col1, ...col1, ...col1, ...col1].map((poster, idx) => (
@@ -358,44 +358,59 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
 
   return (
     <div 
-      className="fixed inset-0 z-[160] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md transition-opacity animate-in fade-in duration-200"
+      className="fixed inset-0 z-[160] flex items-center justify-start md:justify-center p-0 md:p-4 bg-black/90 md:bg-black/85 backdrop-blur-md transition-opacity animate-in fade-in duration-200 overflow-hidden"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="auth-modal-title"
     >
       <div 
-        className="w-full max-w-4xl lg:max-w-[920px] h-auto md:h-[580px] max-h-[92vh] bg-[#0e0e0e] border border-white/10 rounded-2xl md:rounded-3xl shadow-2xl relative overflow-hidden flex flex-col md:flex-row text-white animate-in zoom-in-95 duration-200"
+        className="w-full h-full md:max-w-4xl lg:max-w-[920px] md:h-[580px] md:max-h-[92vh] md:bg-[#0e0e0e] md:border md:border-white/10 md:rounded-3xl md:shadow-2xl relative overflow-hidden flex flex-row items-center md:items-stretch justify-start md:justify-between text-white animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top-Right Close Button */}
+        {/* Top-Right Close Button (Desktop) */}
         <button
           type="button"
           onClick={onClose}
           aria-label="Close dialog"
-          className="absolute top-4 right-4 z-30 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center text-gray-300 hover:text-white transition focus:outline-none focus:ring-2 focus:ring-white/30 cursor-pointer"
+          className="hidden md:flex absolute top-4 right-4 z-30 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 items-center justify-center text-gray-300 hover:text-white transition focus:outline-none focus:ring-2 focus:ring-white/30 cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
 
-        {/* LEFT COLUMN: Authentication Form (User Login / Admin Login) */}
-        <div className="w-full md:w-[48%] p-6 sm:p-8 md:p-10 flex flex-col justify-between relative z-20 bg-[#0e0e0e] overflow-y-auto">
+        {/* AUTHENTICATION FORM CARD:
+            On mobile: floating translucent card on the left leaving right poster strip visible
+            On desktop: left column (48% width)
+        */}
+        <div className="relative z-20 w-[calc(100%-3.75rem)] xs:w-[calc(100%-4.5rem)] sm:w-[calc(100%-5.5rem)] max-w-[340px] sm:max-w-[370px] ml-2 xs:ml-3 sm:ml-4 my-auto bg-[#0e0e0e]/95 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl p-4 xs:p-5 sm:p-6 md:p-8 lg:p-10 md:w-[48%] md:max-w-none md:ml-0 md:my-0 md:h-full md:self-stretch md:border-0 md:rounded-none md:shadow-none md:bg-[#0e0e0e] flex flex-col justify-between overflow-y-auto max-h-[92vh] md:max-h-none">
           <div>
-            {/* Logo */}
-            <div className="flex items-center gap-2.5 mb-6">
-              <div className="w-8 h-8 rounded-lg bg-[#E50914] flex items-center justify-center shadow-lg shadow-red-900/40 flex-shrink-0">
-                <svg className="w-4 h-4 fill-white ml-0.5" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
+            {/* Header: Logo and Mobile Close Button */}
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <div className="flex items-center gap-2 sm:gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#E50914] flex items-center justify-center shadow-lg shadow-red-900/40 flex-shrink-0">
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white ml-0.5" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-base sm:text-lg font-black tracking-tight text-white leading-none">
+                    Movie<span className="text-white">Verify</span>
+                  </span>
+                  <span className="text-[8px] sm:text-[9px] font-bold tracking-[0.2em] text-gray-400 uppercase mt-0.5">
+                    SEARCH • VERIFY • DOWNLOAD
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col">
-                <span className="text-lg font-black tracking-tight text-white leading-none">
-                  Movie<span className="text-white">Verify</span>
-                </span>
-                <span className="text-[9px] font-bold tracking-[0.2em] text-gray-400 uppercase mt-0.5">
-                  SEARCH • VERIFY • DOWNLOAD
-                </span>
-              </div>
+
+              {/* Mobile-only Close Button */}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close dialog"
+                className="md:hidden w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center text-gray-300 hover:text-white transition focus:outline-none focus:ring-2 focus:ring-white/30 cursor-pointer flex-shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             {/* Heading */}
@@ -580,19 +595,22 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
           </div>
 
           {/* Bottom dismiss option: Continue browsing without signing in */}
-          <div className="mt-6 pt-4 border-t border-white/5 text-center">
+          <div className="mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-white/5 text-center">
             <button
               type="button"
               onClick={onClose}
-              className="text-xs text-gray-400 hover:text-white transition duration-150 py-1.5 px-3 rounded-lg hover:bg-white/5 focus:outline-none focus:ring-1 focus:ring-white/20 cursor-pointer font-medium"
+              className="text-[11px] sm:text-xs text-gray-400 hover:text-white transition duration-150 py-1 sm:py-1.5 px-2.5 sm:px-3 rounded-lg hover:bg-white/5 focus:outline-none focus:ring-1 focus:ring-white/20 cursor-pointer font-medium"
             >
               Continue browsing without signing in &rarr;
             </button>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Tilted Movie Poster Collage with continuous vertical scroll */}
-        <div className="hidden md:flex md:w-[52%] relative overflow-hidden bg-black items-start justify-center">
+        {/* POSTER COLLAGE:
+            On mobile: absolute inset-0 z-0 (spans full background of the modal, clearly visible on the right strip & surrounding the card)
+            On desktop: relative w-[52%] h-[580px] z-0 (standard right column)
+        */}
+        <div className="absolute inset-0 md:relative md:inset-auto md:w-[52%] md:h-[580px] md:self-stretch z-0 overflow-hidden bg-black flex items-start justify-center select-none pointer-events-none">
           <MoviePosterCollage key={`collage-${animKey}`} columns={posterColumns} />
         </div>
       </div>
