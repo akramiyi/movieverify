@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import SiteLockScreen from './components/SiteLockScreen';
 import { supabase } from './data/supabaseClient';
 
@@ -33,6 +33,7 @@ const getActresses = () => actors.filter(a => a.type === 'actress');
 
 function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { recentlyViewed, addToRecentlyViewed } = useRecentlyViewed();
   const { history, addToHistory, clearHistory } = useDownloadHistory();
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -60,6 +61,19 @@ function App() {
     setIsActorModalOpen(true);
   };
 
+  const handleOpenAdmin = () => {
+    setShowAuthModal(false);
+    setShowAdmin(true);
+    try {
+      sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
+    } catch {}
+  };
+
+  const handleOpenAuthModal = () => {
+    setShowAdmin(false);
+    setShowAuthModal(true);
+  };
+
   const handleCloseAuthModal = () => {
     setShowAuthModal(false);
     try {
@@ -67,9 +81,16 @@ function App() {
     } catch {}
   };
 
+  const handleCloseAdmin = () => {
+    setShowAdmin(false);
+    if (location.pathname === '/admin') {
+      navigate('/');
+    }
+  };
+
   // Automatic 5-second Google Sign-In welcome popup for unauthenticated visitors
   useEffect(() => {
-    if (showIntro || siteLocked) return;
+    if (showIntro || siteLocked || showAdmin || location.pathname === '/admin') return;
 
     let isMounted = true;
     let timerId = null;
@@ -94,6 +115,7 @@ function App() {
         // Wait exactly 5 seconds before showing the welcome login modal
         timerId = setTimeout(async () => {
           if (!isMounted) return;
+          if (showAdmin || location.pathname === '/admin') return;
 
           try {
             const { data: { session: activeSession } } = await supabase.auth.getSession();
@@ -118,10 +140,14 @@ function App() {
     initAuthAndTimer();
 
     // Listen for auth state changes: cancel timer if user logs in
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         if (timerId) clearTimeout(timerId);
-        setShowAuthModal(false);
+        // Dismiss welcome auth popup automatically only for OAuth sign-ins (e.g. Google),
+        // leaving AuthModal's admin password check to manage its own lifecycle.
+        if (event === 'SIGNED_IN' && session.user.app_metadata?.provider !== 'email') {
+          setShowAuthModal(false);
+        }
       }
     });
 
@@ -130,7 +156,7 @@ function App() {
       if (timerId) clearTimeout(timerId);
       subscription?.unsubscribe();
     };
-  }, [showIntro, siteLocked]);
+  }, [showIntro, siteLocked, showAdmin, location.pathname]);
 
   useEffect(() => {
     const checkLock = async () => {
@@ -342,8 +368,8 @@ function App() {
               searchQuery={searchQuery} 
               activeTab={activeTab} 
               setActiveTab={setActiveTab} 
-              onProfileClick={() => setShowAuthModal(true)}
-              onAdminClick={() => setShowAdmin(true)}
+              onProfileClick={handleOpenAuthModal}
+              onAdminClick={handleOpenAdmin}
               onHistoryClick={() => setIsHistoryModalOpen(true)}
             />
 
@@ -569,7 +595,7 @@ function App() {
       </main>
 
       <SupportSection />
-      <Footer onAdminClick={() => setShowAdmin(true)} />
+      <Footer onAdminClick={handleOpenAdmin} />
 
       <MovieDetailsModal 
         movie={selectedMovie} 
@@ -599,20 +625,18 @@ function App() {
       />
 
       <AuthModal
-        isOpen={showAuthModal}
+        isOpen={showAuthModal && !showAdmin && location.pathname !== '/admin'}
         onClose={handleCloseAuthModal}
-        onOpenAdmin={() => {
-          handleCloseAuthModal();
-          setShowAdmin(true);
-        }}
+        onOpenAdmin={handleOpenAdmin}
       />
 
       {showAdmin && (
-        <AdminPanel onClose={() => setShowAdmin(false)} />
+        <AdminPanel onClose={handleCloseAdmin} />
       )}
       <InstallPWA />
           </>
         } />
+        <Route path="/admin" element={<AdminPanel onClose={handleCloseAdmin} />} />
         <Route path="/actors" element={<AllActorsPage onMovieSelect={handleMovieSelect} type="actors" />} />
         <Route path="/actresses" element={<AllActorsPage onMovieSelect={handleMovieSelect} type="actresses" />} />
         <Route 

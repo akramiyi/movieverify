@@ -34,6 +34,7 @@ const AdminPanel = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('manager'); // 'manager' | 'reports'
   // Login State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [emailVal, setEmailVal] = useState('');
   const [passVal, setPassVal] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -148,6 +149,7 @@ const AdminPanel = ({ onClose }) => {
 
   // Check active session on mount
   useEffect(() => {
+    let isMounted = true;
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -158,8 +160,11 @@ const AdminPanel = ({ onClose }) => {
             .eq('user_id', session.user.id)
             .maybeSingle();
 
+          if (!isMounted) return;
+
           if (adminErr) {
             console.warn('Admin check skipped due to network/database error:', adminErr.message);
+            setIsCheckingSession(false);
             return;
           }
 
@@ -174,9 +179,16 @@ const AdminPanel = ({ onClose }) => {
         }
       } catch (err) {
         console.warn('Session check failed:', err.message);
+      } finally {
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
       }
     };
     checkSession();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Authenticate Admin Credentials using Supabase Auth
@@ -411,14 +423,26 @@ const AdminPanel = ({ onClose }) => {
     return 'Good Evening, Akram 🌙';
   };
 
+  if (isCheckingSession) {
+    return (
+      <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md">
+        <div className="flex flex-col items-center justify-center gap-3">
+          <div className="w-9 h-9 border-2 border-[#E50914] border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-400 text-xs font-medium tracking-wide">Checking administrator session...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isLoggedIn) {
     return (
       <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md">
         <div className="w-full max-w-sm bg-[#181818] border border-white/10 rounded-lg p-6 shadow-2xl relative">
           
           <button 
+            type="button"
             onClick={onClose}
-            className="absolute top-4 left-4 text-gray-400 hover:text-white transition text-xs font-semibold flex items-center gap-1.5 focus:outline-none"
+            className="absolute top-4 left-4 text-gray-400 hover:text-white transition text-xs font-semibold flex items-center gap-1.5 focus:outline-none cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" /> Back to Site
           </button>
