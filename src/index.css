@@ -92,28 +92,28 @@ body {
   transition: opacity 300ms;
 }
 
-/* Smooth continuous vertical poster scrolling (from top to bottom) */
+/* Smooth continuous vertical poster scrolling (from top to bottom, 4-set seamless loop) */
 @keyframes posterScrollDown {
   0% {
     transform: translateY(-50%);
   }
   100% {
-    transform: translateY(0%);
+    transform: translateY(-25%);
   }
 }
 
 .poster-scroll-col-1 {
-  animation: posterScrollDown 36s linear infinite;
+  animation: posterScrollDown 46s linear infinite;
   will-change: transform;
 }
 
 .poster-scroll-col-2 {
-  animation: posterScrollDown 44s linear infinite;
+  animation: posterScrollDown 54s linear infinite;
   will-change: transform;
 }
 
 .poster-scroll-col-3 {
-  animation: posterScrollDown 32s linear infinite;
+  animation: posterScrollDown 40s linear infinite;
   will-change: transform;
 }
 

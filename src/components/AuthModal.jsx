@@ -77,31 +77,31 @@ const PosterCard = ({ title, img }) => {
 // Continuous vertical scrolling poster collage (from top to bottom)
 const MoviePosterCollage = () => {
   return (
-    <div className="relative w-full h-full overflow-hidden bg-black select-none pointer-events-none flex items-center justify-center">
+    <div className="relative w-full h-full overflow-hidden bg-black select-none pointer-events-none flex items-start justify-center">
       {/* Edge gradient overlays for seamless blending into form & edges */}
       <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#0e0e0e] via-[#0e0e0e]/80 to-transparent z-10" />
       <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#0e0e0e] to-transparent z-10" />
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0e0e0e] to-transparent z-10" />
 
-      {/* Angled and scaled collage container */}
-      <div className="transform -rotate-12 scale-110 sm:scale-125 flex gap-4 -mt-20">
+      {/* Angled and scaled collage container anchored at top */}
+      <div className="transform -rotate-12 origin-top scale-110 sm:scale-125 flex gap-4 -mt-6">
         {/* Column 1: Smooth continuous vertical scroll */}
         <div className="flex flex-col gap-4 poster-scroll-col-1">
-          {[...POSTER_COLUMN_1, ...POSTER_COLUMN_1].map((poster, idx) => (
+          {[...POSTER_COLUMN_1, ...POSTER_COLUMN_1, ...POSTER_COLUMN_1, ...POSTER_COLUMN_1].map((poster, idx) => (
             <PosterCard key={`c1-${idx}`} title={poster.title} img={poster.img} />
           ))}
         </div>
 
         {/* Column 2: Smooth continuous vertical scroll */}
-        <div className="flex flex-col gap-4 poster-scroll-col-2 -mt-12">
-          {[...POSTER_COLUMN_2, ...POSTER_COLUMN_2].map((poster, idx) => (
+        <div className="flex flex-col gap-4 poster-scroll-col-2">
+          {[...POSTER_COLUMN_2, ...POSTER_COLUMN_2, ...POSTER_COLUMN_2, ...POSTER_COLUMN_2].map((poster, idx) => (
             <PosterCard key={`c2-${idx}`} title={poster.title} img={poster.img} />
           ))}
         </div>
 
         {/* Column 3: Smooth continuous vertical scroll */}
         <div className="flex flex-col gap-4 poster-scroll-col-3">
-          {[...POSTER_COLUMN_3, ...POSTER_COLUMN_3].map((poster, idx) => (
+          {[...POSTER_COLUMN_3, ...POSTER_COLUMN_3, ...POSTER_COLUMN_3, ...POSTER_COLUMN_3].map((poster, idx) => (
             <PosterCard key={`c3-${idx}`} title={poster.title} img={poster.img} />
           ))}
         </div>
@@ -114,6 +114,14 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
   const [activeTab, setActiveTab] = useState('user'); // 'user' | 'admin'
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [animKey, setAnimKey] = useState(0);
+
+  // Restart poster animation from t=0 whenever modal opens or re-opens
+  useEffect(() => {
+    if (isOpen) {
+      setAnimKey((prev) => prev + 1);
+    }
+  }, [isOpen]);
 
   // Admin login credentials
   const [emailVal, setEmailVal] = useState('');
@@ -453,8 +461,8 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
         </div>
 
         {/* RIGHT COLUMN: Tilted Movie Poster Collage with continuous vertical scroll */}
-        <div className="hidden md:flex md:w-[52%] relative overflow-hidden bg-black items-center justify-center">
-          <MoviePosterCollage />
+        <div className="hidden md:flex md:w-[52%] relative overflow-hidden bg-black items-start justify-center">
+          <MoviePosterCollage key={`collage-${animKey}`} />
         </div>
       </div>
     </div>
