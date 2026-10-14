@@ -91,3 +91,36 @@ body {
   opacity: 0;
   transition: opacity 300ms;
 }
+
+/* Smooth continuous vertical poster scrolling (from top to bottom) */
+@keyframes posterScrollDown {
+  0% {
+    transform: translateY(-50%);
+  }
+  100% {
+    transform: translateY(0%);
+  }
+}
+
+.poster-scroll-col-1 {
+  animation: posterScrollDown 36s linear infinite;
+  will-change: transform;
+}
+
+.poster-scroll-col-2 {
+  animation: posterScrollDown 44s linear infinite;
+  will-change: transform;
+}
+
+.poster-scroll-col-3 {
+  animation: posterScrollDown 32s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poster-scroll-col-1,
+  .poster-scroll-col-2,
+  .poster-scroll-col-3 {
+    animation: none !important;
+  }
+}
