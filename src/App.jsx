@@ -60,6 +60,78 @@ function App() {
     setIsActorModalOpen(true);
   };
 
+  const handleCloseAuthModal = () => {
+    setShowAuthModal(false);
+    try {
+      sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
+    } catch {}
+  };
+
+  // Automatic 5-second Google Sign-In welcome popup for unauthenticated visitors
+  useEffect(() => {
+    if (showIntro || siteLocked) return;
+
+    let isMounted = true;
+    let timerId = null;
+
+    // Do not show if dismissed during this page session
+    try {
+      if (sessionStorage.getItem('movieverify_auth_popup_dismissed')) {
+        return;
+      }
+    } catch {}
+
+    const initAuthAndTimer = async () => {
+      try {
+        // Asynchronously check Supabase session before starting timer
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        // Authenticated users must never see the automatic login popup
+        if (!isMounted || session?.user) {
+          return;
+        }
+
+        // Wait exactly 5 seconds before showing the welcome login modal
+        timerId = setTimeout(async () => {
+          if (!isMounted) return;
+
+          try {
+            const { data: { session: activeSession } } = await supabase.auth.getSession();
+            const alreadyDismissed = sessionStorage.getItem('movieverify_auth_popup_dismissed');
+
+            if (!activeSession?.user && !alreadyDismissed) {
+              setShowAuthModal(true);
+              sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
+            }
+          } catch {
+            if (!sessionStorage.getItem('movieverify_auth_popup_dismissed')) {
+              setShowAuthModal(true);
+              sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
+            }
+          }
+        }, 5000);
+      } catch (err) {
+        console.warn('Auth check error for welcome popup:', err?.message);
+      }
+    };
+
+    initAuthAndTimer();
+
+    // Listen for auth state changes: cancel timer if user logs in
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        if (timerId) clearTimeout(timerId);
+        setShowAuthModal(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      if (timerId) clearTimeout(timerId);
+      subscription?.unsubscribe();
+    };
+  }, [showIntro, siteLocked]);
+
   useEffect(() => {
     const checkLock = async () => {
       try {
@@ -528,9 +600,9 @@ function App() {
 
       <AuthModal
         isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
+        onClose={handleCloseAuthModal}
         onOpenAdmin={() => {
-          setShowAuthModal(false);
+          handleCloseAuthModal();
           setShowAdmin(true);
         }}
       />

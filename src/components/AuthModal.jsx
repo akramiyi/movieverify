@@ -48,7 +48,11 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
     setErrorMessage('');
 
     try {
-      const redirectUri = window.location.origin;
+      const redirectUri = 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+          ? window.location.origin
+          : 'https://movieverify.vercel.app/';
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -191,8 +195,19 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
           </button>
         </div>
 
+        {/* Continue browsing without signing in */}
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-gray-400 hover:text-white transition duration-150 py-1.5 px-3 rounded-lg hover:bg-white/5 focus:outline-none focus:ring-1 focus:ring-white/20 cursor-pointer font-medium"
+          >
+            Continue browsing without signing in &rarr;
+          </button>
+        </div>
+
         {/* Security Note */}
-        <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
+        <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
           <Lock className="w-3 h-3 text-gray-400" />
           <span>Admin privileges strictly require verified backend authorization.</span>
         </div>
