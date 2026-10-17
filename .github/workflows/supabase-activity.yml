@@ -1,0 +1,68 @@
+name: Supabase Activity Checker
+
+# Runs twice daily at 00:17 UTC (05:47 AM IST) and 12:17 UTC (05:47 PM IST)
+# to keep the Supabase Free database active by performing a genuine read query.
+# Also supports manual triggers via workflow_dispatch.
+on:
+  schedule:
+    - cron: '17 0,12 * * *'
+  workflow_dispatch:
+
+# Enforce minimal GitHub token permissions
+permissions:
+  contents: read
+
+# Prevent overlapping execution
+concurrency:
+  group: supabase-activity
+  cancel-in-progress: false
+
+jobs:
+  ping-supabase:
+    name: Query download_links table
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Send read-only REST query to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Validate that required secrets are configured in repository settings
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Error: Required secrets (SUPABASE_URL and/or SUPABASE_ANON_KEY) are missing or empty." >&2
+            echo "Please configure SUPABASE_URL and SUPABASE_ANON_KEY in Repository Settings -> Secrets and variables -> Actions." >&2
+            exit 1
+          fi
+
+          # Strip any trailing slash from Supabase URL for uniform REST endpoint formatting
+          CLEAN_URL="${SUPABASE_URL%/}"
+          ENDPOINT="${CLEAN_URL}/rest/v1/download_links?select=id&limit=1"
+
+          # Perform genuine read-only query requesting only 'id' with limit 1
+          # Response body is discarded (-o /dev/null) to prevent any data exposure
+          # Credentials are passed securely via environment variables to curl headers
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 10 \
+            --max-time 20 \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Accept: application/json" \
+            "$ENDPOINT") || CURL_EXIT=$?
+
+          if [ -n "$CURL_EXIT" ] && [ "$CURL_EXIT" -ne 0 ]; then
+            echo "Error: Network connection to Supabase failed (curl exit code: $CURL_EXIT)." >&2
+            exit 1
+          fi
+
+          echo "HTTP response status code: $HTTP_STATUS"
+
+          # Verify HTTP response is in the 2xx success range (e.g., 200 OK)
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Success: Supabase database activity ping succeeded (HTTP $HTTP_STATUS)."
+            exit 0
+          else
+            echo "Error: Supabase responded with non-2xx status code ($HTTP_STATUS)." >&2
+            exit 1
+          fi
