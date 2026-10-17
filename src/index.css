@@ -117,10 +117,16 @@ body {
   will-change: transform;
 }
 
+.poster-scroll-col-4 {
+  animation: posterScrollDown 48s linear infinite;
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .poster-scroll-col-1,
   .poster-scroll-col-2,
-  .poster-scroll-col-3 {
+  .poster-scroll-col-3,
+  .poster-scroll-col-4 {
     animation: none !important;
   }
 }

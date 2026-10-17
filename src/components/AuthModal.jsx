@@ -53,6 +53,15 @@ const FALLBACK_COLUMN_3 = [
   { title: 'Ratsasan', img: 'https://image.tmdb.org/t/p/w500/velWPhVMQeQKcxggNEU8YmIo52R.jpg' },
 ];
 
+const FALLBACK_COLUMN_4 = [
+  { title: 'Interstellar', img: 'https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg' },
+  { title: 'Gladiator', img: 'https://image.tmdb.org/t/p/w500/ty8TGRuvJLPUmAR1H1nRIsgwvim.jpg' },
+  { title: 'Top Gun Maverick', img: 'https://image.tmdb.org/t/p/w500/62HCnUTziyWcpDaBO2i1DX17ljH.jpg' },
+  { title: 'KGF Chapter 2', img: 'https://image.tmdb.org/t/p/w500/khC63vwhfegq4vGsaXb4w4xPqYy.jpg' },
+  { title: 'The Matrix', img: 'https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg' },
+  { title: 'Pulp Fiction', img: 'https://image.tmdb.org/t/p/w500/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg' },
+];
+
 // Module-level cache for TMDB movie posters so we never re-parse or re-fetch during animation
 let cachedTMDBPosterPool = null;
 
@@ -109,22 +118,24 @@ const getAvailableTMDBPosters = () => {
   FALLBACK_COLUMN_1.forEach((m) => add(m.title, m.img));
   FALLBACK_COLUMN_2.forEach((m) => add(m.title, m.img));
   FALLBACK_COLUMN_3.forEach((m) => add(m.title, m.img));
+  FALLBACK_COLUMN_4.forEach((m) => add(m.title, m.img));
 
-  if (pool.length >= 18) {
+  if (pool.length >= 24) {
     cachedTMDBPosterPool = pool;
   }
 
   return pool;
 };
 
-// Shuffles pool and returns 3 distinct columns of 6 posters each (18 unique posters)
+// Shuffles pool and returns 4 distinct columns of 6 posters each (24 unique posters)
 const getRandomPosterColumns = () => {
   const pool = getAvailableTMDBPosters();
-  if (pool.length < 18) {
+  if (pool.length < 24) {
     return {
       col1: FALLBACK_COLUMN_1,
       col2: FALLBACK_COLUMN_2,
       col3: FALLBACK_COLUMN_3,
+      col4: FALLBACK_COLUMN_4,
     };
   }
 
@@ -139,6 +150,7 @@ const getRandomPosterColumns = () => {
     col1: shuffled.slice(0, 6),
     col2: shuffled.slice(6, 12),
     col3: shuffled.slice(12, 18),
+    col4: shuffled.slice(18, 24),
   };
 };
 
@@ -146,7 +158,7 @@ const PosterCard = ({ title, img }) => {
   const [hasError, setHasError] = useState(false);
 
   return (
-    <div className="w-24 xs:w-28 sm:w-32 md:w-36 lg:w-44 xl:w-52 2xl:w-60 aspect-[2/3] rounded-xl lg:rounded-2xl xl:rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex-shrink-0 bg-neutral-900 group">
+    <div className="w-24 xs:w-28 sm:w-32 md:w-36 lg:w-40 xl:w-40 2xl:w-52 aspect-[2/3] rounded-xl lg:rounded-2xl xl:rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex-shrink-0 bg-neutral-900 group">
       {hasError ? (
         <div className="w-full h-full bg-gradient-to-br from-neutral-800 to-neutral-950 flex flex-col items-center justify-center p-2 text-center">
           <div className="w-6 h-6 rounded-full bg-red-600/30 flex items-center justify-center text-red-500 mb-1">MV</div>
@@ -167,15 +179,13 @@ const PosterCard = ({ title, img }) => {
 
 // Vintage 35mm film reel and ribbon graphic for desktop cinematic atmosphere matching reference image
 const CinematicFilmDecor = () => (
-  <div className="hidden lg:block absolute inset-0 pointer-events-none select-none z-10 overflow-hidden">
-    {/* Cinematic Red Nebula / Fog at bottom matching reference atmosphere */}
-    <div className="absolute -bottom-20 left-1/4 w-[700px] h-[400px] bg-red-600/20 rounded-full blur-[140px] pointer-events-none" />
-    <div className="absolute -bottom-10 right-1/4 w-[600px] h-[350px] bg-red-700/25 rounded-full blur-[160px] pointer-events-none" />
-    <div className="absolute bottom-10 left-1/3 w-[500px] h-[260px] bg-red-500/15 rounded-full blur-[120px] pointer-events-none" />
+  <div className="hidden lg:block absolute inset-0 pointer-events-none select-none z-[1] overflow-hidden">
+    {/* Subtle edge-only crimson atmosphere behind reel in bottom-left */}
+    <div className="absolute -bottom-16 -left-16 w-80 h-80 bg-red-950/20 rounded-full blur-[100px] pointer-events-none" />
 
-    {/* Top Arched 35mm Film Strip Ribbon */}
-    <div className="absolute -top-6 left-[28%] xl:left-[32%] w-[580px] xl:w-[680px] h-48 opacity-75">
-      <svg viewBox="0 0 680 190" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Top Arched 35mm Film Strip Ribbon (positioned in header area, completely clear of poster zone) */}
+    <div className="absolute -top-4 left-[22%] xl:left-[26%] w-[420px] xl:w-[480px] h-36 opacity-60">
+      <svg viewBox="0 0 480 140" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="filmTopGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#1a1a1a" stopOpacity="0.9" />
@@ -183,180 +193,146 @@ const CinematicFilmDecor = () => (
             <stop offset="100%" stopColor="#121212" stopOpacity="0.85" />
           </linearGradient>
           <linearGradient id="filmGlowRed" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#E50914" stopOpacity="0.3" />
-            <stop offset="50%" stopColor="#ff4d4d" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#E50914" stopOpacity="0.1" />
+            <stop offset="0%" stopColor="#E50914" stopOpacity="0.25" />
+            <stop offset="50%" stopColor="#ff4d4d" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#E50914" stopOpacity="0.05" />
           </linearGradient>
         </defs>
 
-        {/* Film strip body arching from top-left downwards towards top-right */}
+        {/* Film strip body arching gracefully and staying well to the left of the poster columns */}
         <path
-          d="M -20 18 C 180 8, 380 75, 690 185 L 678 225 C 370 115, 170 48, -20 58 Z"
+          d="M -10 20 C 130 10, 270 42, 420 115 L 410 148 C 260 76, 120 45, -10 56 Z"
           fill="url(#filmTopGrad)"
-          stroke="#404040"
-          strokeWidth="1.5"
+          stroke="#383838"
+          strokeWidth="1.2"
         />
         {/* Ambient red highlight along top edge */}
         <path
-          d="M -20 18 C 180 8, 380 75, 690 185"
+          d="M -10 20 C 130 10, 270 42, 420 115"
           stroke="url(#filmGlowRed)"
-          strokeWidth="2.5"
+          strokeWidth="2"
         />
 
         {/* Top sprocket perforations along the arch */}
         {[
-          { x: 20, y: 22, r: -5 },
-          { x: 65, y: 20, r: -2 },
-          { x: 110, y: 21, r: 2 },
-          { x: 155, y: 26, r: 6 },
-          { x: 200, y: 34, r: 10 },
-          { x: 245, y: 44, r: 14 },
-          { x: 290, y: 56, r: 17 },
-          { x: 335, y: 70, r: 20 },
-          { x: 380, y: 86, r: 22 },
-          { x: 425, y: 104, r: 24 },
-          { x: 470, y: 124, r: 25 },
-          { x: 515, y: 145, r: 26 },
-          { x: 560, y: 168, r: 26 },
+          { x: 20, y: 22, r: -4 },
+          { x: 65, y: 20, r: -1 },
+          { x: 110, y: 22, r: 3 },
+          { x: 155, y: 27, r: 7 },
+          { x: 200, y: 36, r: 11 },
+          { x: 245, y: 48, r: 15 },
+          { x: 290, y: 62, r: 18 },
+          { x: 335, y: 78, r: 21 },
+          { x: 380, y: 98, r: 23 },
         ].map((pt, idx) => (
           <rect
             key={`top-spk-${idx}`}
             x={pt.x}
             y={pt.y}
-            width="7"
-            height="11"
-            rx="1.5"
+            width="6.5"
+            height="10"
+            rx="1.2"
             transform={`rotate(${pt.r} ${pt.x} ${pt.y})`}
             fill="#050505"
-            stroke="#555"
-            strokeWidth="0.8"
+            stroke="#444"
+            strokeWidth="0.7"
           />
         ))}
 
-        {/* Film frame lines */}
+        {/* Film frame divider lines */}
         {[
           { d: "M 45 22 L 42 54" },
           { d: "M 135 24 L 130 60" },
           { d: "M 225 40 L 217 80" },
           { d: "M 315 64 L 303 108" },
-          { d: "M 405 96 L 390 144" },
-          { d: "M 495 135 L 477 185" },
         ].map((line, idx) => (
           <path
             key={`top-frm-${idx}`}
             d={line.d}
-            stroke="#3a3a3a"
-            strokeWidth="2"
-          />
-        ))}
-
-        {/* Film frame inner dark boxes */}
-        {[
-          { d: "M 52 26 C 90 26, 120 30, 125 32 L 122 55 C 90 53, 58 48, 50 48 Z" },
-          { d: "M 142 33 C 180 39, 210 49, 215 52 L 210 74 C 180 70, 148 60, 140 57 Z" },
-          { d: "M 232 50 C 270 60, 300 74, 305 78 L 297 101 C 265 96, 235 83, 227 79 Z" },
-          { d: "M 322 76 C 360 90, 390 108, 395 113 L 385 136 C 352 130, 322 114, 314 109 Z" },
-        ].map((box, idx) => (
-          <path
-            key={`top-box-${idx}`}
-            d={box.d}
-            fill="#080808"
-            fillOpacity="0.75"
-            stroke="#262626"
-            strokeWidth="1"
+            stroke="#303030"
+            strokeWidth="1.8"
           />
         ))}
       </svg>
     </div>
 
-    {/* Bottom Curving 35mm Film Strip Ribbon */}
-    <div className="absolute -bottom-10 left-[18%] xl:left-[22%] w-[480px] xl:w-[560px] h-36 opacity-70">
-      <svg viewBox="0 0 560 140" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Bottom Curving 35mm Film Strip Ribbon (tucked along bottom margin) */}
+    <div className="absolute -bottom-8 left-[14%] xl:left-[18%] w-[380px] xl:w-[440px] h-28 opacity-50">
+      <svg viewBox="0 0 440 110" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path
-          d="M 10 90 C 140 45, 290 85, 540 25 L 536 60 C 290 120, 140 80, 10 125 Z"
-          fill="#1c1c1c"
-          stroke="#383838"
-          strokeWidth="1.2"
+          d="M 10 70 C 110 35, 230 65, 420 20 L 416 48 C 230 92, 110 62, 10 98 Z"
+          fill="#161616"
+          stroke="#303030"
+          strokeWidth="1"
         />
         <path
-          d="M 10 90 C 140 45, 290 85, 540 25"
+          d="M 10 70 C 110 35, 230 65, 420 20"
           stroke="#E50914"
-          strokeWidth="1.8"
-          strokeOpacity="0.5"
+          strokeWidth="1.5"
+          strokeOpacity="0.3"
         />
         {/* Sprockets along bottom ribbon */}
         {[
-          { x: 40, y: 88, r: -15 },
-          { x: 90, y: 77, r: -12 },
-          { x: 140, y: 72, r: -4 },
-          { x: 190, y: 74, r: 3 },
-          { x: 240, y: 80, r: 8 },
-          { x: 290, y: 85, r: 6 },
-          { x: 340, y: 80, r: -2 },
-          { x: 390, y: 68, r: -10 },
-          { x: 440, y: 52, r: -14 },
-          { x: 490, y: 35, r: -16 },
+          { x: 35, y: 68, r: -14 },
+          { x: 75, y: 59, r: -10 },
+          { x: 115, y: 54, r: -3 },
+          { x: 155, y: 56, r: 4 },
+          { x: 195, y: 61, r: 7 },
+          { x: 235, y: 64, r: 5 },
+          { x: 275, y: 59, r: -2 },
+          { x: 315, y: 49, r: -9 },
+          { x: 355, y: 37, r: -13 },
         ].map((pt, idx) => (
           <rect
             key={`bot-spk-${idx}`}
             x={pt.x}
             y={pt.y}
-            width="6"
-            height="9"
-            rx="1.2"
+            width="5.5"
+            height="8"
+            rx="1"
             transform={`rotate(${pt.r} ${pt.x} ${pt.y})`}
             fill="#050505"
-            stroke="#484848"
-            strokeWidth="0.7"
+            stroke="#3a3a3a"
+            strokeWidth="0.6"
           />
         ))}
       </svg>
     </div>
 
-    {/* Vintage Metallic 35mm Film Reel Wheel (Bottom Left Corner) */}
-    <div className="absolute -bottom-16 -left-16 sm:-bottom-12 sm:-left-12 xl:-bottom-10 xl:-left-10 w-[300px] h-[300px] xl:w-[350px] xl:h-[350px] 2xl:w-[390px] 2xl:h-[390px] pointer-events-none select-none">
-      <svg viewBox="0 0 350 350" className="w-full h-full drop-shadow-[0_0_35px_rgba(229,9,20,0.3)]" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Vintage Metallic 35mm Film Reel Wheel (Subtle in Bottom Left Corner) */}
+    <div className="absolute -bottom-16 -left-16 sm:-bottom-12 sm:-left-12 xl:-bottom-10 xl:-left-10 w-[270px] h-[270px] xl:w-[320px] xl:h-[320px] pointer-events-none select-none opacity-45">
+      <svg viewBox="0 0 350 350" className="w-full h-full drop-shadow-[0_0_25px_rgba(229,9,20,0.15)]" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          {/* Metallic brushed steel gradients */}
           <linearGradient id="metalRimOuter" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#7a7a7a" />
-            <stop offset="25%" stopColor="#b8b8b8" />
-            <stop offset="45%" stopColor="#ffffff" />
-            <stop offset="65%" stopColor="#555555" />
-            <stop offset="85%" stopColor="#8a8a8a" />
-            <stop offset="100%" stopColor="#2e2e2e" />
+            <stop offset="0%" stopColor="#666" />
+            <stop offset="25%" stopColor="#999" />
+            <stop offset="45%" stopColor="#ddd" />
+            <stop offset="65%" stopColor="#444" />
+            <stop offset="85%" stopColor="#777" />
+            <stop offset="100%" stopColor="#222" />
           </linearGradient>
 
           <linearGradient id="metalRimInner" x1="100%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#3d3d3d" />
-            <stop offset="35%" stopColor="#666666" />
-            <stop offset="50%" stopColor="#8c8c8c" />
-            <stop offset="70%" stopColor="#444444" />
-            <stop offset="100%" stopColor="#1a1a1a" />
+            <stop offset="0%" stopColor="#333" />
+            <stop offset="35%" stopColor="#555" />
+            <stop offset="50%" stopColor="#777" />
+            <stop offset="70%" stopColor="#3a3a3a" />
+            <stop offset="100%" stopColor="#141414" />
           </linearGradient>
 
           <radialGradient id="spindleHub" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#111" />
-            <stop offset="40%" stopColor="#333" />
-            <stop offset="85%" stopColor="#777" />
-            <stop offset="100%" stopColor="#222" />
-          </radialGradient>
-
-          <radialGradient id="reelRedAtmosphere" cx="65%" cy="35%" r="70%">
-            <stop offset="0%" stopColor="#E50914" stopOpacity="0.45" />
-            <stop offset="45%" stopColor="#8B0000" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+            <stop offset="0%" stopColor="#0d0d0d" />
+            <stop offset="40%" stopColor="#282828" />
+            <stop offset="85%" stopColor="#666" />
+            <stop offset="100%" stopColor="#1a1a1a" />
           </radialGradient>
         </defs>
 
-        {/* Ambient red backlight behind the reel */}
-        <circle cx="175" cy="175" r="160" fill="url(#reelRedAtmosphere)" />
-
         {/* Film reel outer flange base */}
-        <circle cx="175" cy="175" r="150" fill="#181818" stroke="url(#metalRimOuter)" strokeWidth="6" />
+        <circle cx="175" cy="175" r="150" fill="#121212" stroke="url(#metalRimOuter)" strokeWidth="5" />
 
         {/* Outer concentric metallic groove */}
-        <circle cx="175" cy="175" r="142" stroke="url(#metalRimInner)" strokeWidth="2.5" fill="none" />
+        <circle cx="175" cy="175" r="142" stroke="url(#metalRimInner)" strokeWidth="2" fill="none" />
 
         {/* Sprocket holes on outer perimeter of reel */}
         {Array.from({ length: 32 }).map((_, i) => {
@@ -369,41 +345,39 @@ const CinematicFilmDecor = () => (
               key={`reel-spk-${i}`}
               cx={x}
               cy={y}
-              r="3.5"
+              r="3"
               fill="#060606"
-              stroke="#666"
-              strokeWidth="1"
+              stroke="#555"
+              strokeWidth="0.8"
             />
           );
         })}
 
-        {/* Film roll winding ring behind spokes */}
-        <circle cx="175" cy="175" r="115" fill="#120e0e" stroke="#2a1f1f" strokeWidth="1" />
+        {/* Film roll winding ring */}
+        <circle cx="175" cy="175" r="115" fill="#0d0d0d" stroke="#222" strokeWidth="1" />
 
-        {/* 6 Large circular weight-reduction cutouts of classical 35mm film reel */}
+        {/* 6 Circular cutouts of 35mm film reel */}
         {[0, 60, 120, 180, 240, 300].map((angle, idx) => {
           const rad = (angle * Math.PI) / 180;
           const cx = 175 + 72 * Math.cos(rad);
           const cy = 175 + 72 * Math.sin(rad);
           return (
             <g key={`spoke-hole-${idx}`}>
-              {/* Hole shadow */}
               <circle cx={cx} cy={cy} r="28" fill="#050505" />
-              {/* Metallic beveled rim on hole */}
               <circle
                 cx={cx}
                 cy={cy}
                 r="28"
                 stroke="url(#metalRimOuter)"
-                strokeWidth="2.5"
+                strokeWidth="2"
                 fill="none"
               />
               <circle
                 cx={cx}
                 cy={cy}
                 r="25.5"
-                stroke="#1f1f1f"
-                strokeWidth="1.5"
+                stroke="#1a1a1a"
+                strokeWidth="1.2"
                 fill="none"
               />
             </g>
@@ -425,23 +399,23 @@ const CinematicFilmDecor = () => (
               x2={x2}
               y2={y2}
               stroke="url(#metalRimInner)"
-              strokeWidth="4"
+              strokeWidth="3.5"
               strokeLinecap="round"
             />
           );
         })}
 
         {/* Central Spindle Hub */}
-        <circle cx="175" cy="175" r="44" fill="url(#spindleHub)" stroke="url(#metalRimOuter)" strokeWidth="3" />
-        <circle cx="175" cy="175" r="28" fill="#141414" stroke="#4a4a4a" strokeWidth="2" />
-        <circle cx="175" cy="175" r="14" fill="#000000" stroke="#777" strokeWidth="2" />
+        <circle cx="175" cy="175" r="44" fill="url(#spindleHub)" stroke="url(#metalRimOuter)" strokeWidth="2.5" />
+        <circle cx="175" cy="175" r="28" fill="#111" stroke="#3d3d3d" strokeWidth="1.5" />
+        <circle cx="175" cy="175" r="14" fill="#050505" stroke="#666" strokeWidth="1.5" />
 
-        {/* Red edge specular lighting reflection on the metallic reel */}
+        {/* Subtle red edge reflection on top-right quadrant */}
         <path
           d="M 175 25 A 150 150 0 0 1 325 175"
           stroke="#E50914"
-          strokeWidth="3"
-          strokeOpacity="0.65"
+          strokeWidth="2"
+          strokeOpacity="0.4"
           fill="none"
         />
       </svg>
@@ -450,41 +424,51 @@ const CinematicFilmDecor = () => (
 );
 
 // Continuous vertical scrolling poster collage (from top to bottom)
+// On compact desktop (1024-1279px) & mobile: displays 3 columns
+// On wide desktop (1280px+): displays 4 columns
 const MoviePosterCollage = ({ columns }) => {
-  const { col1, col2, col3 } = columns || {
+  const { col1, col2, col3, col4 } = columns || {
     col1: FALLBACK_COLUMN_1,
     col2: FALLBACK_COLUMN_2,
     col3: FALLBACK_COLUMN_3,
+    col4: FALLBACK_COLUMN_4,
   };
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-black select-none pointer-events-none flex items-start justify-center">
-      {/* Edge gradient overlays for seamless blending into form & edges */}
-      <div className="hidden md:block absolute inset-y-0 left-0 w-24 lg:w-48 xl:w-60 bg-gradient-to-r from-black via-black/85 to-transparent z-10" />
-      <div className="absolute inset-x-0 top-0 h-24 lg:h-36 xl:h-44 bg-gradient-to-b from-black to-transparent z-10" />
-      <div className="absolute inset-x-0 bottom-0 h-24 lg:h-36 xl:h-44 bg-gradient-to-t from-black to-transparent z-10" />
-      <div className="hidden lg:block absolute inset-y-0 right-0 w-20 xl:w-32 bg-gradient-to-l from-black/70 to-transparent z-10" />
+    <div className="relative w-full h-full overflow-hidden bg-[#060606] select-none pointer-events-none flex items-start justify-center">
+      {/* Edge gradient overlays: narrow soft transition to blend into black background */}
+      <div className="hidden md:block absolute inset-y-0 left-0 w-16 lg:w-16 xl:w-20 bg-gradient-to-r from-[#060606] via-[#060606]/60 to-transparent z-10" />
+      <div className="absolute inset-x-0 top-0 h-20 lg:h-28 xl:h-32 bg-gradient-to-b from-[#060606] to-transparent z-10" />
+      <div className="absolute inset-x-0 bottom-0 h-20 lg:h-28 xl:h-32 bg-gradient-to-t from-[#060606] to-transparent z-10" />
+      <div className="hidden lg:block absolute inset-y-0 right-0 w-16 xl:w-20 bg-gradient-to-l from-[#060606]/80 to-transparent z-10" />
 
-      {/* Angled and scaled collage container anchored at top */}
-      <div className="transform -rotate-12 origin-top scale-105 xs:scale-110 sm:scale-125 lg:scale-100 xl:scale-105 2xl:scale-115 flex gap-3.5 sm:gap-4 lg:gap-5 xl:gap-6 -mt-6 lg:-mt-10">
+      {/* Angled and scaled collage container anchored at top, shifted slightly left on desktop to reduce center gap */}
+      <div className="transform -rotate-12 origin-top scale-105 xs:scale-110 sm:scale-125 lg:scale-100 xl:scale-100 2xl:scale-105 flex gap-3.5 sm:gap-4 lg:gap-4 xl:gap-4 2xl:gap-5 -mt-6 lg:-mt-10 lg:-ml-6 xl:-ml-10 2xl:-ml-12">
         {/* Column 1: Smooth continuous vertical scroll */}
-        <div className="flex flex-col gap-4 lg:gap-5 xl:gap-6 poster-scroll-col-1">
+        <div className="flex flex-col gap-4 lg:gap-4 xl:gap-4 2xl:gap-5 poster-scroll-col-1">
           {[...col1, ...col1, ...col1, ...col1].map((poster, idx) => (
             <PosterCard key={`c1-${idx}`} title={poster.title} img={poster.img} />
           ))}
         </div>
 
         {/* Column 2: Smooth continuous vertical scroll */}
-        <div className="flex flex-col gap-4 lg:gap-5 xl:gap-6 poster-scroll-col-2">
+        <div className="flex flex-col gap-4 lg:gap-4 xl:gap-4 2xl:gap-5 poster-scroll-col-2">
           {[...col2, ...col2, ...col2, ...col2].map((poster, idx) => (
             <PosterCard key={`c2-${idx}`} title={poster.title} img={poster.img} />
           ))}
         </div>
 
         {/* Column 3: Smooth continuous vertical scroll */}
-        <div className="flex flex-col gap-4 lg:gap-5 xl:gap-6 poster-scroll-col-3">
+        <div className="flex flex-col gap-4 lg:gap-4 xl:gap-4 2xl:gap-5 poster-scroll-col-3">
           {[...col3, ...col3, ...col3, ...col3].map((poster, idx) => (
             <PosterCard key={`c3-${idx}`} title={poster.title} img={poster.img} />
+          ))}
+        </div>
+
+        {/* Column 4: Visible only on wide desktop (1280px+), hidden on compact desktop & mobile */}
+        <div className="hidden xl:flex flex-col gap-4 xl:gap-4 2xl:gap-5 poster-scroll-col-4">
+          {[...(col4 || FALLBACK_COLUMN_4), ...(col4 || FALLBACK_COLUMN_4), ...(col4 || FALLBACK_COLUMN_4), ...(col4 || FALLBACK_COLUMN_4)].map((poster, idx) => (
+            <PosterCard key={`c4-${idx}`} title={poster.title} img={poster.img} />
           ))}
         </div>
       </div>
@@ -729,15 +713,10 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
       aria-labelledby="auth-modal-title"
     >
       <div 
-        className="w-full h-full md:max-w-4xl md:h-[580px] md:max-h-[92vh] md:bg-[#0e0e0e] md:border md:border-white/10 md:rounded-3xl md:shadow-2xl lg:max-w-none lg:w-screen lg:h-screen lg:h-[100dvh] lg:max-h-none lg:bg-black lg:border-0 lg:rounded-none lg:shadow-none relative overflow-hidden flex flex-row items-center md:items-stretch lg:items-stretch justify-start md:justify-between text-white animate-in zoom-in-95 lg:zoom-in-100 duration-200"
+        className="w-full h-full md:max-w-4xl md:h-[580px] md:max-h-[92vh] md:bg-[#0e0e0e] md:border md:border-white/10 md:rounded-3xl md:shadow-2xl lg:max-w-none lg:w-screen lg:h-screen lg:h-[100dvh] lg:max-h-none lg:bg-[#060606] lg:border-0 lg:rounded-none lg:shadow-none relative overflow-hidden flex flex-row items-center md:items-stretch lg:items-stretch justify-start md:justify-between text-white animate-in zoom-in-95 lg:zoom-in-100 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Desktop Atmospheric Cinematic Lighting Glows (1024px+ only) */}
-        <div className="hidden lg:block absolute -top-32 -left-32 w-[600px] h-[600px] bg-red-600/10 rounded-full blur-[140px] pointer-events-none z-10" />
-        <div className="hidden lg:block absolute -bottom-24 left-10 w-[650px] h-[650px] bg-red-700/15 rounded-full blur-[160px] pointer-events-none z-10" />
-        <div className="hidden lg:block absolute bottom-0 left-1/3 w-[700px] h-[350px] bg-red-900/12 rounded-full blur-[140px] pointer-events-none z-10" />
-
-        {/* Vintage 35mm Film Decor (Bottom-Left Reel & Ribbon on desktop) */}
+        {/* Vintage 35mm Film Decor (Subtle in Bottom-Left Corner & Ribbon, behind posters) */}
         <CinematicFilmDecor />
 
         {/* Desktop Top Header Bar (1024px+): Logo Left, Back to Browsing Right */}
@@ -787,7 +766,7 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
         */}
         <div 
           ref={cardRef}
-          className="relative z-20 w-[calc(100%-3.75rem)] xs:w-[calc(100%-4.5rem)] sm:w-[calc(100%-5.5rem)] max-w-[340px] sm:max-w-[370px] ml-2 xs:ml-3 sm:ml-4 my-auto bg-[#0e0e0e]/95 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl p-4 xs:p-5 sm:p-6 md:p-8 md:w-[48%] md:max-w-none md:ml-0 md:my-0 md:h-full md:self-stretch md:border-0 md:rounded-none md:shadow-none md:bg-[#0e0e0e] lg:w-[48%] xl:w-[44%] 2xl:w-[42%] lg:max-w-[480px] xl:max-w-[520px] 2xl:max-w-[560px] lg:h-full lg:bg-transparent lg:border-0 lg:rounded-none lg:shadow-none lg:p-0 lg:pl-10 xl:pl-16 2xl:pl-24 lg:pr-6 lg:flex lg:flex-col lg:justify-center lg:items-start lg:my-0 lg:ml-0 lg:self-stretch lg:overflow-visible flex flex-col justify-between overflow-y-auto overscroll-contain touch-pan-y max-h-[92vh] max-h-[92dvh] md:max-h-none"
+          className="relative z-20 w-[calc(100%-3.75rem)] xs:w-[calc(100%-4.5rem)] sm:w-[calc(100%-5.5rem)] max-w-[340px] sm:max-w-[370px] ml-2 xs:ml-3 sm:ml-4 my-auto bg-[#0e0e0e]/95 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl p-4 xs:p-5 sm:p-6 md:p-8 md:w-[48%] md:max-w-none md:ml-0 md:my-0 md:h-full md:self-stretch md:border-0 md:rounded-none md:shadow-none md:bg-[#0e0e0e] lg:w-[46%] xl:w-[42%] 2xl:w-[38%] lg:max-w-[460px] xl:max-w-[500px] 2xl:max-w-[540px] lg:h-full lg:bg-transparent lg:border-0 lg:rounded-none lg:shadow-none lg:p-0 lg:pl-10 xl:pl-16 2xl:pl-24 lg:pr-4 lg:flex lg:flex-col lg:justify-center lg:items-start lg:my-0 lg:ml-0 lg:self-stretch lg:overflow-visible flex flex-col justify-between overflow-y-auto overscroll-contain touch-pan-y max-h-[92vh] max-h-[92dvh] md:max-h-none"
         >
           <div className="w-full">
             {/* Header: Logo and Mobile Close Button (Mobile / Tablet only) */}
@@ -1023,9 +1002,9 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
         {/* POSTER COLLAGE:
             On mobile: absolute inset-0 z-0 (spans full background of the modal, clearly visible on the right strip & surrounding the card)
             On tablet: relative w-[52%] h-[580px] z-0 (standard right column)
-            On desktop (1024px+): full height right column (52% - 60% width)
+            On desktop (1024px+): full height right column (54% - 62% width), z-10 above decorative ribbons
         */}
-        <div className="absolute inset-0 md:relative md:inset-auto md:w-[52%] md:h-[580px] lg:w-[52%] xl:w-[56%] 2xl:w-[58%] lg:h-full lg:self-stretch z-0 overflow-hidden bg-black flex items-start justify-center select-none pointer-events-none">
+        <div className="absolute inset-0 md:relative md:inset-auto md:w-[52%] md:h-[580px] lg:w-[54%] xl:w-[58%] 2xl:w-[62%] lg:h-full lg:self-stretch z-10 overflow-hidden bg-[#060606] flex items-start justify-center select-none pointer-events-none">
           <MoviePosterCollage key={`collage-${animKey}`} columns={posterColumns} />
         </div>
       </div>
