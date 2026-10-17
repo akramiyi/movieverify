@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, ShieldCheck, AlertCircle, Loader2, Lock, User, Mail, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 
@@ -247,6 +247,84 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
+  // Refs for touch-scroll containment
+  const overlayRef = useRef(null);
+  const cardRef = useRef(null);
+
+  // Lock document / body scrolling while modal is open, and restore original scroll position on close
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Capture current scroll position across all browsers
+    const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    // Save previous inline styles
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyOverflowY = document.body.style.overflowY;
+    const prevBodyPosition = document.body.style.position;
+    const prevBodyTop = document.body.style.top;
+    const prevBodyLeft = document.body.style.left;
+    const prevBodyRight = document.body.style.right;
+    const prevBodyWidth = document.body.style.width;
+    const prevBodyPaddingRight = document.body.style.paddingRight;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevHtmlOverflowY = document.documentElement.style.overflowY;
+
+    // Apply mobile-bulletproof scroll lock to both documentElement and body
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.overflowY = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.overflowY = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      // Revert styles when modal closes or unmounts
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.documentElement.style.overflowY = prevHtmlOverflowY;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.overflowY = prevBodyOverflowY;
+      document.body.style.position = prevBodyPosition;
+      document.body.style.top = prevBodyTop;
+      document.body.style.left = prevBodyLeft;
+      document.body.style.right = prevBodyRight;
+      document.body.style.width = prevBodyWidth;
+      document.body.style.paddingRight = prevBodyPaddingRight;
+
+      // Restore exact scroll position
+      window.scrollTo(0, scrollY);
+    };
+  }, [isOpen]);
+
+  // Handle touch events on mobile: prevent accidental background scrolling when dragging outside the card
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    const handleTouchMove = (e) => {
+      // If the touch is outside the scrollable login card, prevent background scroll/overscroll
+      if (cardRef.current && !cardRef.current.contains(e.target)) {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    overlay.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      overlay.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [isOpen]);
+
   // Close on Escape key press
   useEffect(() => {
     if (!isOpen) return;
@@ -358,7 +436,8 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
 
   return (
     <div 
-      className="fixed inset-0 z-[160] flex items-center justify-start md:justify-center p-0 md:p-4 bg-black/90 md:bg-black/85 backdrop-blur-md transition-opacity animate-in fade-in duration-200 overflow-hidden"
+      ref={overlayRef}
+      className="fixed inset-0 w-full h-full h-[100dvh] min-h-[100dvh] z-[1000] flex items-center justify-start md:justify-center p-0 md:p-4 bg-black/90 md:bg-black/85 backdrop-blur-md transition-opacity animate-in fade-in duration-200 overflow-hidden overscroll-none touch-none"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -382,7 +461,10 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
             On mobile: floating translucent card on the left leaving right poster strip visible
             On desktop: left column (48% width)
         */}
-        <div className="relative z-20 w-[calc(100%-3.75rem)] xs:w-[calc(100%-4.5rem)] sm:w-[calc(100%-5.5rem)] max-w-[340px] sm:max-w-[370px] ml-2 xs:ml-3 sm:ml-4 my-auto bg-[#0e0e0e]/95 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl p-4 xs:p-5 sm:p-6 md:p-8 lg:p-10 md:w-[48%] md:max-w-none md:ml-0 md:my-0 md:h-full md:self-stretch md:border-0 md:rounded-none md:shadow-none md:bg-[#0e0e0e] flex flex-col justify-between overflow-y-auto max-h-[92vh] md:max-h-none">
+        <div 
+          ref={cardRef}
+          className="relative z-20 w-[calc(100%-3.75rem)] xs:w-[calc(100%-4.5rem)] sm:w-[calc(100%-5.5rem)] max-w-[340px] sm:max-w-[370px] ml-2 xs:ml-3 sm:ml-4 my-auto bg-[#0e0e0e]/95 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl p-4 xs:p-5 sm:p-6 md:p-8 lg:p-10 md:w-[48%] md:max-w-none md:ml-0 md:my-0 md:h-full md:self-stretch md:border-0 md:rounded-none md:shadow-none md:bg-[#0e0e0e] flex flex-col justify-between overflow-y-auto overscroll-contain touch-pan-y max-h-[92vh] max-h-[92dvh] md:max-h-none"
+        >
           <div>
             {/* Header: Logo and Mobile Close Button */}
             <div className="flex items-center justify-between mb-4 sm:mb-6">
