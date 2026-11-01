@@ -47,12 +47,12 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
 
   useEffect(() => {
     if (movie && movie.id) {
-      if (!isNaN(parsedId)) {
-        fetchTMDBDetails(parsedId, resolvedMediaType || 'movie').then((res) => {
+      if (!isNaN(parsedId) && resolvedMediaType) {
+        fetchTMDBDetails(parsedId, resolvedMediaType).then((res) => {
           setDetails({
-            cast: res.cast || 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
-            trailerUrl: res.trailerUrl || '',
-            runtime: res.runtime || null
+            cast: res.cast || movie.cast || 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
+            trailerUrl: res.trailerUrl || movie.trailerUrl || '',
+            runtime: res.runtime || movie.runtime || null
           });
         });
       } else {

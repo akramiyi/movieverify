@@ -27,25 +27,37 @@ export const activeLinks = { ...staticDownloadLinks };
 
 export const getMediaTypeFromId = (id) => {
   const parsedId = parseInt(String(id).split('-')[0], 10);
-  if (isNaN(parsedId)) return null;
+  if (isNaN(parsedId) || parsedId <= 0) return null;
 
-  if (String(id).includes('-tv')) return 'tv';
-  if (String(id).includes('-movie')) return 'movie';
+  const idStr = String(id || '');
+  const hasTvSuffix = idStr.includes('-tv');
+  const hasMovieSuffix = idStr.includes('-movie');
+  if (hasTvSuffix && hasMovieSuffix) return null;
+  if (hasTvSuffix) return 'tv';
+  if (hasMovieSuffix) return 'movie';
 
-  if (activeLinks[`${parsedId}-tv`]) return 'tv';
-  if (activeLinks[`${parsedId}-movie`]) return 'movie';
+  // Check download-link keys: if both TV and Movie entries exist for one ID, treat as ambiguous
+  const hasTvLink = !!(activeLinks && activeLinks[`${parsedId}-tv`]);
+  const hasMovieLink = !!(activeLinks && activeLinks[`${parsedId}-movie`]);
+  if (hasTvLink && hasMovieLink) {
+    return null;
+  }
+  if (hasTvLink) return 'tv';
+  if (hasMovieLink) return 'movie';
 
-  const localMatch = localMovies.find(m => String(m.id) === String(parsedId) || String(m.id) === `${parsedId}-tv`);
+  const localMatch = localMovies.find(m => String(m.id) === String(parsedId) || String(m.id) === `${parsedId}-tv` || String(m.id) === `${parsedId}-movie`);
   if (localMatch) {
-    if (localMatch.mediaType) return localMatch.mediaType;
-    if (localMatch.seasons && localMatch.seasons.length > 0) return 'tv';
+    if (localMatch.mediaType === 'tv' || localMatch.mediaType === 'movie') return localMatch.mediaType;
+    if (localMatch.media_type === 'tv' || localMatch.media_type === 'movie') return localMatch.media_type;
+    if (localMatch.seasons && Array.isArray(localMatch.seasons) && localMatch.seasons.length > 0) return 'tv';
     if (localMatch.genre && (
       localMatch.genre.toLowerCase().includes('web series') ||
-      localMatch.genre.toLowerCase().includes('tv')
+      localMatch.genre.toLowerCase().includes('tv series')
     )) {
       return 'tv';
     }
-    return 'movie';
+    // Fail-closed: untyped local catalog records return null (no implicit fallback)
+    return null;
   }
 
   return null;
@@ -557,12 +569,46 @@ export const searchTMDB = async (query) => {
 
 // Details Fetch Helper
 export const fetchTMDBDetails = async (id, mediaType) => {
+  const parsedId = parseInt(String(id).split('-')[0], 10);
+  if (isNaN(parsedId) || parsedId <= 0) {
+    return {
+      runtime: null,
+      cast: 'Placeholder Actor 1, Placeholder Actor 2',
+      trailerUrl: ''
+    };
+  }
+
+  // Accept only explicitly verified 'movie' or 'tv', or attempt trusted ID/catalog resolution
+  let resolvedType = null;
+  if (mediaType === 'tv' || mediaType === 'movie') {
+    resolvedType = mediaType;
+  } else {
+    const fromId = getMediaTypeFromId(id);
+    if (fromId === 'tv' || fromId === 'movie') {
+      resolvedType = fromId;
+    }
+  }
+
+  // If still ambiguous, return safe empty details without making a speculative TMDB request
+  if (!resolvedType) {
+    return {
+      runtime: null,
+      cast: 'Placeholder Actor 1, Placeholder Actor 2',
+      trailerUrl: ''
+    };
+  }
+
   try {
-    const type = mediaType === 'tv' ? 'tv' : 'movie';
-    const parsedId = parseInt(String(id).split('-')[0], 10);
-    const endpoint = `/${type}/${parsedId}?append_to_response=credits,videos&include_video_language=en,hi,te,ta,ml,null`;
+    const endpoint = `/${resolvedType}/${parsedId}?append_to_response=credits,videos&include_video_language=en,hi,te,ta,ml,null`;
 
     const res = await fetchTMDB(endpoint);
+    if (!res) {
+      return {
+        runtime: null,
+        cast: 'Placeholder Actor 1, Placeholder Actor 2',
+        trailerUrl: ''
+      };
+    }
 
     let trailerUrl = '';
     if (res.videos && res.videos.results && res.videos.results.length > 0) {
@@ -575,7 +621,7 @@ export const fetchTMDBDetails = async (id, mediaType) => {
       }
     }
 
-    const castList = (res.credits && res.credits.cast)
+    const castList = (res.credits && res.credits.cast && res.credits.cast.length > 0)
       ? res.credits.cast.slice(0, 5).map(c => c.name).join(', ')
       : 'Placeholder Actor 1, Placeholder Actor 2';
 
