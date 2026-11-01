@@ -136,7 +136,8 @@ export const movies = [
     ],
     featured: false,
     trending: true,
-    latest: true
+    latest: true,
+    mediaType: "tv"
   },
   {
     id: 1215162,
@@ -208,7 +209,8 @@ export const movies = [
     description: "When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces and one strange little girl.",
     trailerUrl: "#",
     download480p: "#", download720p: "#", download1080p: "#",
-    featured: true, trending: true, latest: false
+    featured: true, trending: true, latest: false,
+    mediaType: "tv"
   },
   {
     id: 864692,
@@ -259,7 +261,8 @@ export const movies = [
     description: "An unusual group of robbers attempt to carry out the most perfect robbery in Spanish history - stealing 2.4 billion euros from the Royal Mint of Spain.",
     trailerUrl: "#",
     download480p: "#", download720p: "#", download1080p: "#",
-    featured: false, trending: true, latest: false
+    featured: false, trending: true, latest: false,
+    mediaType: "tv"
   }
 ];
 

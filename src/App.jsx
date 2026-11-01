@@ -16,7 +16,8 @@ import IntroAnimation from './components/IntroAnimation';
 import SearchFilters from './components/SearchFilters';
 import SupportSection from './components/SupportSection';
 
-import { useTMDB, searchTMDB } from './hooks/useTMDB';
+import { useTMDB, searchTMDB, fetchMovieOrTVById } from './hooks/useTMDB';
+import Toast from './components/Toast';
 import { useLatestIndiaRelease } from './hooks/useLatestIndiaRelease';
 import InstallPWA from './components/InstallPWA';
 import ActorsRow from './components/ActorsRow';
@@ -41,10 +42,52 @@ function App() {
     return !localStorage.getItem('introShown');
   });
   const [selectedMovie, setSelectedMovie] = useState(null);
+  const [deepLinkLoading, setDeepLinkLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [showToast, setShowToast] = useState(false);
 
   const handleMovieSelect = (movie) => {
+    if (!movie) return;
     setSelectedMovie(movie);
     addToRecentlyViewed(movie);
+
+    // Canonical deep-link URL format: /?type=movie&id=550 or /?type=tv&id=71446
+    const cleanId = String(movie.id).split('-')[0];
+    const mediaType = movie.mediaType || (
+      String(movie.id).includes('-tv') ? 'tv' : (
+        movie.seasons || (movie.genre && movie.genre.toLowerCase().includes('web series')) ? 'tv' : 'movie'
+      )
+    );
+
+    const searchParams = new URLSearchParams(location.search);
+    const currentId = searchParams.get('id') || searchParams.get('movie') || searchParams.get('tv');
+
+    if (currentId !== cleanId) {
+      searchParams.set('type', mediaType === 'tv' ? 'tv' : 'movie');
+      searchParams.set('id', cleanId);
+      searchParams.delete('movie');
+      searchParams.delete('tv');
+      navigate({
+        pathname: location.pathname,
+        search: `?${searchParams.toString()}`
+      }, { replace: false });
+    }
+  };
+
+  const handleCloseMovieModal = () => {
+    setSelectedMovie(null);
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.has('id') || searchParams.has('movie') || searchParams.has('tv') || searchParams.has('type')) {
+      searchParams.delete('id');
+      searchParams.delete('type');
+      searchParams.delete('movie');
+      searchParams.delete('tv');
+      const newSearch = searchParams.toString();
+      navigate({
+        pathname: location.pathname,
+        search: newSearch ? `?${newSearch}` : ''
+      }, { replace: true });
+    }
   };
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('home');
@@ -98,13 +141,17 @@ function App() {
     // Do not show if dismissed during this active browsing session
     if (authPopupDismissed) return;
 
+    // If visitor opened a shared deep link, prioritize title viewing without immediate popup
+    const initialParams = new URLSearchParams(location.search);
+    if (initialParams.has('id') || initialParams.has('movie') || initialParams.has('tv')) return;
+
     let isMounted = true;
 
     const initAuth = async () => {
       try {
         // Asynchronously check Supabase session
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         // Authenticated users must never see the automatic login popup
         if (!isMounted || session?.user || showAdmin || location.pathname === '/admin') {
           return;
@@ -154,7 +201,7 @@ function App() {
         }
 
         const alreadyUnlocked = sessionStorage.getItem('movieverify_unlocked');
-        
+
         if (data?.is_locked && !alreadyUnlocked) {
           setSiteLocked(true);
         }
@@ -170,7 +217,7 @@ function App() {
   useEffect(() => {
     setSeeAllSection(null);
   }, [activeTab, searchQuery]);
-  
+
   const {
     trending,
     popular,
@@ -182,6 +229,127 @@ function App() {
     isLoading: isTMDBLoading,
     error: tmdbError
   } = useTMDB();
+
+  // Handle URL deep-linking on initial load, refresh, and browser back/forward navigation
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const rawId = searchParams.get('id') || searchParams.get('movie') || searchParams.get('tv');
+
+    // If no deep link in URL and a movie is currently open, close it (e.g. browser back button)
+    if (!rawId) {
+      if (selectedMovie) {
+        setSelectedMovie(null);
+      }
+      return;
+    }
+
+    const cleanId = String(rawId).split('-')[0].trim();
+    const parsedId = parseInt(cleanId, 10);
+
+    // Handle invalid TMDB ID
+    if (isNaN(parsedId) || parsedId <= 0) {
+      setToastMessage('Invalid title link.');
+      setShowToast(true);
+      const cleanParams = new URLSearchParams(location.search);
+      cleanParams.delete('id');
+      cleanParams.delete('movie');
+      cleanParams.delete('tv');
+      cleanParams.delete('type');
+      const newSearch = cleanParams.toString();
+      navigate({
+        pathname: location.pathname,
+        search: newSearch ? `?${newSearch}` : ''
+      }, { replace: true });
+      return;
+    }
+
+    // If already displaying this movie, avoid redundant fetches
+    if (selectedMovie && String(selectedMovie.id).split('-')[0] === String(parsedId)) {
+      return;
+    }
+
+    let requestedType = searchParams.get('type');
+    if (requestedType) {
+      requestedType = requestedType.toLowerCase().trim();
+      if (requestedType !== 'tv' && requestedType !== 'movie') {
+        requestedType = null;
+      }
+    } else if (searchParams.has('tv')) {
+      requestedType = 'tv';
+    }
+
+    let isCancelled = false;
+
+    const loadDeepLink = async () => {
+      setDeepLinkLoading(true);
+
+      // Check in-memory pool first for instant loading
+      const inMemoryPool = [
+        ...(featured || []),
+        ...(trending || []),
+        ...(popular || []),
+        ...(bollywood || []),
+        ...(southIndian || []),
+        ...(webSeries || []),
+        ...(downloadAvailable || []),
+        ...(myList || []),
+        ...(recentlyViewed || [])
+      ];
+
+      const foundInMemory = inMemoryPool.find((m) => {
+        const mId = String(m.id).split('-')[0];
+        if (mId !== String(parsedId)) return false;
+        if (requestedType && m.mediaType && m.mediaType !== requestedType) return false;
+        return true;
+      });
+
+      if (foundInMemory && !isCancelled) {
+        setSelectedMovie(foundInMemory);
+        addToRecentlyViewed(foundInMemory);
+        setDeepLinkLoading(false);
+        return;
+      }
+
+      try {
+        const titleData = await fetchMovieOrTVById(parsedId, requestedType);
+        if (isCancelled) return;
+
+        if (titleData) {
+          setSelectedMovie(titleData);
+          addToRecentlyViewed(titleData);
+        } else {
+          setToastMessage('Title not found or unavailable.');
+          setShowToast(true);
+          const cleanParams = new URLSearchParams(location.search);
+          cleanParams.delete('id');
+          cleanParams.delete('movie');
+          cleanParams.delete('tv');
+          cleanParams.delete('type');
+          const newSearch = cleanParams.toString();
+          navigate({
+            pathname: location.pathname,
+            search: newSearch ? `?${newSearch}` : ''
+          }, { replace: true });
+        }
+      } catch (err) {
+        console.error('Deep link fetch error:', err);
+        if (!isCancelled) {
+          setToastMessage('Error loading title details.');
+          setShowToast(true);
+        }
+      } finally {
+        if (!isCancelled) {
+          setDeepLinkLoading(false);
+        }
+      }
+    };
+
+    loadDeepLink();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [location.search]);
 
   const { currentMovie: latestIndiaMovie, pool: latestIndiaPool } = useLatestIndiaRelease();
 
@@ -211,19 +379,19 @@ function App() {
     let result = [...searchResults];
 
     if (searchFilters.genre !== 'All') {
-      result = result.filter((m) => 
+      result = result.filter((m) =>
         !m.genre || m.genre.toLowerCase().includes(searchFilters.genre.toLowerCase())
       );
     }
 
     if (searchFilters.language !== 'All') {
-      result = result.filter((m) => 
+      result = result.filter((m) =>
         m.language?.toLowerCase().includes(searchFilters.language.toLowerCase())
       );
     }
 
     if (searchFilters.minRating > 0) {
-      result = result.filter((m) => 
+      result = result.filter((m) =>
         parseFloat(m.rating) >= searchFilters.minRating
       );
     }
@@ -344,11 +512,11 @@ function App() {
       <Routes>
         <Route path="/" element={
           <>
-            <Navbar 
-              onSearch={setSearchQuery} 
-              searchQuery={searchQuery} 
-              activeTab={activeTab} 
-              setActiveTab={setActiveTab} 
+            <Navbar
+              onSearch={setSearchQuery}
+              searchQuery={searchQuery}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
               onProfileClick={handleOpenAuthModal}
               onAdminClick={handleOpenAdmin}
               onHistoryClick={() => setIsHistoryModalOpen(true)}
@@ -365,7 +533,7 @@ function App() {
           seeAllSection ? (
             <div className="pt-32 px-4 md:px-12">
               <div className="flex items-center gap-4 mb-8">
-                <button 
+                <button
                   onClick={() => setSeeAllSection(null)}
                   className="bg-white/10 hover:bg-white/20 text-white transition text-xs md:text-sm font-bold px-4 py-2 rounded-full flex items-center gap-1.5 focus:outline-none"
                 >
@@ -377,10 +545,10 @@ function App() {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                 {seeAllSection.movies.map((movie) => (
-                  <MovieCard 
-                    key={movie.id} 
-                    movie={movie} 
-                    onClick={() => handleMovieSelect(movie)} 
+                  <MovieCard
+                    key={movie.id}
+                    movie={movie}
+                    onClick={() => handleMovieSelect(movie)}
                     myList={myList}
                     onToggleMyList={toggleMyList}
                   />
@@ -389,21 +557,21 @@ function App() {
             </div>
           ) : (
             <>
-              <FeaturedCarousel 
+              <FeaturedCarousel
                 movies={displayFeatured}
                 onPlayTrailer={handleMovieSelect}
               />
-              
+
               <div className="relative z-20 pb-10">
                 {/* Render My List row if user has saved items */}
                 {myList.length > 0 && (activeTab === 'home' || activeTab === 'mylist') && (
-                  <MovieRow 
-                    title="My List" 
-                    movies={myList} 
-                    onMovieClick={handleMovieSelect} 
-                    isLoading={appLoading} 
-                    myList={myList} 
-                    onToggleMyList={toggleMyList} 
+                  <MovieRow
+                    title="My List"
+                    movies={myList}
+                    onMovieClick={handleMovieSelect}
+                    isLoading={appLoading}
+                    myList={myList}
+                    onToggleMyList={toggleMyList}
                     onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })}
                   />
                 )}
@@ -422,7 +590,7 @@ function App() {
 
                 {/* Browse by Genre */}
                 <div className="px-4 md:px-12 mb-8 mt-4">
-                  <h2 className="text-sm font-semibold text-[#e5e5e5] 
+                  <h2 className="text-sm font-semibold text-[#e5e5e5]
                                  md:text-2xl mb-4">
                     Browse by Genre
                   </h2>
@@ -436,8 +604,8 @@ function App() {
                       <button
                         key={slug}
                         onClick={() => navigate(`/genre/${slug}`)}
-                        className="px-4 py-2 bg-[#242424] hover:bg-[#E50914] 
-                                   text-white text-sm font-medium rounded-full 
+                        className="px-4 py-2 bg-[#242424] hover:bg-[#E50914]
+                                   text-white text-sm font-medium rounded-full
                                    transition"
                       >
                         {label}
@@ -462,7 +630,7 @@ function App() {
                       </p>
                     </div>
                   ) : (
-                    <MovieRow 
+                    <MovieRow
                       title={
                         <span className="flex items-center gap-2">
                           Download Available
@@ -472,11 +640,11 @@ function App() {
                           </span>
                         </span>
                       }
-                      movies={displayDownloadAvailable} 
-                      onMovieClick={handleMovieSelect} 
+                      movies={displayDownloadAvailable}
+                      onMovieClick={handleMovieSelect}
                       isLoading={appLoading && displayDownloadAvailable.length === 0}
-                      myList={myList} 
-                      onToggleMyList={toggleMyList} 
+                      myList={myList}
+                      onToggleMyList={toggleMyList}
                       onSeeAll={(title, movies) => setSeeAllSection({ title, movies })}
                     />
                   )
@@ -488,13 +656,13 @@ function App() {
                 )}
 
                 {latestIndiaPool.length > 0 && (
-                  <MovieRow 
-                    title="India's Latest Releases (This Week's Pick First)" 
+                  <MovieRow
+                    title="India's Latest Releases (This Week's Pick First)"
                     movies={latestIndiaMovie ? [latestIndiaMovie, ...latestIndiaPool.filter(m => m.id !== latestIndiaMovie.id)] : latestIndiaPool}
-                    onMovieClick={handleMovieSelect} 
-                    isLoading={false} 
-                    myList={myList} 
-                    onToggleMyList={toggleMyList} 
+                    onMovieClick={handleMovieSelect}
+                    isLoading={false}
+                    myList={myList}
+                    onToggleMyList={toggleMyList}
                     onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })}
                   />
                 )}
@@ -553,9 +721,9 @@ function App() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {displayedSearchResults.map(movie => (
                     <div key={movie.id} onClick={() => handleMovieSelect(movie)} className="cursor-pointer hover:scale-105 transition flex flex-col items-center">
-                      <img 
-                        src={movie.poster} 
-                        alt={movie.title} 
+                      <img
+                        src={movie.poster}
+                        alt={movie.title}
                         className="w-full aspect-[2/3] object-cover rounded-md"
                         loading="lazy"
                         onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/300x450/141414/E50914?text=No+Poster' }}
@@ -578,10 +746,11 @@ function App() {
       <SupportSection />
       <Footer onAdminClick={handleOpenAdmin} />
 
-      <MovieDetailsModal 
-        movie={selectedMovie} 
-        isOpen={!!selectedMovie} 
-        onClose={() => setSelectedMovie(null)} 
+      <MovieDetailsModal
+        movie={selectedMovie}
+        isOpen={!!selectedMovie || deepLinkLoading}
+        isLoading={deepLinkLoading}
+        onClose={handleCloseMovieModal}
         onSelectMovie={handleMovieSelect}
         myList={myList}
         onToggleMyList={toggleMyList}
@@ -610,15 +779,15 @@ function App() {
         <Route path="/admin" element={<AdminPanel onClose={handleCloseAdmin} />} />
         <Route path="/actors" element={<AllActorsPage onMovieSelect={handleMovieSelect} type="actors" />} />
         <Route path="/actresses" element={<AllActorsPage onMovieSelect={handleMovieSelect} type="actresses" />} />
-        <Route 
-          path="/genre/:genreSlug" 
+        <Route
+          path="/genre/:genreSlug"
           element={
-            <GenrePage 
-              onMovieClick={handleMovieSelect} 
-              myList={myList} 
-              onToggleMyList={toggleMyList} 
+            <GenrePage
+              onMovieClick={handleMovieSelect}
+              myList={myList}
+              onToggleMyList={toggleMyList}
             />
-          } 
+          }
         />
       </Routes>
 
@@ -632,6 +801,7 @@ function App() {
         <AdminPanel onClose={handleCloseAdmin} />
       )}
       <InstallPWA />
+      <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
     </div>
   );
 }

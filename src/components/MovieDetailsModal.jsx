@@ -15,7 +15,7 @@ const getMatchPercent = (rating) => {
   return isNaN(num) ? 'N/A' : `${Math.round(num * 10)}%`;
 };
 
-const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList, onSelectMovie, onDownloadTracked }) => {
+const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList = [], onToggleMyList, onSelectMovie, onDownloadTracked }) => {
   const { toggleNotify, isNotifying } = useNotifyList();
   const notifying = movie ? isNotifying(movie.id) : false;
   const [details, setDetails] = useState({
@@ -34,7 +34,11 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
     if (movie && movie.id) {
       const idStr = String(movie.id);
       const parsedId = parseInt(idStr.split('-')[0], 10);
-      const mediaType = movie.mediaType || (idStr.includes('-tv') ? 'tv' : 'movie');
+      const mediaType = movie.mediaType || (
+        idStr.includes('-tv') ? 'tv' : (
+          movie.seasons || (movie.genre && movie.genre.toLowerCase().includes('web series')) ? 'tv' : 'movie'
+        )
+      );
 
       if (!isNaN(parsedId)) {
         fetchTMDBDetails(parsedId, mediaType).then((res) => {
@@ -53,6 +57,40 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
       }
     }
   }, [movie]);
+
+  if (isLoading && !movie) {
+    return (
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[1050] flex items-center justify-center p-4 overflow-y-auto"
+          >
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md bg-[#181818] rounded-2xl shadow-2xl z-10 p-8 flex flex-col items-center justify-center border border-white/10 text-center"
+            >
+              <button
+                onClick={onClose}
+                className="absolute top-4 right-4 z-50 w-8 h-8 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-gray-300 hover:text-white transition cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-12 h-12 border-4 border-[#E50914] border-t-transparent rounded-full animate-spin mb-4" />
+              <h3 className="text-white text-lg font-bold">Loading Title Details...</h3>
+              <p className="text-gray-400 text-xs mt-1">Retrieving official TMDB information</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  }
 
   if (!movie) return null;
 
@@ -79,7 +117,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-0 md:pt-10 overflow-y-auto"
+          className="fixed inset-0 z-[1050] flex items-center justify-center p-4 md:p-0 md:pt-10 overflow-y-auto"
         >
           {/* Overlay */}
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -93,7 +131,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
             className="relative w-full max-w-4xl bg-[#181818] rounded-xl shadow-2xl z-10 my-8 max-h-[90vh] flex flex-col overflow-hidden"
           >
             {/* Close Button */}
-            <button 
+            <button
               onClick={onClose}
               className="absolute top-4 right-4 z-50 w-10 h-10 bg-[#181818]/60 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-gray-800 transition shadow-lg border border-white/10"
             >
@@ -104,19 +142,19 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
             <div className="overflow-y-auto flex-1 hide-scrollbar">
               {/* Top Banner Area */}
               <div className="relative w-full h-[300px] md:h-[450px] flex-none">
-              <ImageWithFallback 
-                src={movie.backdrop} 
-                backdropSrc={movie.poster} 
+              <ImageWithFallback
+                src={movie.backdrop}
+                backdropSrc={movie.poster}
                 alt={movie.title}
                 className={`w-full h-full object-cover ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-r from-[#181818]/80 to-transparent w-3/4" />
-              
+
               <div className="absolute bottom-10 left-10">
                 <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 drop-shadow-lg">{movie.title}</h2>
                 <div className="flex flex-wrap items-center gap-4">
-                  <button 
+                  <button
                     onClick={() => {
                       document.getElementById('download-options')?.scrollIntoView({ behavior: 'smooth' });
                     }}
@@ -125,14 +163,14 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                     <Download className="w-6 h-6 stroke-[3]" /> Download
                   </button>
                   {details.trailerUrl && (
-                    <button 
+                    <button
                       onClick={() => window.open(details.trailerUrl, '_blank')}
                       className="flex items-center gap-2 bg-[#6d6d6eb3] hover:bg-[#6d6d6e66] text-white px-6 py-2 md:px-8 md:py-3 rounded md:text-lg font-bold transition"
                     >
                       <Play className="w-5 h-5 fill-current" /> Watch Trailer
                     </button>
                   )}
-                  <button 
+                  <button
                     onClick={() => onToggleMyList(movie)}
                     className="w-10 h-10 md:w-12 md:h-12 border-2 border-gray-400 bg-[#2a2a2a]/50 hover:border-white rounded-full flex items-center justify-center text-white transition"
                   >
@@ -165,7 +203,7 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                        {seasons.map((s, idx) => {
                          const hasAnySeasonLink = s.parts.some(p => p.download480p || p.download720p || p.download1080p);
                          if (!hasAnySeasonLink) return null;
-                         
+
                          return (
                            <div key={idx} className="bg-[#242424] p-4 rounded-lg">
                              <h4 className="font-bold text-gray-300 mb-3">Season {s.season}</h4>
@@ -193,8 +231,8 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                           <button
                             onClick={() => toggleNotify(movie)}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                              notifying 
-                                ? 'bg-[#E50914]/20 text-[#E50914] border border-[#E50914]' 
+                              notifying
+                                ? 'bg-[#E50914]/20 text-[#E50914] border border-[#E50914]'
                                 : 'bg-[#242424] text-gray-300 hover:bg-[#333]'
                             }`}
                           >
@@ -227,20 +265,22 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex items-center gap-8 mt-4 pb-6 border-b border-white/10">
-                  <ReportProblemButton 
-                    movieId={movie.id} 
-                    movieTitle={movie.title} 
+                  <ReportProblemButton
+                    movieId={movie.id}
+                    movieTitle={movie.title}
                   />
-                  <ShareButton 
-                    movieId={movie.id} 
-                    movieTitle={movie.title} 
+                  <ShareButton
+                    movieId={movie.id}
+                    movieTitle={movie.title}
+                    mediaType={movie.mediaType || (String(movie.id).includes("-tv") ? "tv" : (movie.seasons ? "tv" : "movie"))}
+                    movie={movie}
                   />
                 </div>
-                <ReviewSection 
-                  movieId={movie.id} 
-                  movieTitle={movie.title} 
+                <ReviewSection
+                  movieId={movie.id}
+                  movieTitle={movie.title}
                 />
               </div>
 
@@ -266,18 +306,18 @@ const MovieDetailsModal = ({ movie, isOpen, onClose, myList = [], onToggleMyList
               <h3 className="text-2xl font-bold text-white mb-6">More Like This</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {similarMovies.map((simMovie) => (
-                  <div 
-                    key={simMovie.id} 
+                  <div
+                    key={simMovie.id}
                     onClick={() => onSelectMovie && onSelectMovie(simMovie)}
                     className="bg-[#242424] rounded-lg overflow-hidden group cursor-pointer"
                   >
                     <div className="relative aspect-video">
-                      <ImageWithFallback 
+                      <ImageWithFallback
                         src={simMovie.backdrop}
-                        backdropSrc={simMovie.poster} 
-                        alt={simMovie.title} 
+                        backdropSrc={simMovie.poster}
+                        alt={simMovie.title}
                         lazy={true}
-                        className={`w-full h-full object-cover ${simMovie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`} 
+                        className={`w-full h-full object-cover ${simMovie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
                       />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                          <Play className="w-10 h-10 text-white fill-current" />

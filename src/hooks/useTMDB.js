@@ -25,6 +25,32 @@ const headers = {
 
 export const activeLinks = { ...staticDownloadLinks };
 
+export const getMediaTypeFromId = (id) => {
+  const parsedId = parseInt(String(id).split('-')[0], 10);
+  if (isNaN(parsedId)) return null;
+
+  if (String(id).includes('-tv')) return 'tv';
+  if (String(id).includes('-movie')) return 'movie';
+
+  if (activeLinks[`${parsedId}-tv`]) return 'tv';
+  if (activeLinks[`${parsedId}-movie`]) return 'movie';
+
+  const localMatch = localMovies.find(m => String(m.id) === String(parsedId) || String(m.id) === `${parsedId}-tv`);
+  if (localMatch) {
+    if (localMatch.mediaType) return localMatch.mediaType;
+    if (localMatch.seasons && localMatch.seasons.length > 0) return 'tv';
+    if (localMatch.genre && (
+      localMatch.genre.toLowerCase().includes('web series') ||
+      localMatch.genre.toLowerCase().includes('tv')
+    )) {
+      return 'tv';
+    }
+    return 'movie';
+  }
+
+  return null;
+};
+
 const tmdbCache = new Map();
 let supabaseCachePromise = null;
 let supabaseCacheData = null;
@@ -40,7 +66,7 @@ export const getDownloadLinks = (movieId, movieTitle) => {
   if (activeLinks[`${movieId}-tv`]) {
     return activeLinks[`${movieId}-tv`];
   }
-  
+
   const localMatch = localMovies.find(
     (m) => String(m.id) === String(movieId) || (m.title && movieTitle && m.title.toLowerCase() === movieTitle.toLowerCase())
   );
@@ -52,7 +78,7 @@ export const getDownloadLinks = (movieId, movieTitle) => {
       seasons: localMatch.seasons || null
     };
   }
-  
+
   return {
     download480p: null,
     download720p: null,
@@ -88,10 +114,14 @@ export const formatMovie = (m) => {
   const quality = '1080p';
 
   let genre = '';
-  if (Array.isArray(m.genre_names)) {
+  if (Array.isArray(m.genres)) {
+    genre = m.genres.map(g => g.name || g).filter(Boolean).join(', ');
+  } else if (Array.isArray(m.genre_names)) {
     genre = m.genre_names.join(', ');
   } else if (Array.isArray(m.genre_ids)) {
     genre = m.genre_ids.map(id => GENRE_MAP[id]).filter(Boolean).join(', ');
+  } else if (typeof m.genre === 'string') {
+    genre = m.genre;
   }
 
   const rating =
@@ -101,6 +131,14 @@ export const formatMovie = (m) => {
   const links = getDownloadLinks(id, title);
 
   const description = links.description || m.overview || '';
+
+  const resolvedMediaType = (
+    m.media_type ||
+    m.mediaType ||
+    (m.first_air_date ? 'tv' : null) ||
+    getMediaTypeFromId(id) ||
+    'movie'
+  );
 
   return {
     id,
@@ -122,7 +160,7 @@ export const formatMovie = (m) => {
     featured: false,
     trending: false,
     latest: false,
-    mediaType: m.media_type || (m.first_air_date ? 'tv' : 'movie')
+    mediaType: resolvedMediaType
   };
 };
 
@@ -139,29 +177,34 @@ const prioritizeDownloads = (list) => {
 // Reusable fetch helper
 const fetchTMDB = async (endpoint) => {
   const cacheKey = `tmdb_cache_${endpoint}`;
-  
+
   if (tmdbCache.has(endpoint)) {
     return tmdbCache.get(endpoint);
   }
 
   try {
-    const sessionCached = sessionStorage.getItem(cacheKey);
-    if (sessionCached) {
-      const data = JSON.parse(sessionCached);
-      tmdbCache.set(endpoint, data);
-      return data;
+    if (typeof sessionStorage !== 'undefined') {
+      const sessionCached = sessionStorage.getItem(cacheKey);
+      if (sessionCached) {
+        const data = JSON.parse(sessionCached);
+        tmdbCache.set(endpoint, data);
+        return data;
+      }
     }
   } catch (e) {
     console.error('sessionStorage read failed', e);
   }
 
-  const token = import.meta.env.VITE_TMDB_TOKEN;
-  if (!token) {
-    throw new Error('VITE_TMDB_TOKEN environment variable is not defined.');
+  const reqHeaders = {
+    'Content-Type': 'application/json'
+  };
+  const token = import.meta.env?.VITE_TMDB_TOKEN;
+  if (token) {
+    reqHeaders['Authorization'] = `Bearer ${token}`;
   }
 
   const response = await fetch(`${BASE_URL}${endpoint}`, {
-    headers
+    headers: reqHeaders
   });
 
   if (!response.ok) {
@@ -174,13 +217,15 @@ const fetchTMDB = async (endpoint) => {
 
   const data = await response.json();
   tmdbCache.set(endpoint, data);
-  
+
   try {
-    sessionStorage.setItem(cacheKey, JSON.stringify(data));
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(cacheKey, JSON.stringify(data));
+    }
   } catch (e) {
     console.warn('sessionStorage set failed (quota exceeded?)', e);
   }
-  
+
   return data;
 };
 
@@ -193,7 +238,7 @@ const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
   for (const idStr of ids) {
     const parsedId = parseInt(idStr.split('-')[0], 10);
     if (isNaN(parsedId)) continue;
-    
+
     const existing = alreadyFetchedList.find(m => String(m.id) === String(parsedId));
     if (existing) {
       results.push(existing);
@@ -204,7 +249,7 @@ const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
 
   for (let i = 0; i < idsToFetch.length; i += BATCH_SIZE) {
     const batch = idsToFetch.slice(i, i + BATCH_SIZE);
-    
+
     const batchResults = await Promise.all(
       batch.map(async (idStr) => {
         const parsedId = parseInt(idStr.split('-')[0], 10);
@@ -257,11 +302,11 @@ export const useTMDB = () => {
           if (!supabaseCachePromise && !supabaseCacheData) {
             supabaseCachePromise = supabase.from('download_links').select('*');
           }
-          
-          const { data: dbData, error: dbErr } = supabaseCacheData 
-            ? { data: supabaseCacheData, error: null } 
+
+          const { data: dbData, error: dbErr } = supabaseCacheData
+            ? { data: supabaseCacheData, error: null }
             : await supabaseCachePromise;
-          
+
           if (!dbErr && dbData) {
             supabaseCacheData = dbData;
             dbData.forEach(row => {
@@ -277,7 +322,7 @@ export const useTMDB = () => {
         } catch {
           // Gracefully relying on static local download links
         }
-        
+
         const [
           trendingRes,
           popularRes,
@@ -301,19 +346,19 @@ export const useTMDB = () => {
         const trendingList = (trendingRes.results || []).map(formatMovie);
         const popularList = (popularRes.results || []).map(formatMovie);
         const bollywoodList = (bollywoodRes.results || []).map(formatMovie);
-        
+
         const mergedSouth = [
           ...(teluguRes.results || []),
           ...(tamilRes.results || []),
           ...(kannadaRes.results || []),
           ...(malayalamRes.results || [])
         ];
-        
+
         const uniqueSouthMap = new Map();
         mergedSouth.forEach(item => {
           uniqueSouthMap.set(item.id, item);
         });
-        
+
         const southIndianList = Array.from(uniqueSouthMap.values())
           .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
           .map(formatMovie);
@@ -477,22 +522,22 @@ export const fetchTMDBDetails = async (id, mediaType) => {
     const type = mediaType === 'tv' ? 'tv' : 'movie';
     const parsedId = parseInt(String(id).split('-')[0], 10);
     const endpoint = `/${type}/${parsedId}?append_to_response=credits,videos&include_video_language=en,hi,te,ta,ml,null`;
-    
+
     const res = await fetchTMDB(endpoint);
-    
+
     let trailerUrl = '';
     if (res.videos && res.videos.results && res.videos.results.length > 0) {
       const youtubeVideos = res.videos.results.filter(v => v.site === 'YouTube');
       if (youtubeVideos.length > 0) {
-        const trailer = youtubeVideos.find(v => v.type === 'Trailer') || 
-                        youtubeVideos.find(v => v.type === 'Teaser') || 
+        const trailer = youtubeVideos.find(v => v.type === 'Trailer') ||
+                        youtubeVideos.find(v => v.type === 'Teaser') ||
                         youtubeVideos[0];
         trailerUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
       }
     }
 
-    const castList = (res.credits && res.credits.cast) 
-      ? res.credits.cast.slice(0, 5).map(c => c.name).join(', ') 
+    const castList = (res.credits && res.credits.cast)
+      ? res.credits.cast.slice(0, 5).map(c => c.name).join(', ')
       : 'Placeholder Actor 1, Placeholder Actor 2';
 
     return {
@@ -508,4 +553,76 @@ export const fetchTMDBDetails = async (id, mediaType) => {
       trailerUrl: ''
     };
   }
+};
+
+// Fetch individual Movie or TV title by ID and media type for deep linking
+export const fetchMovieOrTVById = async (id, requestedType = null) => {
+  const parsedId = parseInt(String(id).split('-')[0], 10);
+  if (isNaN(parsedId) || parsedId <= 0) return null;
+
+  let primaryType = null;
+  let secondaryType = null;
+
+  if (requestedType === 'tv') {
+    primaryType = 'tv';
+    secondaryType = null;
+  } else if (requestedType === 'movie') {
+    primaryType = 'movie';
+    secondaryType = null;
+  } else {
+    // Legacy link or un-typed link (e.g. ?movie=71446 or ?id=71446)
+    const knownType = getMediaTypeFromId(parsedId);
+    if (knownType === 'tv') {
+      primaryType = 'tv';
+      secondaryType = 'movie';
+    } else if (knownType === 'movie') {
+      primaryType = 'movie';
+      secondaryType = 'tv';
+    } else {
+      primaryType = 'movie';
+      secondaryType = 'tv';
+    }
+  }
+
+  let item = null;
+  let resolvedType = primaryType;
+
+  try {
+    item = await fetchTMDB(`/${primaryType}/${parsedId}`);
+  } catch (e) {
+    console.warn(`Failed to fetch /${primaryType}/${parsedId}:`, e.message);
+  }
+
+  if (!item && secondaryType) {
+    try {
+      item = await fetchTMDB(`/${secondaryType}/${parsedId}`);
+      if (item) {
+        resolvedType = secondaryType;
+      }
+    } catch (e) {
+      console.warn(`Failed fallback fetch /${secondaryType}/${parsedId}:`, e.message);
+    }
+  }
+
+  if (!item) {
+    const localMatch = localMovies.find(m => {
+      const cleanLocalId = String(m.id).split('-')[0];
+      if (cleanLocalId !== String(parsedId)) return false;
+      const isTv = m.mediaType === 'tv' || m.seasons || (m.genre && m.genre.toLowerCase().includes('web series'));
+      const localType = isTv ? 'tv' : 'movie';
+      if (requestedType && localType !== requestedType) return false;
+      return true;
+    });
+    if (localMatch) {
+      const isTv = localMatch.mediaType === 'tv' || localMatch.seasons || (localMatch.genre && localMatch.genre.toLowerCase().includes('web series'));
+      return {
+        ...localMatch,
+        mediaType: isTv ? 'tv' : 'movie'
+      };
+    }
+    return null;
+  }
+
+  item.media_type = resolvedType;
+  return formatMovie(item);
 };
