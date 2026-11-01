@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/share/:type/:id",
+      "destination": "/api/share?type=:type&id=:id"
+    },
+    {
+      "source": "/share/:type/:id/",
+      "destination": "/api/share?type=:type&id=:id"
+    },
+    {
+      "source": "/((?!api/|share/|.*\\.[\\w]+$).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

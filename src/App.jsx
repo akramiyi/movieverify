@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import SiteLockScreen from './components/SiteLockScreen';
 import { supabase } from './data/supabaseClient';
 
@@ -31,6 +31,17 @@ import DownloadHistoryModal from './components/DownloadHistoryModal';
 
 const getActors = () => actors.filter(a => a.type === 'actor');
 const getActresses = () => actors.filter(a => a.type === 'actress');
+
+const ShareRedirectHandler = () => {
+  const { type, id } = useParams();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const cleanType = type === 'tv' ? 'tv' : 'movie';
+    const cleanId = String(id || '').split('-')[0].trim();
+    navigate(`/?type=${cleanType}&id=${cleanId}`, { replace: true });
+  }, [type, id, navigate]);
+  return null;
+};
 
 function App() {
   const navigate = useNavigate();

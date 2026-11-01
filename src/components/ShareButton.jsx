@@ -20,8 +20,11 @@ const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
   const cleanId = String(movieId || movie?.id || '').split('-')[0].trim();
   const title = movieTitle || movie?.title || movie?.name || 'this title';
 
-  // Canonical unambiguous URL format: /?type=movie&id=550 or /?type=tv&id=71446
-  const shareUrl = `${window.location.origin}/?type=${type}&id=${cleanId}`;
+  // Dynamic Open Graph share URL format: /share/movie/{id} or /share/tv/{id}
+  const baseOrigin = (typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost'))
+    ? window.location.origin
+    : 'https://movieverify.vercel.app';
+  const shareUrl = `${baseOrigin}/share/${type}/${cleanId}`;
   const shareText = `Check out "${title}" on MovieVerify!`;
 
   // Close menu on click outside
