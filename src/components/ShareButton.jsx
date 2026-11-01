@@ -1,10 +1,108 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Share2, Check, MessageCircle, Link as LinkIcon, MoreHorizontal } from 'lucide-react';
+import { Share2, Check, MessageCircle, Link as LinkIcon, MoreHorizontal, Loader2 } from 'lucide-react';
 import { getMediaTypeFromId } from '../hooks/useTMDB';
+
+// Module-level prewarm cache mapping canonicalShareUrl -> Promise<{ ok, data, error }>
+const prewarmCache = new Map();
+
+export async function prewarmShareUrl(canonicalShareUrl, timeoutMs = 4000) {
+  if (!canonicalShareUrl) return null;
+
+  if (prewarmCache.has(canonicalShareUrl)) {
+    return prewarmCache.get(canonicalShareUrl);
+  }
+
+  const promise = (async () => {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = setTimeout(() => {
+      if (controller) controller.abort();
+    }, timeoutMs);
+
+    try {
+      const res = await fetch(canonicalShareUrl, {
+        method: 'GET',
+        headers: {
+          Accept: 'text/html,application/xhtml+xml',
+        },
+        signal: controller ? controller.signal : undefined
+      });
+
+      if (!res.ok) {
+        throw new Error(`Prewarm fetch returned status ${res.status}`);
+      }
+
+      const html = await res.text();
+
+      const titleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                         html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:title["']/i);
+      const descMatch = html.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']+)["']/i) ||
+                        html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:description["']/i);
+      const imageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                         html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i);
+      const urlMatch = html.match(/<meta\s+property=["']og:url["']\s+content=["']([^"']+)["']/i) ||
+                       html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:url["']/i);
+
+      const ogTitle = titleMatch ? titleMatch[1] : null;
+      const ogDescription = descMatch ? descMatch[1] : null;
+      const ogImage = imageMatch ? imageMatch[1] : null;
+      const ogUrl = urlMatch ? urlMatch[1] : null;
+
+      if (!ogTitle || !ogImage) {
+        throw new Error('Incomplete Open Graph metadata');
+      }
+
+      // Preload & decode poster image in browser environment
+      if (typeof window !== 'undefined' && typeof Image !== 'undefined' && ogImage) {
+        try {
+          await new Promise((resolve) => {
+            const img = new Image();
+            const imgTimeout = setTimeout(resolve, 2500);
+
+            img.onload = () => {
+              clearTimeout(imgTimeout);
+              if (typeof img.decode === 'function') {
+                img.decode().then(resolve).catch(resolve);
+              } else {
+                resolve();
+              }
+            };
+            img.onerror = () => {
+              clearTimeout(imgTimeout);
+              resolve();
+            };
+            img.src = ogImage;
+          });
+        } catch {
+          // Non-fatal image preload failure
+        }
+      }
+
+      return {
+        ok: true,
+        ogTitle,
+        ogDescription,
+        ogImage,
+        ogUrl
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err.message
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  })();
+
+  prewarmCache.set(canonicalShareUrl, promise);
+  return promise;
+}
 
 const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [prewarmReady, setPrewarmReady] = useState(false);
   const menuRef = useRef(null);
 
   const cleanId = String(movieId || movie?.id || '').split('-')[0].trim();
@@ -56,6 +154,31 @@ const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
     : 'https://movieverify.vercel.app';
   const shareUrl = hasValidMediaType ? `${baseOrigin}/share/${type}/${cleanId}` : '';
   const shareText = `Check out "${title}" on MovieVerify!`;
+
+  // Start preparing the exact canonical share URL as soon as component/details are available
+  useEffect(() => {
+    if (!hasValidMediaType || !shareUrl) {
+      setPrewarmReady(false);
+      return;
+    }
+
+    let isMounted = true;
+    prewarmShareUrl(shareUrl)
+      .then((res) => {
+        if (!isMounted) return;
+        if (res && res.ok) {
+          setPrewarmReady(true);
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setPrewarmReady(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasValidMediaType, shareUrl]);
 
   // Close menu on click outside
   useEffect(() => {
@@ -110,14 +233,56 @@ const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
     }
   };
 
-  const handleWhatsAppShare = (e) => {
+  const handleWhatsAppShare = async (e) => {
     e.stopPropagation();
     if (!hasValidMediaType || !shareUrl) return;
+
     // Direct WhatsApp compose flow (bypasses Windows/OS native share sheet)
     const textPayload = `${shareText}\n${shareUrl}`;
-    const url = `https://wa.me/?text=${encodeURIComponent(textPayload)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-    setShowMenu(false);
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(textPayload)}`;
+
+    // 1. If prewarming has already completed, launch immediately and synchronously
+    if (prewarmReady) {
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+      setShowMenu(false);
+      return;
+    }
+
+    // 2. Otherwise, show 'Preparing poster...' feedback while prewarming finishes
+    setIsPreparing(true);
+
+    const isMobile = typeof window !== 'undefined' && (
+      'ontouchstart' in window ||
+      (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+      /android|iphone|ipad|ipod/i.test(navigator.userAgent || '')
+    );
+
+    // Open placeholder synchronously on desktop to prevent popup blockers
+    const win = (!isMobile && typeof window !== 'undefined')
+      ? window.open('about:blank', '_blank')
+      : null;
+
+    try {
+      await Promise.race([
+        prewarmShareUrl(shareUrl),
+        new Promise((resolve) => setTimeout(resolve, 2500))
+      ]);
+    } catch (err) {
+      console.warn('Prewarm fallback error:', err);
+    } finally {
+      setIsPreparing(false);
+      setShowMenu(false);
+
+      if (win && !win.closed) {
+        win.location.href = waUrl;
+      } else {
+        if (isMobile) {
+          window.location.href = waUrl;
+        } else {
+          window.open(waUrl, '_blank', 'noopener,noreferrer');
+        }
+      }
+    }
   };
 
   const handleNativeShare = async (e) => {
@@ -171,15 +336,26 @@ const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
             </div>
           ) : (
             <>
-              {/* Action 1: Direct WhatsApp compose flow */}
+              {/* Action 1: Direct WhatsApp compose flow with prewarming feedback */}
               <button
                 onClick={handleWhatsAppShare}
+                disabled={isPreparing}
                 className="flex items-center gap-2.5 w-full px-3 py-2
                            text-white text-sm hover:bg-[#333]
-                           rounded-lg transition cursor-pointer text-left whitespace-nowrap"
+                           rounded-lg transition cursor-pointer text-left whitespace-nowrap
+                           disabled:opacity-80"
               >
-                <MessageCircle className="w-4 h-4 text-[#25D366] flex-shrink-0" />
-                <span>WhatsApp</span>
+                {isPreparing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 text-[#25D366] flex-shrink-0 animate-spin" />
+                    <span className="text-[#25D366] font-medium">Preparing poster...</span>
+                  </>
+                ) : (
+                  <>
+                    <MessageCircle className="w-4 h-4 text-[#25D366] flex-shrink-0" />
+                    <span>WhatsApp</span>
+                  </>
+                )}
               </button>
 
               {/* Action 2: Copy link */}

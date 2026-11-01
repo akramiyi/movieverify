@@ -32,14 +32,23 @@ const CRAWLER_USER_AGENTS = [
   'bingbot'
 ];
 
-function isCrawler(userAgent) {
+export function isCrawler(userAgent) {
   if (!userAgent || typeof userAgent !== 'string') return false;
   const ua = userAgent.toLowerCase();
   return CRAWLER_USER_AGENTS.some(crawler => ua.includes(crawler));
 }
 
+// In-memory container cache across warm serverless invocations
+const serverTitleCache = new Map();
+const MAX_SERVER_CACHE = 200;
+
 // Fetch TMDB data using server token or backend proxy fallback
 async function fetchTitleDetails(mediaType, id) {
+  const cacheKey = `${mediaType}:${id}`;
+  if (serverTitleCache.has(cacheKey)) {
+    return serverTitleCache.get(cacheKey);
+  }
+
   const serverToken = process.env.TMDB_READ_TOKEN || process.env.TMDB_TOKEN || process.env.TMDB_API_KEY;
 
   if (serverToken) {
@@ -56,7 +65,13 @@ async function fetchTitleDetails(mediaType, id) {
 
       const res = await fetch(url, { headers: reqHeaders });
       if (res.ok) {
-        return await res.json();
+        const json = await res.json();
+        if (serverTitleCache.size >= MAX_SERVER_CACHE) {
+          const firstKey = serverTitleCache.keys().next().value;
+          serverTitleCache.delete(firstKey);
+        }
+        serverTitleCache.set(cacheKey, json);
+        return json;
       }
       if (res.status === 404) {
         return null;
@@ -72,7 +87,13 @@ async function fetchTitleDetails(mediaType, id) {
     const proxyUrl = `${proxyBase}/api/tmdb/${mediaType}/${id}`;
     const res = await fetch(proxyUrl);
     if (res.ok) {
-      return await res.json();
+      const json = await res.json();
+      if (serverTitleCache.size >= MAX_SERVER_CACHE) {
+        const firstKey = serverTitleCache.keys().next().value;
+        serverTitleCache.delete(firstKey);
+      }
+      serverTitleCache.set(cacheKey, json);
+      return json;
     }
     if (res.status === 404) {
       return null;
@@ -94,8 +115,7 @@ function renderHtml({
   imageAlt,
   canonicalShareUrl,
   targetAppUrl,
-  mediaType,
-  crawler = false
+  mediaType
 }) {
   const ogType = mediaType === 'tv' ? 'video.tv_show' : 'video.movie';
 
@@ -128,15 +148,15 @@ function renderHtml({
   <meta name="twitter:description" content="${escapeHtml(description)}" />
   <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
   <meta name="twitter:image:alt" content="${escapeHtml(imageAlt)}" />
-${crawler ? '' : `  <meta http-equiv="refresh" content="0;url=${escapeHtml(targetAppUrl)}" />
-  <!-- Human Browser Instant Client Redirect -->
+
+  <!-- Client-side instant navigation for human visitors (crawlers ignore JS) -->
   <script>
     try {
       window.location.replace(${JSON.stringify(targetAppUrl)});
     } catch (e) {
       window.location.href = ${JSON.stringify(targetAppUrl)};
     }
-  </script>`}
+  </script>
   <style>
     body {
       margin: 0;
@@ -257,9 +277,6 @@ export default async function handler(req, res) {
   const baseUrl = `${proto}://${host}`;
   const defaultFallbackImage = `${baseUrl}/og-fallback.jpg`;
 
-  const ua = req.headers?.['user-agent'] || '';
-  const crawler = isCrawler(ua);
-
   // Validate media type
   if (rawType !== 'movie' && rawType !== 'tv') {
     res.statusCode = 400;
@@ -275,8 +292,7 @@ export default async function handler(req, res) {
       imageAlt: 'MovieVerify Logo',
       canonicalShareUrl: `${baseUrl}/`,
       targetAppUrl: '/',
-      mediaType: 'movie',
-      crawler
+      mediaType: 'movie'
     });
     return res.end(html);
   }
@@ -297,8 +313,7 @@ export default async function handler(req, res) {
       imageAlt: 'MovieVerify Logo',
       canonicalShareUrl: `${baseUrl}/`,
       targetAppUrl: '/',
-      mediaType: rawType,
-      crawler
+      mediaType: rawType
     });
     return res.end(html);
   }
@@ -320,8 +335,7 @@ export default async function handler(req, res) {
       imageAlt: 'MovieVerify Logo',
       canonicalShareUrl: `${baseUrl}/share/${rawType}/${parsedId}`,
       targetAppUrl: '/',
-      mediaType: rawType,
-      crawler
+      mediaType: rawType
     });
     return res.end(html);
   }
@@ -376,9 +390,9 @@ export default async function handler(req, res) {
   const targetAppUrl = `/?type=${encodeURIComponent(rawType)}&id=${encodeURIComponent(String(parsedId))}`;
 
   // Cache successful responses on Vercel Edge for 1 hour, stale-while-revalidate 1 day
+  // Both browsers and crawlers share the identical cached response (no User-Agent variation)
   res.statusCode = 200;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Vary', 'User-Agent');
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
 
   const html = renderHtml({
@@ -391,8 +405,7 @@ export default async function handler(req, res) {
     imageAlt,
     canonicalShareUrl,
     targetAppUrl,
-    mediaType: rawType,
-    crawler
+    mediaType: rawType
   });
 
   return res.end(html);
