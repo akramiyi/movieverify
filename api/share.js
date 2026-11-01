@@ -128,17 +128,15 @@ function renderHtml({
   <meta name="twitter:description" content="${escapeHtml(description)}" />
   <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
   <meta name="twitter:image:alt" content="${escapeHtml(imageAlt)}" />
-${crawler ? '' : `
-  <!-- Human Browser Fast Redirect -->
-  <meta http-equiv="refresh" content="0;url=${escapeHtml(targetAppUrl)}" />
+${crawler ? '' : `  <meta http-equiv="refresh" content="0;url=${escapeHtml(targetAppUrl)}" />
+  <!-- Human Browser Instant Client Redirect -->
   <script>
     try {
       window.location.replace(${JSON.stringify(targetAppUrl)});
     } catch (e) {
       window.location.href = ${JSON.stringify(targetAppUrl)};
     }
-  </script>
-`}
+  </script>`}
   <style>
     body {
       margin: 0;
@@ -380,6 +378,7 @@ export default async function handler(req, res) {
   // Cache successful responses on Vercel Edge for 1 hour, stale-while-revalidate 1 day
   res.statusCode = 200;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Vary', 'User-Agent');
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
 
   const html = renderHtml({
