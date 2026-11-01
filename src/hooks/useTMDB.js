@@ -135,9 +135,12 @@ export const formatMovie = (m) => {
   const resolvedMediaType = (
     m.media_type ||
     m.mediaType ||
+    (String(id).includes('-tv') ? 'tv' : null) ||
+    (String(id).includes('-movie') ? 'movie' : null) ||
     (m.first_air_date ? 'tv' : null) ||
+    (m.release_date ? 'movie' : null) ||
     getMediaTypeFromId(id) ||
-    'movie'
+    null
   );
 
   return {
@@ -253,7 +256,16 @@ const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
     const batchResults = await Promise.all(
       batch.map(async (idStr) => {
         const parsedId = parseInt(idStr.split('-')[0], 10);
-        const mediaType = idStr.includes('-tv') ? 'tv' : 'movie';
+        const mediaType = idStr.includes('-tv')
+          ? 'tv'
+          : (idStr.includes('-movie')
+            ? 'movie'
+            : getMediaTypeFromId(parsedId));
+
+        if (!mediaType) {
+          // If media type remains unknown or ambiguous, skip that item from typed metadata fetching
+          return null;
+        }
 
         try {
           let item = await fetchTMDB(`/${mediaType}/${parsedId}`);
@@ -343,9 +355,12 @@ export const useTMDB = () => {
           fetchTMDB('/tv/popular?language=en-US&page=1')
         ]);
 
-        const trendingList = (trendingRes.results || []).map(formatMovie);
-        const popularList = (popularRes.results || []).map(formatMovie);
-        const bollywoodList = (bollywoodRes.results || []).map(formatMovie);
+        const trendingList = (trendingRes.results || []).map(item => {
+          const mType = item.media_type || (item.first_air_date ? 'tv' : (item.release_date ? 'movie' : getMediaTypeFromId(item.id)));
+          return formatMovie({ ...item, media_type: mType });
+        });
+        const popularList = (popularRes.results || []).map(item => formatMovie({ ...item, media_type: 'movie' }));
+        const bollywoodList = (bollywoodRes.results || []).map(item => formatMovie({ ...item, media_type: 'movie' }));
 
         const mergedSouth = [
           ...(teluguRes.results || []),
@@ -361,9 +376,9 @@ export const useTMDB = () => {
 
         const southIndianList = Array.from(uniqueSouthMap.values())
           .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
-          .map(formatMovie);
+          .map(item => formatMovie({ ...item, media_type: 'movie' }));
 
-        const webSeriesList = (webSeriesRes.results || []).map(formatMovie);
+        const webSeriesList = (webSeriesRes.results || []).map(item => formatMovie({ ...item, media_type: 'tv' }));
 
         const allFetchedSoFar = [
           ...trendingList,
@@ -401,7 +416,21 @@ export const useTMDB = () => {
         localMovies.forEach(m => {
           const hasLocalLink = !!(m.download480p || m.download720p || m.download1080p || m.seasons);
           if (hasLocalLink && !downloadAvailableIds.some(id => String(id) === String(m.id) || String(id).startsWith(String(m.id) + '-'))) {
-            downloadAvailableIds.push(`${m.id}-${m.seasons ? 'tv' : 'movie'}`);
+            const mType = (
+              m.mediaType ||
+              m.media_type ||
+              (String(m.id).includes('-tv') ? 'tv' : null) ||
+              (String(m.id).includes('-movie') ? 'movie' : null) ||
+              (m.seasons && m.seasons.length > 0 ? 'tv' : null) ||
+              (m.first_air_date ? 'tv' : null) ||
+              (m.genre && (m.genre.toLowerCase().includes('web series') || m.genre.toLowerCase().includes('tv series')) ? 'tv' : null) ||
+              getMediaTypeFromId(m.id) ||
+              (m.release_date ? 'movie' : null) ||
+              null
+            );
+            if (mType) {
+              downloadAvailableIds.push(`${m.id}-${mType}`);
+            }
           }
         });
 
@@ -425,12 +454,16 @@ export const useTMDB = () => {
         localMovies.forEach(m => {
           const hasLocalLink = !!(m.download480p || m.download720p || m.download1080p || m.seasons);
           if (hasLocalLink) {
-            const fetchedItem = resolvedList.find(r => String(r.id) === String(m.id));
+            const mType = m.mediaType || (m.seasons && m.seasons.length > 0 ? 'tv' : null) || getMediaTypeFromId(m.id);
+            const fetchedItem = resolvedList.find(r => String(r.id) === String(m.id) && (!mType || r.mediaType === mType));
             if (fetchedItem) {
               fetchedItem.download480p = m.download480p || fetchedItem.download480p;
               fetchedItem.download720p = m.download720p || fetchedItem.download720p;
               fetchedItem.download1080p = m.download1080p || fetchedItem.download1080p;
               fetchedItem.seasons = m.seasons || fetchedItem.seasons;
+              if (mType) {
+                fetchedItem.mediaType = mType;
+              }
             }
           }
         });
@@ -506,7 +539,13 @@ export const searchTMDB = async (query) => {
         item.media_type === 'movie' ||
         item.media_type === 'tv'
       )
-      .map(formatMovie);
+      .map(item => {
+        const mType = item.media_type || (item.first_air_date ? 'tv' : (item.release_date ? 'movie' : null));
+        return formatMovie({
+          ...item,
+          media_type: mType
+        });
+      });
 
     return prioritizeDownloads(results);
 
@@ -608,21 +647,28 @@ export const fetchMovieOrTVById = async (id, requestedType = null) => {
     const localMatch = localMovies.find(m => {
       const cleanLocalId = String(m.id).split('-')[0];
       if (cleanLocalId !== String(parsedId)) return false;
-      const isTv = m.mediaType === 'tv' || m.seasons || (m.genre && m.genre.toLowerCase().includes('web series'));
-      const localType = isTv ? 'tv' : 'movie';
+      const isTv = m.mediaType === 'tv' || (m.seasons && m.seasons.length > 0) || (m.genre && (m.genre.toLowerCase().includes('web series') || m.genre.toLowerCase().includes('tv series')));
+      const localType = m.mediaType || (isTv ? 'tv' : 'movie');
       if (requestedType && localType !== requestedType) return false;
       return true;
     });
     if (localMatch) {
-      const isTv = localMatch.mediaType === 'tv' || localMatch.seasons || (localMatch.genre && localMatch.genre.toLowerCase().includes('web series'));
+      const isTv = localMatch.mediaType === 'tv' || (localMatch.seasons && localMatch.seasons.length > 0) || (localMatch.genre && (localMatch.genre.toLowerCase().includes('web series') || localMatch.genre.toLowerCase().includes('tv series')));
+      const finalType = localMatch.mediaType || (isTv ? 'tv' : 'movie');
       return {
         ...localMatch,
-        mediaType: isTv ? 'tv' : 'movie'
+        mediaType: finalType,
+        media_type: finalType
       };
     }
     return null;
   }
 
   item.media_type = resolvedType;
-  return formatMovie(item);
+  const formatted = formatMovie(item);
+  return {
+    ...formatted,
+    mediaType: resolvedType,
+    media_type: resolvedType
+  };
 };

@@ -16,7 +16,7 @@ import IntroAnimation from './components/IntroAnimation';
 import SearchFilters from './components/SearchFilters';
 import SupportSection from './components/SupportSection';
 
-import { useTMDB, searchTMDB, fetchMovieOrTVById } from './hooks/useTMDB';
+import { useTMDB, searchTMDB, fetchMovieOrTVById, getMediaTypeFromId } from './hooks/useTMDB';
 import Toast from './components/Toast';
 import { useLatestIndiaRelease } from './hooks/useLatestIndiaRelease';
 import InstallPWA from './components/InstallPWA';
@@ -59,22 +59,36 @@ function App() {
 
   const handleMovieSelect = (movie) => {
     if (!movie) return;
-    setSelectedMovie(movie);
-    addToRecentlyViewed(movie);
 
     // Canonical deep-link URL format: /?type=movie&id=550 or /?type=tv&id=71446
     const cleanId = String(movie.id).split('-')[0];
-    const mediaType = movie.mediaType || (
-      String(movie.id).includes('-tv') ? 'tv' : (
-        movie.seasons || (movie.genre && movie.genre.toLowerCase().includes('web series')) ? 'tv' : 'movie'
-      )
+    const resolvedMediaType = (
+      movie.mediaType ||
+      movie.media_type ||
+      (String(movie.id).includes('-tv') ? 'tv' : null) ||
+      (String(movie.id).includes('-movie') ? 'movie' : null) ||
+      (movie.seasons && movie.seasons.length > 0 ? 'tv' : null) ||
+      (movie.first_air_date ? 'tv' : null) ||
+      (movie.genre && (movie.genre.toLowerCase().includes('web series') || movie.genre.toLowerCase().includes('tv series')) ? 'tv' : null) ||
+      getMediaTypeFromId(cleanId) ||
+      (movie.release_date ? 'movie' : null) ||
+      null
     );
+
+    const enrichedMovie = resolvedMediaType
+      ? { ...movie, mediaType: resolvedMediaType, media_type: resolvedMediaType }
+      : movie;
+
+    setSelectedMovie(enrichedMovie);
+    addToRecentlyViewed(enrichedMovie);
 
     const searchParams = new URLSearchParams(location.search);
     const currentId = searchParams.get('id') || searchParams.get('movie') || searchParams.get('tv');
 
     if (currentId !== cleanId) {
-      searchParams.set('type', mediaType === 'tv' ? 'tv' : 'movie');
+      if (resolvedMediaType) {
+        searchParams.set('type', resolvedMediaType);
+      }
       searchParams.set('id', cleanId);
       searchParams.delete('movie');
       searchParams.delete('tv');
@@ -310,13 +324,18 @@ function App() {
       const foundInMemory = inMemoryPool.find((m) => {
         const mId = String(m.id).split('-')[0];
         if (mId !== String(parsedId)) return false;
-        if (requestedType && m.mediaType && m.mediaType !== requestedType) return false;
+        const itemType = m.mediaType || m.media_type || (m.first_air_date ? 'tv' : (m.release_date ? 'movie' : getMediaTypeFromId(mId)));
+        if (requestedType && itemType && itemType !== requestedType) return false;
         return true;
       });
 
       if (foundInMemory && !isCancelled) {
-        setSelectedMovie(foundInMemory);
-        addToRecentlyViewed(foundInMemory);
+        const itemType = foundInMemory.mediaType || foundInMemory.media_type || requestedType || getMediaTypeFromId(parsedId);
+        const enriched = itemType
+          ? { ...foundInMemory, mediaType: itemType, media_type: itemType }
+          : foundInMemory;
+        setSelectedMovie(enriched);
+        addToRecentlyViewed(enriched);
         setDeepLinkLoading(false);
         return;
       }
@@ -326,8 +345,12 @@ function App() {
         if (isCancelled) return;
 
         if (titleData) {
-          setSelectedMovie(titleData);
-          addToRecentlyViewed(titleData);
+          const itemType = titleData.mediaType || titleData.media_type || requestedType || getMediaTypeFromId(parsedId);
+          const enriched = itemType
+            ? { ...titleData, mediaType: itemType, media_type: itemType }
+            : titleData;
+          setSelectedMovie(enriched);
+          addToRecentlyViewed(enriched);
         } else {
           setToastMessage('Title not found or unavailable.');
           setShowToast(true);

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Play, Plus, ThumbsUp, Download, Check } from 'lucide-react';
 import { movies } from '../data/movies';
-import { fetchTMDBDetails, getDownloadLinks } from '../hooks/useTMDB';
+import { fetchTMDBDetails, getDownloadLinks, getMediaTypeFromId } from '../hooks/useTMDB';
 import ImageWithFallback from './ImageWithFallback';
 import ReportProblemButton from './ReportProblemButton';
 import ShareButton from './ShareButton';
@@ -30,18 +30,25 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
   const download1080p = liveLinks.download1080p || movie?.download1080p;
   const seasons = liveLinks.seasons || movie?.seasons;
 
+  const idStr = movie ? String(movie.id) : '';
+  const parsedId = movie ? parseInt(idStr.split('-')[0], 10) : NaN;
+  const resolvedMediaType = movie ? (
+    movie.mediaType ||
+    movie.media_type ||
+    (idStr.includes('-tv') ? 'tv' : null) ||
+    (idStr.includes('-movie') ? 'movie' : null) ||
+    (movie.seasons && movie.seasons.length > 0 ? 'tv' : null) ||
+    (movie.first_air_date ? 'tv' : null) ||
+    (movie.genre && (movie.genre.toLowerCase().includes('web series') || movie.genre.toLowerCase().includes('tv series')) ? 'tv' : null) ||
+    getMediaTypeFromId(parsedId) ||
+    (movie.release_date ? 'movie' : null) ||
+    null
+  ) : null;
+
   useEffect(() => {
     if (movie && movie.id) {
-      const idStr = String(movie.id);
-      const parsedId = parseInt(idStr.split('-')[0], 10);
-      const mediaType = movie.mediaType || (
-        idStr.includes('-tv') ? 'tv' : (
-          movie.seasons || (movie.genre && movie.genre.toLowerCase().includes('web series')) ? 'tv' : 'movie'
-        )
-      );
-
       if (!isNaN(parsedId)) {
-        fetchTMDBDetails(parsedId, mediaType).then((res) => {
+        fetchTMDBDetails(parsedId, resolvedMediaType || 'movie').then((res) => {
           setDetails({
             cast: res.cast || 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
             trailerUrl: res.trailerUrl || '',
@@ -56,7 +63,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
         });
       }
     }
-  }, [movie]);
+  }, [movie, parsedId, resolvedMediaType]);
 
   if (isLoading && !movie) {
     return (
@@ -274,8 +281,12 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                   <ShareButton
                     movieId={movie.id}
                     movieTitle={movie.title}
-                    mediaType={movie.mediaType || (String(movie.id).includes("-tv") ? "tv" : (movie.seasons ? "tv" : "movie"))}
-                    movie={movie}
+                    mediaType={resolvedMediaType}
+                    movie={{
+                      ...movie,
+                      mediaType: resolvedMediaType || movie.mediaType || null,
+                      media_type: resolvedMediaType || movie.media_type || null
+                    }}
                   />
                 </div>
                 <ReviewSection

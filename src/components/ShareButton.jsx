@@ -1,30 +1,60 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Share2, Check, MessageCircle, Link as LinkIcon, MoreHorizontal } from 'lucide-react';
+import { getMediaTypeFromId } from '../hooks/useTMDB';
 
 const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
 
-  // Derive canonical media type and clean numeric ID
-  const resolvedType = (
-    mediaType ||
-    movie?.mediaType ||
-    movie?.media_type ||
-    (String(movieId || movie?.id).includes('-tv') ? 'tv' : null) ||
-    (movie?.seasons && movie.seasons.length > 0 ? 'tv' : null) ||
-    (movie?.genre && movie.genre.toLowerCase().includes('web series') ? 'tv' : null) ||
-    'movie'
-  );
-  const type = resolvedType === 'tv' ? 'tv' : 'movie';
   const cleanId = String(movieId || movie?.id || '').split('-')[0].trim();
   const title = movieTitle || movie?.title || movie?.name || 'this title';
+
+  // Authoritative media type resolver:
+  // 1. Movie object's own mediaType takes precedence over external/inherited props
+  // 2. Explicit mediaType prop
+  // 3. ID suffix hints (-tv vs -movie)
+  // 4. Seasons / TV-specific metadata
+  // 5. Catalog / local reference lookup
+  // 6. Release date metadata
+  // Never silently defaults to 'movie'
+  const deriveMediaType = () => {
+    const objType = movie?.mediaType || movie?.media_type;
+    if (objType === 'tv' || objType === 'movie') return objType;
+
+    if (mediaType === 'tv' || mediaType === 'movie') return mediaType;
+
+    const rawIdStr = String(movieId || movie?.id || '');
+    if (rawIdStr.includes('-tv')) return 'tv';
+    if (rawIdStr.includes('-movie')) return 'movie';
+
+    if (movie?.seasons && Array.isArray(movie.seasons) && movie.seasons.length > 0) return 'tv';
+    if (movie?.first_air_date) return 'tv';
+    if (movie?.genre && (
+      movie.genre.toLowerCase().includes('web series') ||
+      movie.genre.toLowerCase().includes('tv series')
+    )) {
+      return 'tv';
+    }
+
+    if (cleanId) {
+      const fromCatalog = getMediaTypeFromId(cleanId);
+      if (fromCatalog === 'tv' || fromCatalog === 'movie') return fromCatalog;
+    }
+
+    if (movie?.release_date) return 'movie';
+
+    return null;
+  };
+
+  const type = deriveMediaType();
+  const hasValidMediaType = !!type;
 
   // Dynamic Open Graph share URL format: /share/movie/{id} or /share/tv/{id}
   const baseOrigin = (typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost'))
     ? window.location.origin
     : 'https://movieverify.vercel.app';
-  const shareUrl = `${baseOrigin}/share/${type}/${cleanId}`;
+  const shareUrl = hasValidMediaType ? `${baseOrigin}/share/${type}/${cleanId}` : '';
   const shareText = `Check out "${title}" on MovieVerify!`;
 
   // Close menu on click outside
@@ -69,6 +99,7 @@ const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
 
   const handleCopyLink = async (e) => {
     if (e && e.stopPropagation) e.stopPropagation();
+    if (!hasValidMediaType || !shareUrl) return;
     const success = await copyToClipboard(shareUrl);
     if (success) {
       setCopied(true);
@@ -81,6 +112,7 @@ const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
 
   const handleWhatsAppShare = (e) => {
     e.stopPropagation();
+    if (!hasValidMediaType || !shareUrl) return;
     // Direct WhatsApp compose flow (bypasses Windows/OS native share sheet)
     const textPayload = `${shareText}\n${shareUrl}`;
     const url = `https://wa.me/?text=${encodeURIComponent(textPayload)}`;
@@ -91,6 +123,7 @@ const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
   const handleNativeShare = async (e) => {
     e.stopPropagation();
     setShowMenu(false);
+    if (!hasValidMediaType || !shareUrl) return;
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         await navigator.share({
@@ -129,48 +162,56 @@ const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
       </button>
 
       {showMenu && (
-        <div className="absolute top-full left-0 mt-2 bg-[#242424]
-                        rounded-lg shadow-xl p-2 z-50 w-52 border border-white/10
+        <div className="absolute top-full right-0 left-auto sm:right-auto sm:left-0 mt-2 bg-[#242424]
+                        rounded-lg shadow-2xl p-2 z-50 w-56 border border-white/10
                         animate-in fade-in zoom-in-95 duration-100">
-          {/* Action 1: Direct WhatsApp compose flow */}
-          <button
-            onClick={handleWhatsAppShare}
-            className="flex items-center gap-2.5 w-full px-3 py-2
-                       text-white text-sm hover:bg-[#333]
-                       rounded-lg transition cursor-pointer text-left"
-          >
-            <MessageCircle className="w-4 h-4 text-[#25D366] flex-shrink-0" />
-            <span>WhatsApp</span>
-          </button>
+          {!hasValidMediaType ? (
+            <div className="p-3 text-xs text-amber-300 bg-amber-950/40 border border-amber-800/50 rounded-lg text-center leading-relaxed">
+              Media type could not be verified. Sharing is disabled for this title.
+            </div>
+          ) : (
+            <>
+              {/* Action 1: Direct WhatsApp compose flow */}
+              <button
+                onClick={handleWhatsAppShare}
+                className="flex items-center gap-2.5 w-full px-3 py-2
+                           text-white text-sm hover:bg-[#333]
+                           rounded-lg transition cursor-pointer text-left whitespace-nowrap"
+              >
+                <MessageCircle className="w-4 h-4 text-[#25D366] flex-shrink-0" />
+                <span>WhatsApp</span>
+              </button>
 
-          {/* Action 2: Copy link */}
-          <button
-            onClick={handleCopyLink}
-            className="flex items-center gap-2.5 w-full px-3 py-2
-                       text-white text-sm hover:bg-[#333]
-                       rounded-lg transition cursor-pointer text-left"
-          >
-            {copied ? (
-              <Check className="w-4 h-4 text-[#25D366] flex-shrink-0" />
-            ) : (
-              <LinkIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
-            )}
-            <span className={copied ? "text-[#25D366] font-medium" : ""}>
-              {copied ? 'Copied Link!' : 'Copy Link'}
-            </span>
-          </button>
+              {/* Action 2: Copy link */}
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-2.5 w-full px-3 py-2
+                           text-white text-sm hover:bg-[#333]
+                           rounded-lg transition cursor-pointer text-left whitespace-nowrap"
+              >
+                {copied ? (
+                  <Check className="w-4 h-4 text-[#25D366] flex-shrink-0" />
+                ) : (
+                  <LinkIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                )}
+                <span className={copied ? "text-[#25D366] font-medium" : ""}>
+                  {copied ? 'Copied Link!' : 'Copy Link'}
+                </span>
+              </button>
 
-          {/* Action 3: More options (navigator.share with Copy Link fallback) */}
-          <button
-            onClick={handleNativeShare}
-            className="flex items-center gap-2.5 w-full px-3 py-2
-                       text-gray-300 hover:text-white text-sm hover:bg-[#333]
-                       rounded-lg transition cursor-pointer text-left
-                       border-t border-white/5 mt-1 pt-2"
-          >
-            <MoreHorizontal className="w-4 h-4 text-gray-400 flex-shrink-0" />
-            <span>More options...</span>
-          </button>
+              {/* Action 3: More options (navigator.share with Copy Link fallback) */}
+              <button
+                onClick={handleNativeShare}
+                className="flex items-center gap-2.5 w-full px-3 py-2
+                           text-gray-300 hover:text-white text-sm hover:bg-[#333]
+                           rounded-lg transition cursor-pointer text-left whitespace-nowrap
+                           border-t border-white/5 mt-1 pt-2"
+              >
+                <MoreHorizontal className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span>More options...</span>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
