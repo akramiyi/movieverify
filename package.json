@@ -7,10 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:api": "node --test tests/api/*.test.js",
+    "test:client": "node --test tests/client/*.test.js",
+    "test": "node --test tests/api/*.test.js tests/client/*.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
+    "firebase": "^13.1.0",
+    "firebase-admin": "^14.5.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3"

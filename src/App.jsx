@@ -20,6 +20,7 @@ import { useTMDB, searchTMDB, fetchMovieOrTVById, getMediaTypeFromId } from './h
 import Toast from './components/Toast';
 import { useLatestIndiaRelease } from './hooks/useLatestIndiaRelease';
 import InstallPWA from './components/InstallPWA';
+import NotificationPrompt from './components/NotificationPrompt';
 import ActorsRow from './components/ActorsRow';
 import ActorModal from './components/ActorModal';
 import { actors } from './data/actors';
@@ -835,6 +836,14 @@ function App() {
         <AdminPanel onClose={handleCloseAdmin} />
       )}
       <InstallPWA />
+      {!showIntro && !siteLocked && !showAdmin && location.pathname !== '/admin' && (
+        <NotificationPrompt
+          onSubscribeSuccess={() => {
+            setToastMessage('Notifications enabled! You will receive new release alerts.');
+            setShowToast(true);
+          }}
+        />
+      )}
       <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
     </div>
   );

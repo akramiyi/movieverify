@@ -26,3 +26,7 @@ dist-ssr
 # Telegram Bot secrets (NEVER commit)
 telegram-bot/.env
 telegram-bot/node_modules
+
+# Local safety snapshots (Phase 15.2.5)
+.backup_phase_15_2_5/
+
