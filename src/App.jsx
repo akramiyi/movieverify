@@ -29,6 +29,7 @@ import GenrePage from './pages/GenrePage';
 import { useRecentlyViewed } from './hooks/useRecentlyViewed';
 import { useDownloadHistory } from './hooks/useDownloadHistory';
 import DownloadHistoryModal from './components/DownloadHistoryModal';
+import NotificationCenter from './components/NotificationCenter';
 
 const getActors = () => actors.filter(a => a.type === 'actor');
 const getActresses = () => actors.filter(a => a.type === 'actress');
@@ -50,6 +51,7 @@ function App() {
   const { recentlyViewed, addToRecentlyViewed } = useRecentlyViewed();
   const { history, addToHistory, clearHistory } = useDownloadHistory();
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   const [showIntro, setShowIntro] = useState(() => {
     return !localStorage.getItem('introShown');
   });
@@ -555,6 +557,7 @@ function App() {
               onProfileClick={handleOpenAuthModal}
               onAdminClick={handleOpenAdmin}
               onHistoryClick={() => setIsHistoryModalOpen(true)}
+              onNotificationClick={() => setIsNotificationCenterOpen(true)}
             />
 
       {tmdbError && (
@@ -797,6 +800,16 @@ function App() {
         onClose={() => setIsHistoryModalOpen(false)}
         history={history}
         onClear={clearHistory}
+      />
+
+      <NotificationCenter
+        isOpen={isNotificationCenterOpen}
+        onClose={() => setIsNotificationCenterOpen(false)}
+        onSelectMovie={handleMovieSelect}
+        onSelectActor={(actor) => {
+          setSelectedActor(actor);
+          setIsActorModalOpen(true);
+        }}
       />
 
       <ActorModal

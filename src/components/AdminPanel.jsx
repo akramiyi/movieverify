@@ -4,6 +4,7 @@ import { supabase } from '../data/supabaseClient';
 import { searchTMDB, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import CampaignManager from './CampaignManager';
 
 const AdminLiveClock = () => {
   const [now, setNow] = useState(new Date());
@@ -579,6 +580,12 @@ const AdminPanel = ({ onClose }) => {
             {activeTab === 'analytics' ? 'Back to Manager' : 'View Analytics'}
           </button>
           <button 
+            onClick={() => setActiveTab(activeTab === 'campaigns' ? 'manager' : 'campaigns')}
+            className="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
+          >
+            {activeTab === 'campaigns' ? 'Back to Manager' : 'Campaigns'}
+          </button>
+          <button 
             onClick={() => setActiveTab(activeTab === 'reports' ? 'manager' : 'reports')}
             className="bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
           >
@@ -601,7 +608,11 @@ const AdminPanel = ({ onClose }) => {
 
         {/* Main Content Area */}
         <div className="flex flex-col md:flex-row gap-8 w-full">
-          {activeTab === 'reports' ? (
+          {activeTab === 'campaigns' ? (
+            <div className="w-full flex-1">
+              <CampaignManager />
+            </div>
+          ) : activeTab === 'reports' ? (
             <div className="w-full flex-1">
               <ReportsPanel />
             </div>

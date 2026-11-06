@@ -49,6 +49,14 @@ CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$
     );
 $$ LANGUAGE sql STABLE;
 
+CREATE OR REPLACE FUNCTION auth.role() RETURNS text AS $$
+    SELECT coalesce(
+        nullif(current_setting('request.jwt.claim.role', true), ''),
+        (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+        'authenticated'
+    );
+$$ LANGUAGE sql STABLE;
+
 -- 4. Create Mock Table public.admin_users for Local Tests
 CREATE TABLE IF NOT EXISTS public.admin_users (
     user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,

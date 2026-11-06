@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Bell, BellRing } from 'lucide-react';
+import { useSubscriptions } from '../hooks/useSubscriptions';
 import MovieCard from '../components/MovieCard';
 import { formatMovie } from '../hooks/useTMDB';
 
@@ -46,6 +47,8 @@ const GenrePage = ({ onMovieClick, myList, onToggleMyList }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const { isGenreNotifying, toggleGenreNotify } = useSubscriptions();
+  const isSubscribed = isGenreNotifying(genreId || genreSlug);
 
   const genreId = TMDB_GENRE_MAP[genreSlug];
   const genreLabel = GENRE_LABELS[genreSlug] || genreSlug;
@@ -92,9 +95,22 @@ const GenrePage = ({ onMovieClick, myList, onToggleMyList }) => {
     <div className="min-h-screen bg-[#141414] pt-24 pb-10">
       <div className="px-4 md:px-12">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl md:text-5xl font-black text-white">
-            {genreLabel} Movies
-          </h1>
+          <div className="flex flex-wrap items-center gap-4">
+            <h1 className="text-3xl md:text-5xl font-black text-white">
+              {genreLabel} Movies
+            </h1>
+            <button
+              onClick={() => toggleGenreNotify({ id: genreId || genreSlug, name: genreLabel })}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-md ${
+                isSubscribed 
+                  ? 'bg-[#E50914] text-white' 
+                  : 'bg-white/10 text-gray-300 hover:bg-white/20 hover:text-white'
+              }`}
+            >
+              {isSubscribed ? <BellRing className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
+              {isSubscribed ? 'Subscribed' : 'Notify on New'}
+            </button>
+          </div>
           <button
             onClick={() => navigate('/')}
             className="w-10 h-10 bg-[#2a2a2a] hover:bg-[#E50914] 

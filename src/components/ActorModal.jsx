@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Download } from 'lucide-react';
+import { X, Download, Bell, BellRing } from 'lucide-react';
+import { useSubscriptions } from '../hooks/useSubscriptions';
 import { formatMovie } from '../hooks/useTMDB';
 
 const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
   const [movies, setMovies] = useState([]);
+  const { isActorNotifying, toggleActorNotify } = useSubscriptions();
+  const isSubscribed = actor ? isActorNotifying(actor.tmdb_id || actor.id) : false;
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -82,6 +85,17 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
               <p className="text-white/80 text-sm mt-1">
                 {movies.length} Movies & Shows
               </p>
+              <button
+                onClick={() => toggleActorNotify(actor)}
+                className={`mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition shadow-md ${
+                  isSubscribed 
+                    ? 'bg-black/80 text-white border border-white/20 hover:bg-black' 
+                    : 'bg-white text-black hover:bg-white/90'
+                }`}
+              >
+                {isSubscribed ? <BellRing className="w-3.5 h-3.5 text-[#E50914]" /> : <Bell className="w-3.5 h-3.5" />}
+                {isSubscribed ? 'Subscribed to Releases' : 'Notify on New Movies'}
+              </button>
             </div>
 
             {/* Movies Grid */}

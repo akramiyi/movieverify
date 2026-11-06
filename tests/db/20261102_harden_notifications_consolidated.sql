@@ -5,7 +5,12 @@
 -- Scope: 11 Tables, 14 Database Functions, 5 Triggers, Full RLS, Strict Grants
 -- ============================================================================
 
-\set ON_ERROR_STOP on
+-- \set ON_ERROR_STOP on
+-- NOTE FOR SUPABASE SQL EDITOR & CLI USAGE:
+-- The '\set' psql meta-command is commented out above because the Supabase Studio SQL Editor
+-- communicates directly via PostgreSQL server APIs and rejects backslash client commands.
+-- Transactional atomicity is fully guaranteed by the enclosing BEGIN ... COMMIT block.
+-- If executing via the psql command-line client, run with: psql -v ON_ERROR_STOP=1 -f <file>
 
 BEGIN;
 
@@ -1329,11 +1334,57 @@ CREATE OR REPLACE FUNCTION public.record_notification_telemetry(
 RETURNS boolean AS $$
 DECLARE
     v_del RECORD;
+    v_caller_role text;
 BEGIN
-    IF p_event_type NOT IN ('delivered', 'opened') THEN
-        RAISE EXCEPTION 'Invalid telemetry event type: %', p_event_type;
+    -- Validate parameters
+    IF p_event_type IS NULL OR p_event_type NOT IN ('delivered', 'opened') THEN
+        RAISE EXCEPTION 'Invalid telemetry event type';
     END IF;
 
+    IF p_nonce IS NULL 
+       OR length(regexp_replace(p_nonce, '\s+', '', 'g')) = 0 
+       OR length(p_nonce) > 128 THEN
+        RAISE EXCEPTION 'Invalid telemetry nonce: must be non-empty, non-whitespace, and at most 128 characters';
+    END IF;
+
+    -- Input-size validation on device_info payload: explicit 4096-byte limit
+    IF p_device_info IS NOT NULL AND octet_length(p_device_info::text) > 4096 THEN
+        RAISE EXCEPTION 'Invalid telemetry device_info: payload exceeds 4096 bytes';
+    END IF;
+
+    -- Resolve caller role securely from Supabase JWT auth context.
+    -- Inside a SECURITY DEFINER function owned by postgres, current_user evaluates to 'postgres'
+    -- (the function owner) and NOT the invoking client! Relying on current_user would allow any
+    -- client calling this function to bypass identity checks as postgres.
+    -- We inspect auth.role() or current_setting('request.jwt.claim.role', true).
+    v_caller_role := coalesce(
+        nullif(auth.role(), ''),
+        nullif(current_setting('request.jwt.claim.role', true), ''),
+        (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')
+    );
+
+    IF v_caller_role IS NULL THEN
+        RAISE EXCEPTION 'Authentication required: caller role is missing or unverified';
+    END IF;
+
+    -- 1. Trusted backend service role execution
+    IF v_caller_role = 'service_role' THEN
+        -- Trusted service execution: allowed
+        NULL;
+    -- 2. Authenticated client caller: auth.uid() must be non-NULL and match p_recipient_id
+    ELSIF v_caller_role = 'authenticated' THEN
+        IF auth.uid() IS NULL THEN
+            RAISE EXCEPTION 'Authentication required: auth.uid() is NULL';
+        END IF;
+        IF auth.uid() IS DISTINCT FROM p_recipient_id THEN
+            RAISE EXCEPTION 'Caller auth.uid() % does not match telemetry recipient_id %', auth.uid(), p_recipient_id;
+        END IF;
+    -- 3. Explicitly reject anon, public, postgres (when spoofed via JWT), and any unexpected roles
+    ELSE
+        RAISE EXCEPTION 'Unauthorized caller role: %', v_caller_role;
+    END IF;
+
+    -- Verify delivery exists and belongs to p_recipient_id
     SELECT id, recipient_id, delivery_status INTO v_del
     FROM public.notification_deliveries
     WHERE id = p_delivery_id
@@ -1347,10 +1398,11 @@ BEGIN
         RAISE EXCEPTION 'Recipient mismatch for delivery %', p_delivery_id;
     END IF;
 
+    -- Insert telemetry record (unique constraints uq_telemetry_nonce and uq_telemetry_delivery_event enforce deduplication)
     INSERT INTO public.notification_telemetry (
         delivery_id, recipient_id, event_type, nonce, device_info
     ) VALUES (
-        p_delivery_id, p_recipient_id, p_event_type, p_nonce, p_device_info
+        p_delivery_id, p_recipient_id, p_event_type, p_nonce, COALESCE(p_device_info, '{}'::jsonb)
     );
 
     IF p_event_type = 'delivered' AND v_del.delivery_status = 'sent' THEN
@@ -1787,66 +1839,78 @@ ALTER TABLE public.notification_opt_outs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_audit_log ENABLE ROW LEVEL SECURITY;
 
 -- Tokens: users read/manage their own tokens
+DROP POLICY IF EXISTS p_tokens_user_all ON public.notification_tokens;
 CREATE POLICY p_tokens_user_all ON public.notification_tokens
     FOR ALL TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
 -- Subscriptions: users read/manage their own requests
+DROP POLICY IF EXISTS p_movie_notify_user_all ON public.movie_notify_requests;
 CREATE POLICY p_movie_notify_user_all ON public.movie_notify_requests
     FOR ALL TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS p_actor_notify_user_all ON public.actor_notify_requests;
 CREATE POLICY p_actor_notify_user_all ON public.actor_notify_requests
     FOR ALL TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS p_genre_notify_user_all ON public.genre_notify_requests;
 CREATE POLICY p_genre_notify_user_all ON public.genre_notify_requests
     FOR ALL TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
 -- User Notifications: users read their notifications, update read state
+DROP POLICY IF EXISTS p_user_notif_select ON public.user_notifications;
 CREATE POLICY p_user_notif_select ON public.user_notifications
     FOR SELECT TO authenticated
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS p_user_notif_update ON public.user_notifications;
 CREATE POLICY p_user_notif_update ON public.user_notifications
     FOR UPDATE TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
 -- Opt-Outs: users manage their preferences
+DROP POLICY IF EXISTS p_opt_outs_user_all ON public.notification_opt_outs;
 CREATE POLICY p_opt_outs_user_all ON public.notification_opt_outs
     FOR ALL TO authenticated
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
 -- Campaigns: admins manage campaigns; authenticated read published/scheduled
+DROP POLICY IF EXISTS p_campaigns_admin ON public.notification_campaigns;
 CREATE POLICY p_campaigns_admin ON public.notification_campaigns
     FOR ALL TO authenticated
     USING (public.notifications_is_admin())
     WITH CHECK (public.notifications_is_admin());
 
 -- Queue: admins only
+DROP POLICY IF EXISTS p_queue_admin ON public.notification_queue;
 CREATE POLICY p_queue_admin ON public.notification_queue
     FOR ALL TO authenticated
     USING (public.notifications_is_admin())
     WITH CHECK (public.notifications_is_admin());
 
 -- Deliveries: users see deliveries for their recipient_id; admins all
+DROP POLICY IF EXISTS p_deliveries_user_select ON public.notification_deliveries;
 CREATE POLICY p_deliveries_user_select ON public.notification_deliveries
     FOR SELECT TO authenticated
     USING (auth.uid() = recipient_id OR public.notifications_is_admin());
 
 -- Telemetry: users select own; admins all
+DROP POLICY IF EXISTS p_telemetry_user_select ON public.notification_telemetry;
 CREATE POLICY p_telemetry_user_select ON public.notification_telemetry
     FOR SELECT TO authenticated
     USING (auth.uid() = recipient_id OR public.notifications_is_admin());
 
 -- Audit Log: admins read only
+DROP POLICY IF EXISTS p_audit_log_admin ON public.notification_audit_log;
 CREATE POLICY p_audit_log_admin ON public.notification_audit_log
     FOR SELECT TO authenticated
     USING (public.notifications_is_admin());
@@ -1854,6 +1918,93 @@ CREATE POLICY p_audit_log_admin ON public.notification_audit_log
 -- ----------------------------------------------------------------------------
 -- SECTION 10: Strict Role Privileges & Grants (Targeted Scoping)
 -- ----------------------------------------------------------------------------
+-- ============================================================================
+-- Explicit Table Privilege Lockdown (Remediates Inherited Default Privileges)
+-- ============================================================================
+-- Supabase / PostgreSQL default privileges for postgres in schema public grant
+-- In production Supabase, postgres default privileges in public include MAINTAIN, REFERENCES, TRIGGER, TRUNCATE
+-- to anon, authenticated, and service_role.
+-- Explicitly revoke all privileges from PUBLIC, anon, and authenticated across all
+-- 15 notification and quarantine tables before granting strictly required minimums.
+
+REVOKE ALL ON TABLE 
+    public.admin_users,
+    public.notification_tokens,
+    public.movie_notify_requests,
+    public.actor_notify_requests,
+    public.genre_notify_requests,
+    public.notification_campaigns,
+    public.notification_queue,
+    public.notification_deliveries,
+    public.notification_telemetry,
+    public.user_notifications,
+    public.notification_opt_outs,
+    public.notification_audit_log,
+    public.legacy_token_quarantine,
+    public.legacy_subscription_quarantine,
+    public.legacy_delivery_quarantine
+FROM PUBLIC, anon, authenticated;
+
+-- Minimum Required Table Grants for Authenticated Users (Governed by RLS Policies)
+-- Tokens: users insert, select, update, delete own tokens
+-- notification_tokens: Device registration, token refresh, and revocation are handled
+-- EXCLUSIVELY through backend serverless endpoints (/api/notifications/register and /api/notifications/revoke)
+-- operating under service_role. No direct client SQL access is required or permitted.
+-- STRICT ZERO GRANTS: Authenticated and anon client roles possess ZERO SELECT, INSERT, UPDATE, or DELETE privileges.
+
+-- Subscriptions: users insert, select, update, delete own requests
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.movie_notify_requests TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.actor_notify_requests TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.genre_notify_requests TO authenticated;
+
+-- User Notifications: users read their notifications and mark read/unread
+GRANT SELECT, UPDATE ON TABLE public.user_notifications TO authenticated;
+
+-- Opt-outs / Preferences: users manage own preferences
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.notification_opt_outs TO authenticated;
+
+-- Admin-managed tables (authenticated users with admin role manage via RLS notifications_is_admin())
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.notification_campaigns TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.notification_queue TO authenticated;
+GRANT SELECT ON TABLE public.notification_audit_log TO authenticated;
+
+-- Read-only delivery & telemetry queries for recipient / admin inspection
+-- notification_deliveries: Strictly restrict client SELECT to user-facing notification delivery metadata.
+-- Excludes all internal dispatch fields (worker_id, reservation_token, reservation_expires_at,
+-- current_dispatch_attempt_id, dispatch_expires_at, token_snapshot_hash, fcm_message_id, failure_reason)
+-- as well as internal retry fields (token_id, retry_after, attempt_count, max_attempts).
+GRANT SELECT (id, campaign_id, recipient_id, delivery_status, created_at, updated_at) 
+    ON TABLE public.notification_deliveries TO authenticated;
+-- notification_telemetry: Telemetry is recorded via SECURITY DEFINER function record_notification_telemetry().
+-- Authenticated users do not require direct SQL SELECT or DML on notification_telemetry table.
+-- Zero client table grants; telemetry table is reserved for service_role and admin queries.
+
+-- admin_users: authenticated users self-row check
+GRANT SELECT ON TABLE public.admin_users TO authenticated;
+
+-- Quarantine tables: STRICTLY ZERO GRANTS to PUBLIC, anon, or authenticated.
+-- (legacy_token_quarantine, legacy_subscription_quarantine, legacy_delivery_quarantine)
+
+-- Full administrative access for backend service_role
+GRANT ALL ON TABLE 
+    public.admin_users,
+    public.notification_tokens,
+    public.movie_notify_requests,
+    public.actor_notify_requests,
+    public.genre_notify_requests,
+    public.notification_campaigns,
+    public.notification_queue,
+    public.notification_deliveries,
+    public.notification_telemetry,
+    public.user_notifications,
+    public.notification_opt_outs,
+    public.notification_audit_log,
+    public.legacy_token_quarantine,
+    public.legacy_subscription_quarantine,
+    public.legacy_delivery_quarantine
+TO service_role;
+
+
 -- 1. Targeted revocations on notification functions (no blanket schema-wide revokes)
 REVOKE ALL ON FUNCTION public.notifications_is_admin() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.claim_notification_queue_batch(text, integer, integer) FROM PUBLIC, anon, authenticated;

@@ -31,6 +31,13 @@ CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$
     SELECT '{"role": "authenticated", "email": "test@movieverify.com"}'::jsonb;
 $$ LANGUAGE sql STABLE;
 
+CREATE OR REPLACE FUNCTION auth.role() RETURNS text AS $$
+    SELECT coalesce(
+        nullif(current_setting('request.jwt.claim.role', true), ''),
+        'authenticated'
+    );
+$$ LANGUAGE sql STABLE;
+
 -- Create roles if missing
 DO $$
 BEGIN
