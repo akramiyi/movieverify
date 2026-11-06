@@ -1,0 +1,233 @@
+/**
+ * React Hook for Firebase Cloud Messaging & Push Notification Management
+ * 
+ * Provides permission checking, token lifecycle handling, and auth sync.
+ * Adheres strictly to non-intrusive permission policies (never auto-prompts).
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '../data/supabaseClient';
+import {
+  isPushNotificationSupported,
+  requestNotificationPermission,
+  getDeviceFcmToken,
+  registerTokenWithBackend,
+  revokeTokenWithBackend,
+  getMessagingInstance,
+  setupForegroundMessageHandler,
+} from '../services/firebaseClient';
+
+const STORAGE_REGISTERED_KEY = 'movieverify_push_registered';
+const STORAGE_LAST_TOKEN_KEY = 'movieverify_push_last_token';
+
+export function usePushNotifications(options = {}) {
+  const { onForegroundMessage = null, vapidKey = null } = options;
+
+  const [permission, setPermission] = useState('default');
+  const [isSupported, setIsSupported] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const tokenRef = useRef(null);
+
+  // 1. Initial Browser Capabilities & Permission Check
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkCapabilities = async () => {
+      if (typeof window === 'undefined') {
+        if (isMounted) setIsLoading(false);
+        return;
+      }
+
+      const supported = await isPushNotificationSupported();
+      if (!isMounted) return;
+      setIsSupported(supported);
+
+      if (!supported) {
+        setPermission('unsupported');
+        setIsLoading(false);
+        return;
+      }
+
+      const currentPerm = Notification.permission;
+      setPermission(currentPerm);
+
+      const hasRegistered = localStorage.getItem(STORAGE_REGISTERED_KEY) === 'true';
+      const lastToken = localStorage.getItem(STORAGE_LAST_TOKEN_KEY);
+      if (lastToken) {
+        tokenRef.current = lastToken;
+      }
+
+      if (currentPerm === 'granted' && hasRegistered) {
+        setIsSubscribed(true);
+      }
+
+      setIsLoading(false);
+    };
+
+    checkCapabilities();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 2. Foreground Message Listener Setup
+  useEffect(() => {
+    if (!isSupported || permission !== 'granted') return;
+
+    let unsubscribe = () => {};
+
+    const setupListener = async () => {
+      const messaging = await getMessagingInstance();
+      if (messaging) {
+        unsubscribe = setupForegroundMessageHandler(messaging, (payload) => {
+          if (typeof onForegroundMessage === 'function') {
+            onForegroundMessage(payload);
+          }
+        });
+      }
+    };
+
+    setupListener();
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isSupported, permission, onForegroundMessage]);
+
+  // 3. Explicit Subscribe Action (Triggered on User Click)
+  const subscribe = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const permResult = await requestNotificationPermission();
+      setPermission(permResult);
+
+      if (permResult !== 'granted') {
+        setIsLoading(false);
+        return { success: false, permission: permResult, error: 'Permission denied or dismissed' };
+      }
+
+      // Generate FCM Token
+      const token = await getDeviceFcmToken({ vapidKey });
+      if (!token) {
+        setIsLoading(false);
+        setError('Failed to generate device token.');
+        return { success: false, error: 'Token generation failed' };
+      }
+
+      tokenRef.current = token;
+      try {
+        localStorage.setItem(STORAGE_LAST_TOKEN_KEY, token);
+      } catch {}
+
+      // Get Active Supabase Session for Authenticated Registration
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        const regRes = await registerTokenWithBackend({
+          token,
+          accessToken: session.access_token,
+        });
+
+        if (!regRes.success) {
+          setError(regRes.error || 'Failed to register token with server.');
+          setIsLoading(false);
+          return { success: false, error: regRes.error };
+        }
+      }
+
+      try {
+        localStorage.setItem(STORAGE_REGISTERED_KEY, 'true');
+      } catch {}
+
+      setIsSubscribed(true);
+      setIsLoading(false);
+      return { success: true, token };
+    } catch (err) {
+      setError(err.message || 'Unexpected subscription error');
+      setIsLoading(false);
+      return { success: false, error: err.message };
+    }
+  }, [vapidKey]);
+
+  // 4. Explicit Unsubscribe Action
+  const unsubscribe = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const token = tokenRef.current || localStorage.getItem(STORAGE_LAST_TOKEN_KEY);
+
+    try {
+      if (token) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          await revokeTokenWithBackend({
+            token,
+            accessToken: session.access_token,
+          });
+        }
+      }
+
+      try {
+        localStorage.removeItem(STORAGE_REGISTERED_KEY);
+        localStorage.removeItem(STORAGE_LAST_TOKEN_KEY);
+      } catch {}
+
+      tokenRef.current = null;
+      setIsSubscribed(false);
+      setIsLoading(false);
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Failed to unsubscribe');
+      setIsLoading(false);
+      return { success: false, error: err.message };
+    }
+  }, []);
+
+  // 5. Synchronize Token Registration on Auth State Change
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const storedToken = tokenRef.current || localStorage.getItem(STORAGE_LAST_TOKEN_KEY);
+
+      if (event === 'SIGNED_IN' && session?.access_token && storedToken) {
+        // Register token under new authenticated user account
+        try {
+          await registerTokenWithBackend({
+            token: storedToken,
+            accessToken: session.access_token,
+          });
+          localStorage.setItem(STORAGE_REGISTERED_KEY, 'true');
+          setIsSubscribed(true);
+        } catch (err) {
+          console.warn('[usePushNotifications] Auth sync register failed:', err?.message);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        // Token revocation is handled in handleSignOut, but state is reset here
+        setIsSubscribed(false);
+        try {
+          localStorage.removeItem(STORAGE_REGISTERED_KEY);
+        } catch {}
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  return {
+    permission,
+    isSupported,
+    isSubscribed,
+    isLoading,
+    error,
+    subscribe,
+    unsubscribe,
+  };
+}
+
