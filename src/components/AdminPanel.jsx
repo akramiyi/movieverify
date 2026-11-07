@@ -98,14 +98,15 @@ const AdminPanel = ({ onClose }) => {
 
   const fetchSiteLockStatus = async () => {
     try {
-      const { data } = await supabase
-        .from('site_settings')
-        .select('is_locked, lock_password')
-        .eq('id', 1)
-        .single();
-      if (data) {
-        setSiteLockStatus(data.is_locked);
-        setLockKeyInput(data.lock_password || '');
+      const res = await fetch('/api/site-lock', {
+        method: 'GET',
+        credentials: 'include'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSiteLockStatus(Boolean(data.is_locked));
+        // Never fetch or display the stored password
+        setLockKeyInput('');
       }
     } catch (e) {
       console.warn('Failed to fetch site lock status:', e.message);
@@ -117,20 +118,92 @@ const AdminPanel = ({ onClose }) => {
     const newStatus = !siteLockStatus;
     
     try {
-      const { error } = await supabase
-        .from('site_settings')
-        .update({ 
-          is_locked: newStatus, 
-          lock_password: lockKeyInput.trim(),
-          updated_at: new Date().toISOString() 
-        })
-        .eq('id', 1);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setActionStatus({ type: 'error', message: 'Admin authentication required.' });
+        setLockToggling(false);
+        return;
+      }
 
-      if (!error) {
+      const res = await fetch('/api/site-lock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'admin_update',
+          is_locked: newStatus,
+          new_password: lockKeyInput.trim() // Empty string preserves existing password
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
         setSiteLockStatus(newStatus);
+        setLockKeyInput('');
+        setActionStatus({
+          type: 'success',
+          message: `Site ${newStatus ? 'locked' : 'unlocked'} successfully.${lockKeyInput.trim() ? ' New access key saved.' : ''}`
+        });
+      } else {
+        setActionStatus({
+          type: 'error',
+          message: data.error || 'Failed to update site lock.'
+        });
       }
     } catch (e) {
       console.warn('Failed to update site lock:', e.message);
+      setActionStatus({ type: 'error', message: 'Network error updating site lock.' });
+    }
+    setLockToggling(false);
+  };
+
+  const handleUpdateKey = async () => {
+    if (!lockKeyInput.trim()) return;
+
+    setLockToggling(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setActionStatus({ type: 'error', message: 'Admin authentication required.' });
+        setLockToggling(false);
+        return;
+      }
+
+      const res = await fetch('/api/site-lock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'admin_update',
+          is_locked: siteLockStatus,
+          new_password: lockKeyInput.trim()
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
+        setLockKeyInput('');
+        setActionStatus({
+          type: 'success',
+          message: 'New access key saved successfully.'
+        });
+      } else {
+        setActionStatus({
+          type: 'error',
+          message: data.error || 'Failed to update access key.'
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to save access key:', e.message);
+      setActionStatus({ type: 'error', message: 'Network error saving access key.' });
     }
     setLockToggling(false);
   };
@@ -653,15 +726,36 @@ const AdminPanel = ({ onClose }) => {
               </button>
             </div>
             
-            <input
-              type="text"
-              placeholder="Set access key"
-              value={lockKeyInput}
-              onChange={(e) => setLockKeyInput(e.target.value)}
-              className="w-full bg-black/50 border border-white/10 rounded p-2 text-white text-sm outline-none focus:border-[#E50914] transition"
-            />
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="Set new access key (leave blank to keep current)"
+                value={lockKeyInput}
+                onChange={(e) => setLockKeyInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleUpdateKey();
+                  }
+                }}
+                className="flex-1 bg-black/50 border border-white/10 rounded p-2 text-white text-sm outline-none focus:border-[#E50914] transition"
+                autoComplete="new-password"
+              />
+              {lockKeyInput.trim() && (
+                <button
+                  type="button"
+                  onClick={handleUpdateKey}
+                  disabled={lockToggling}
+                  className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-bold transition"
+                >
+                  Save Key
+                </button>
+              )}
+            </div>
             <p className="text-gray-500 text-[10px] mt-1">
-              This is the key visitors will need to enter to access the site while locked.
+              {lockKeyInput.trim() 
+                ? 'Click "Save Key" or hit Enter to update access key, or toggle lock state to apply.' 
+                : 'Current key is securely hashed. Leave empty to preserve current key.'}
             </p>
           </div>
 

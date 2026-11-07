@@ -214,24 +214,28 @@ function App() {
   useEffect(() => {
     const checkLock = async () => {
       try {
-        const { data, error } = await supabase
-          .from('site_settings')
-          .select('is_locked')
-          .eq('id', 1)
-          .single();
+        const res = await fetch('/api/site-lock', {
+          method: 'GET',
+          credentials: 'include'
+        });
 
-        if (error) {
-          setCheckingLock(false);
+        if (!res.ok) {
+          // Fail closed on API error: treat site as locked to prevent security bypass
+          console.warn('[SiteLock] Failed to verify lock status, server returned', res.status);
+          setSiteLocked(true);
           return;
         }
 
-        const alreadyUnlocked = sessionStorage.getItem('movieverify_unlocked');
-
-        if (data?.is_locked && !alreadyUnlocked) {
+        const data = await res.json();
+        if (data?.is_locked && !data?.is_unlocked) {
           setSiteLocked(true);
+        } else {
+          setSiteLocked(false);
         }
-      } catch {
-        // Silently continue if database is paused/unreachable
+      } catch (err) {
+        // Fail closed on network or fetch error
+        console.warn('[SiteLock] Error connecting to site-lock API:', err.message);
+        setSiteLocked(true);
       } finally {
         setCheckingLock(false);
       }
@@ -535,6 +539,10 @@ function App() {
 
   if (showIntro) {
     return <IntroAnimation onComplete={() => setShowIntro(false)} />;
+  }
+
+  if (checkingLock) {
+    return <div className="min-h-screen bg-[#0a0a0a]" />;
   }
 
   if (siteLocked) {

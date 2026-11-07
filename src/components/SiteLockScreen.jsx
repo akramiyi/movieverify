@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
-import { supabase } from '../data/supabaseClient';
 
 const SiteLockScreen = ({ onUnlock }) => {
   const [keyInput, setKeyInput] = useState('');
@@ -13,26 +12,27 @@ const SiteLockScreen = ({ onUnlock }) => {
     setError('');
 
     try {
-      const { data, error: fetchErr } = await supabase
-        .from('site_settings')
-        .select('lock_password')
-        .eq('id', 1)
-        .single();
+      const res = await fetch('/api/site-lock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'unlock',
+          password: keyInput.trim(),
+        }),
+      });
 
-      if (fetchErr) {
-        setError('Unable to verify key. Try again.');
-        setChecking(false);
-        return;
-      }
+      const data = await res.json().catch(() => ({}));
 
-      if (keyInput.trim() === data.lock_password) {
-        sessionStorage.setItem('movieverify_unlocked', 'true');
+      if (res.ok && data.success) {
         onUnlock();
       } else {
-        setError('Incorrect key. Please try again.');
+        setError(data.error || 'Incorrect key. Please try again.');
       }
-    } catch (err) {
-      setError('Something went wrong.');
+    } catch {
+      setError('Unable to verify key. Please try again.');
     } finally {
       setChecking(false);
     }
@@ -57,6 +57,7 @@ const SiteLockScreen = ({ onUnlock }) => {
             placeholder="Enter access key"
             className="w-full bg-black/50 border border-white/10 rounded p-3 text-white text-center focus:border-[#E50914] outline-none transition text-sm"
             required
+            autoComplete="current-password"
           />
 
           {error && (
