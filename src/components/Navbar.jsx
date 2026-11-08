@@ -27,7 +27,8 @@ const LiveTime = () => {
   );
 };
 
-const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onProfileClick, onAdminClick, onHistoryClick }) => {
+const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onProfileClick, onAdminClick, onHistoryClick, onNotificationClick }) => {
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -71,7 +72,21 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
   }, [searchQuery]);
 
   useEffect(() => {
-    const checkReports = async () => {
+      const checkNotifications = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch('/api/notifications/user', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setUnreadNotifications(json.unread_count || 0);
+      }
+    } catch {}
+  };
+
+  const checkReports = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return; // only fetch if admin is logged in
@@ -89,6 +104,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
       }
     };
     checkReports();
+    checkNotifications();
   }, []);
 
   useEffect(() => {

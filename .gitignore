@@ -23,6 +23,36 @@ dist-ssr
 *.sln
 *.sw?
 
-# Telegram Bot secrets (NEVER commit)
+# ==============================================================================
+# ENVIRONMENT & CREDENTIAL PROTECTION POLICY
+# ==============================================================================
+# 1. Ignore all root and nested environment variable files
+.env
+.env.*
+*.env
+*.env.*
+**/.env
+**/.env.*
+
+# 2. Ignore private keys, certificates, and GCP credential files
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*serviceAccount*.json
+*firebase-adminsdk*.json
+
+# 3. Ignore bot credentials and vendor directories
 telegram-bot/.env
+telegram-bot/.env.*
 telegram-bot/node_modules
+
+# 4. Explicitly allow ONLY non-secret template/example files
+!.env.example
+!telegram-bot/.env.example
+
+# 5. Local safety snapshots, tooling metadata, and agent scratch
+.backup_phase_15_2_5/
+.vercel
+scratch/
