@@ -1,0 +1,26 @@
+name: Schedule Trigger Diagnostic
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: schedule-trigger-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  diagnostic:
+    name: Verify Schedule Event
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+
+    steps:
+      - name: Confirm workflow trigger
+        run: |
+          echo "SCHEDULE_DIAGNOSTIC_OK"
+          echo "Event: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref }}"
+          echo "Schedule: ${{ github.event.schedule || 'manual' }}"
