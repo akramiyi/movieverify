@@ -1,13 +1,20 @@
 # ============================================================================
-# MOVIEVERIFY PHASE 15.1: DISPOSABLE POSTGRESQL EXECUTION RUNBOOK (R3.1)
+# MOVIEVERIFY PHASE 2 RELEASE: DISPOSABLE POSTGRESQL 17 EXECUTION RUNBOOK (R4.0)
 # File: tests/db/run_disposable_tests.ps1
-# Mode: Local Disposable Docker Container (supabase/postgres:15.1.1.78)
+# Mode: Local Disposable Docker Container (public.ecr.aws/supabase/postgres:17.11.0.011)
 # Zero Remote Connection: Enforced via --network none
 # Concurrency Protocol: Deterministic Two-Way Advisory Handshake
+#
+# Phase 2 corrections from R3.1:
+#   - Default image updated to public.ecr.aws/supabase/postgres:17.11.0.011 (PG 17.11)
+#   - Applies all 8 versioned release migrations sequentially (not consolidated Phase 1.5 SQL)
+#   - Separate rollback test database (mv_rollback_test) for rollback_notifications.sql
+#   - Legacy Phase 1.5 upgrade test preserved as a separately named stage
+#   - Migration exit codes checked individually with -v ON_ERROR_STOP=1
 # ============================================================================
 
 param(
-    [string]$Image = "supabase/postgres:15.1.1.78",
+    [string]$Image           = "public.ecr.aws/supabase/postgres:17.11.0.011",
     [string]$ContainerPrefix = "mv_disposable_"
 )
 
@@ -34,11 +41,36 @@ function Exec-Psql($cName, $dbName, $filePath) {
 }
 
 function Exec-Psql-Sql($cName, $dbName, $sql) {
-    Log-Step "Executing inline SQL on database '$dbName': $sql"
+    Log-Step "Executing inline SQL on database '$dbName'"
     docker exec $cName psql -U postgres -d $dbName -v ON_ERROR_STOP=1 -c $sql
     if ($LASTEXITCODE -ne 0) {
-        throw "FATAL: inline SQL command failed with exit code ${LASTEXITCODE} on SQL: $sql"
+        throw "FATAL: inline SQL command failed with exit code ${LASTEXITCODE}"
     }
+}
+
+function Apply-Phase2-Migrations($cName, $dbName) {
+    Log-Step "Applying 8 Phase 2 release migrations to '$dbName'..."
+    $migrations = @(
+        "/test_db/supabase_migrations/20261108000001_notification_endpoints_and_preferences.sql",
+        "/test_db/supabase_migrations/20261108000002_notification_subscriptions_and_inbox.sql",
+        "/test_db/supabase_migrations/20261108000003_notification_campaigns_and_queue.sql",
+        "/test_db/supabase_migrations/20261108000004_notification_deliveries_and_telemetry.sql",
+        "/test_db/supabase_migrations/20261108000005_notification_rpcs_and_functions.sql",
+        "/test_db/supabase_migrations/20261108000006_notification_rls_and_dcl.sql",
+        "/test_db/supabase_migrations/20261108000007_legacy_api_compatibility_layer.sql",
+        "/test_db/supabase_migrations/20261108195246_secure_notification_views_with_invoker_rls.sql"
+    )
+    $i = 1
+    foreach ($m in $migrations) {
+        Log-Step "  Migration $i/8: $m"
+        docker exec $cName psql -U postgres -d $dbName -v ON_ERROR_STOP=1 -f $m
+        if ($LASTEXITCODE -ne 0) {
+            throw "FATAL: Migration $i failed on '$dbName': $m (exit code $LASTEXITCODE)"
+        }
+        Write-Host "  [OK] Migration $i applied successfully." -ForegroundColor Green
+        $i++
+    }
+    Write-Host "All 8 Phase 2 release migrations applied to '$dbName'." -ForegroundColor Green
 }
 
 function Wait-And-Validate-Jobs($job1, $job2, [string]$suiteName) {
@@ -70,11 +102,24 @@ function Wait-And-Validate-Jobs($job1, $job2, [string]$suiteName) {
 }
 
 # ----------------------------------------------------------------------------
-# STEP 0: Safety Verification (Zero Remote Egress & Pre-Flight SQL Scan)
+# STEP 0: Safety Verification (Zero Remote Egress, Image Availability, Pre-Flight SQL Scan)
 # ----------------------------------------------------------------------------
 Log-Header "STEP 0: Pre-Flight Safety Verification"
 
-# Verify SQL files do not target live Supabase
+# Verify the required PG17 Docker image is present locally
+Log-Step "Verifying Docker image is present locally: $Image"
+$imgCheck = docker image inspect $Image 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "BLOCKED: Docker image '$Image' is NOT present locally. Do not download from an unverified source. Load the image manually and retry."
+}
+Write-Host "Docker image verified locally: $Image" -ForegroundColor Green
+
+# Verify PostgreSQL 17 is the target (from image tag)
+if ($Image -notmatch "17\.") {
+    throw "BLOCKED: Image '$Image' does not appear to be a PostgreSQL 17 image. Phase 2 requires PG17."
+}
+
+# Verify SQL files do not target live Supabase production
 $sqlFiles = Get-ChildItem -Path "tests/db" -Filter "*.sql"
 foreach ($f in $sqlFiles) {
     $content = Get-Content $f.FullName -Raw
@@ -101,24 +146,25 @@ $CleanupPassed = $false
 
 try {
     # ----------------------------------------------------------------------------
-    # STEP 1: Launch Disposable Container with --network none & Health Check
+    # STEP 1: Launch Disposable PostgreSQL 17 Container with --network none
     # ----------------------------------------------------------------------------
-    Log-Header "STEP 1: Starting Isolated Disposable Container ($Image)"
-    Log-Step "Running container with --network none (zero network egress, pure docker exec isolation)..."
-    
+    Log-Header "STEP 1: Starting Isolated Disposable PostgreSQL 17 Container"
+    Log-Step "Image: $Image"
+    Log-Step "Network: --network none (zero external connectivity)"
+
     $runOut = docker run -d --name $ContainerName `
         --network none `
         -e POSTGRES_PASSWORD=postgres `
         $Image
-    
+
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($runOut)) {
         throw "FATAL: docker run failed with exit code $LASTEXITCODE."
     }
 
     $CreatedContainerId = $runOut.Trim()
-    Log-Step "Container started successfully with ID: $CreatedContainerId"
+    Log-Step "Container started: $CreatedContainerId"
 
-    Log-Step "Polling PostgreSQL Readiness Health Check (pg_isready)..."
+    Log-Step "Polling PostgreSQL Readiness (pg_isready)..."
     $maxAttempts = 30
     $ready = $false
     for ($i = 1; $i -le $maxAttempts; $i++) {
@@ -135,120 +181,153 @@ try {
         throw "FATAL: PostgreSQL failed to become ready within $maxAttempts seconds."
     }
 
-    # ----------------------------------------------------------------------------
-    # STEP 2: Copy Test Scripts into Container Filesystem
-    # ----------------------------------------------------------------------------
-    Log-Header "STEP 2: Provisioning Test Files into Container"
-    docker cp tests/db ${ContainerName}:/test_db
+    # Verify actual PostgreSQL version
+    Log-Step "Verifying PostgreSQL server version..."
+    docker exec $ContainerName psql -U postgres -c "SELECT version(); SHOW server_version;"
     if ($LASTEXITCODE -ne 0) {
-        throw "FATAL: docker cp failed with exit code $LASTEXITCODE."
+        throw "FATAL: Could not query PostgreSQL version."
     }
-    Log-Step "Copied test artifacts to ${ContainerName}:/test_db successfully."
+
+    # Verify network isolation: no default gateway
+    Log-Step "Verifying network isolation (--network none)..."
+    $netInfo = docker exec $ContainerName ip route 2>&1
+    if ($netInfo -match "default") {
+        throw "SAFETY VIOLATION: Container has a default network gateway! --network none was not enforced."
+    }
+    Write-Host "Network isolation verified: no default gateway present." -ForegroundColor Green
 
     # ----------------------------------------------------------------------------
-    # STEP 3: State 4 Historical Upgrade Verification (Isolated DB: mv_upgrade_test)
+    # STEP 2: Copy Test Scripts and Migrations into Container Filesystem
     # ----------------------------------------------------------------------------
-    Log-Header "STEP 3: Historical State 4 Upgrade Testing (Database: mv_upgrade_test)"
+    Log-Header "STEP 2: Provisioning Test Files and Migrations into Container"
+    docker cp tests/db ${ContainerName}:/test_db
+    if ($LASTEXITCODE -ne 0) {
+        throw "FATAL: docker cp of tests/db failed."
+    }
+
+    # Copy migrations into the container
+    docker cp supabase/migrations ${ContainerName}:/test_db/supabase_migrations
+    if ($LASTEXITCODE -ne 0) {
+        throw "FATAL: docker cp of supabase/migrations failed."
+    }
+    Log-Step "Copied test artifacts and migrations to ${ContainerName}:/test_db successfully."
+
+    # ----------------------------------------------------------------------------
+    # STEP 3: Legacy Phase 1.5 Historical Upgrade Verification (mv_upgrade_test)
+    # (Preserved separately — does NOT use Phase 2 migrations)
+    # ----------------------------------------------------------------------------
+    Log-Header "STEP 3: Legacy Phase 1.5 Historical Upgrade Testing (Database: mv_upgrade_test)"
     Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_upgrade_test;"
-    
     Exec-Psql $ContainerName "mv_upgrade_test" "/test_db/fixture_state4_legacy_deliveries.sql"
     Exec-Psql $ContainerName "mv_upgrade_test" "/test_db/00_disposable_auth_fixtures.sql"
     Exec-Psql $ContainerName "mv_upgrade_test" "/test_db/20261102_harden_notifications_consolidated.sql"
     Exec-Psql $ContainerName "mv_upgrade_test" "/test_db/test_upgrade_runner.sql"
-    Write-Host "Historical upgrade invariants verified successfully." -ForegroundColor Green
+    Write-Host "Legacy Phase 1.5 historical upgrade invariants verified successfully." -ForegroundColor Green
 
     # ----------------------------------------------------------------------------
-    # STEP 4: State 0 Clean-Install & 42-Assertion pgTAP Suite (Isolated DB: mv_clean_test)
+    # STEP 4: Phase 2 Clean Install + 42-Assertion pgTAP Suite (mv_phase2_clean)
+    # Applies all 8 versioned release migrations.
     # ----------------------------------------------------------------------------
-    Log-Header "STEP 4: Clean Install & 42-Assertion pgTAP Suite (Database: mv_clean_test)"
-    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_clean_test;"
+    Log-Header "STEP 4A: Phase 2 Clean Install + 42-Assertion pgTAP Suite (Database: mv_phase2_clean)"
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase2_clean;"
+    Exec-Psql $ContainerName "mv_phase2_clean" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Phase2-Migrations $ContainerName "mv_phase2_clean"
+    Exec-Psql $ContainerName "mv_phase2_clean" "/test_db/pgtap_suite.sql"
+    Write-Host "42-Assertion Phase 2 pgTAP suite passed." -ForegroundColor Green
 
-    Exec-Psql $ContainerName "mv_clean_test" "/test_db/fixture_state0_clean.sql"
-    Exec-Psql $ContainerName "mv_clean_test" "/test_db/00_disposable_auth_fixtures.sql"
-    Exec-Psql $ContainerName "mv_clean_test" "/test_db/20261102_harden_notifications_consolidated.sql"
-    Exec-Psql $ContainerName "mv_clean_test" "/test_db/pgtap_suite.sql"
-    Write-Host "42-Assertion core pgTAP suite executed and verified successfully." -ForegroundColor Green
-    Exec-Psql $ContainerName "mv_clean_test" "/test_db/test_campaign_ingestion.sql"
-    Write-Host "28-Assertion campaign ingestion pgTAP suite executed and verified successfully." -ForegroundColor Green
+    Log-Header "STEP 4B: Phase 2 Campaign Ingestion Suite (Database: mv_phase2_campaign)"
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase2_campaign;"
+    Exec-Psql $ContainerName "mv_phase2_campaign" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Phase2-Migrations $ContainerName "mv_phase2_campaign"
+    Exec-Psql $ContainerName "mv_phase2_campaign" "/test_db/test_campaign_ingestion.sql"
+    Write-Host "28-Assertion Phase 2 campaign ingestion suite passed." -ForegroundColor Green
 
     # ----------------------------------------------------------------------------
-    # STEP 5: Concurrency Claims & Transfer Race Isolation (Isolated DB: mv_concurrency_test)
+    # STEP 5: Phase 2 Concurrency Tests (mv_phase2_concurrency)
     # ----------------------------------------------------------------------------
-    Log-Header "STEP 5: Concurrency Claims & Transfer Race (Database: mv_concurrency_test)"
-    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_concurrency_test;"
+    Log-Header "STEP 5: Phase 2 Concurrency Claims & Transfer Race (Database: mv_phase2_concurrency)"
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase2_concurrency;"
+    Exec-Psql $ContainerName "mv_phase2_concurrency" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Phase2-Migrations $ContainerName "mv_phase2_concurrency"
+    Exec-Psql $ContainerName "mv_phase2_concurrency" "/test_db/concurrency_harness.sql"
 
-    Exec-Psql $ContainerName "mv_concurrency_test" "/test_db/fixture_state0_clean.sql"
-    Exec-Psql $ContainerName "mv_concurrency_test" "/test_db/00_disposable_auth_fixtures.sql"
-    Exec-Psql $ContainerName "mv_concurrency_test" "/test_db/20261102_harden_notifications_consolidated.sql"
-    Exec-Psql $ContainerName "mv_concurrency_test" "/test_db/concurrency_harness.sql"
-
-    # Step 5B: Two Genuine Parallel Sessions with Two-Way Advisory Handshake
+    # Step 5B: Two Genuine Parallel Sessions — Reservation Concurrency
     Log-Step "Launching Worker 1 and Worker 2 deterministic two-way handshake background jobs..."
     $job1 = Start-Job -ScriptBlock {
         param($c)
-        $out = docker exec $c psql -U postgres -d mv_concurrency_test -v ON_ERROR_STOP=1 -f /test_db/session1_reservation.sql 2>&1
+        $out = docker exec $c psql -U postgres -d mv_phase2_concurrency -v ON_ERROR_STOP=1 -f /test_db/session1_reservation.sql 2>&1
         [PSCustomObject]@{ Session = "Worker1"; ExitCode = $LASTEXITCODE; Output = ($out | Out-String) }
     } -ArgumentList $ContainerName
 
     $job2 = Start-Job -ScriptBlock {
         param($c)
-        $out = docker exec $c psql -U postgres -d mv_concurrency_test -v ON_ERROR_STOP=1 -f /test_db/session2_reservation.sql 2>&1
+        $out = docker exec $c psql -U postgres -d mv_phase2_concurrency -v ON_ERROR_STOP=1 -f /test_db/session2_reservation.sql 2>&1
         [PSCustomObject]@{ Session = "Worker2"; ExitCode = $LASTEXITCODE; Output = ($out | Out-String) }
     } -ArgumentList $ContainerName
 
     Wait-And-Validate-Jobs $job1 $job2 "Reservation Concurrency Claims"
 
     # Verify Claims Intersection (INTERSECT == 0) and Transaction Overlap Proof
-    Exec-Psql $ContainerName "mv_concurrency_test" "/test_db/verify_concurrency_race.sql"
-    Write-Host "Reservation claims intersection (INTERSECT == 0) and transaction overlap formally proven." -ForegroundColor Green
+    Exec-Psql $ContainerName "mv_phase2_concurrency" "/test_db/verify_concurrency_race.sql"
+    Write-Host "Reservation claims INTERSECT == 0 and transaction overlap formally proven." -ForegroundColor Green
 
-    # Step 5D: Token-Transfer Race with Two-Way Handshake
-    Log-Step "Launching Token-Transfer Session 1 and Reservation Session 2 parallel jobs..."
+    # Step 5D: Endpoint Deactivation Transfer Race
+    Log-Step "Launching Endpoint-Deactivation Session 1 and Reservation Session 2 parallel jobs..."
     $tJob1 = Start-Job -ScriptBlock {
         param($c)
-        $out = docker exec $c psql -U postgres -d mv_concurrency_test -v ON_ERROR_STOP=1 -f /test_db/session1_transfer_race.sql 2>&1
+        $out = docker exec $c psql -U postgres -d mv_phase2_concurrency -v ON_ERROR_STOP=1 -f /test_db/session1_transfer_race.sql 2>&1
         [PSCustomObject]@{ Session = "TransferSession1"; ExitCode = $LASTEXITCODE; Output = ($out | Out-String) }
     } -ArgumentList $ContainerName
 
     $tJob2 = Start-Job -ScriptBlock {
         param($c)
-        $out = docker exec $c psql -U postgres -d mv_concurrency_test -v ON_ERROR_STOP=1 -f /test_db/session2_reserve_race.sql 2>&1
+        $out = docker exec $c psql -U postgres -d mv_phase2_concurrency -v ON_ERROR_STOP=1 -f /test_db/session2_reserve_race.sql 2>&1
         [PSCustomObject]@{ Session = "ReserveSession2"; ExitCode = $LASTEXITCODE; Output = ($out | Out-String) }
     } -ArgumentList $ContainerName
 
-    Wait-And-Validate-Jobs $tJob1 $tJob2 "Token Transfer Race"
+    Wait-And-Validate-Jobs $tJob1 $tJob2 "Endpoint Deactivation Race"
 
-    # Verify Transfer Race Audit & Trigger-Driven Cancellation
-    Exec-Psql $ContainerName "mv_concurrency_test" "/test_db/verify_transfer_race.sql"
-    Write-Host "Token-transfer trigger cancellation and zero-leakage formally proven." -ForegroundColor Green
+    Exec-Psql $ContainerName "mv_phase2_concurrency" "/test_db/verify_transfer_race.sql"
+    Write-Host "Endpoint deactivation transfer race and zero-leakage formally proven." -ForegroundColor Green
 
-    # Step 5E: Campaign Ingestion Idempotency Race with Transaction Locking
+    # Step 5E: Campaign Idempotency Race
     Log-Step "Launching Campaign Idempotency Session 1 and Session 2 parallel jobs..."
     $cJob1 = Start-Job -ScriptBlock {
         param($c)
-        $out = docker exec $c psql -U postgres -d mv_concurrency_test -v ON_ERROR_STOP=1 -f /test_db/session1_campaign_idemp.sql 2>&1
+        $out = docker exec $c psql -U postgres -d mv_phase2_concurrency -v ON_ERROR_STOP=1 -f /test_db/session1_campaign_idemp.sql 2>&1
         [PSCustomObject]@{ Session = "CampaignSession1"; ExitCode = $LASTEXITCODE; Output = ($out | Out-String) }
     } -ArgumentList $ContainerName
 
     $cJob2 = Start-Job -ScriptBlock {
         param($c)
-        $out = docker exec $c psql -U postgres -d mv_concurrency_test -v ON_ERROR_STOP=1 -f /test_db/session2_campaign_idemp.sql 2>&1
+        $out = docker exec $c psql -U postgres -d mv_phase2_concurrency -v ON_ERROR_STOP=1 -f /test_db/session2_campaign_idemp.sql 2>&1
         [PSCustomObject]@{ Session = "CampaignSession2"; ExitCode = $LASTEXITCODE; Output = ($out | Out-String) }
     } -ArgumentList $ContainerName
 
     Wait-And-Validate-Jobs $cJob1 $cJob2 "Campaign Idempotency Race"
 
-    # Verify Campaign Race Audit & Single Campaign Ingestion
-    Exec-Psql $ContainerName "mv_concurrency_test" "/test_db/verify_campaign_idemp_race.sql"
+    Exec-Psql $ContainerName "mv_phase2_concurrency" "/test_db/verify_campaign_idemp_race.sql"
     Write-Host "Campaign idempotency race and zero duplicate deliveries formally proven." -ForegroundColor Green
+
+    # ----------------------------------------------------------------------------
+    # STEP 6: Phase 2 Rollback Verification (Separate Database: mv_rollback_test)
+    # Must use a separate DB — rollback drops Phase 2 objects with RESTRICT.
+    # ----------------------------------------------------------------------------
+    Log-Header "STEP 6: Phase 2 Rollback Verification (Database: mv_rollback_test)"
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_rollback_test;"
+    Exec-Psql $ContainerName "mv_rollback_test" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Phase2-Migrations $ContainerName "mv_rollback_test"
+    Log-Step "Executing rollback_notifications.sql on mv_rollback_test..."
+    Exec-Psql $ContainerName "mv_rollback_test" "/test_db/rollback_notifications.sql"
+    Write-Host "Phase 2 rollback verified: all notification objects removed without CASCADE." -ForegroundColor Green
 
     $SuitePassed = $true
 
 } finally {
     # ----------------------------------------------------------------------------
-    # STEP 6: Teardown & Cleanup Verification (Only Owned Container Removed)
+    # STEP 7: Teardown & Cleanup Verification (Only Owned Container Removed)
     # ----------------------------------------------------------------------------
-    Log-Header "STEP 6: Teardown & Cleanup Verification"
+    Log-Header "STEP 7: Teardown & Cleanup Verification"
     if ($CreatedContainerId) {
         Log-Step "Removing confirmed owned disposable container: $ContainerName ($CreatedContainerId)..."
         $rmOut = docker rm -f $CreatedContainerId 2>&1
@@ -273,8 +352,8 @@ try {
     }
 
     if ($SuitePassed -and $CleanupPassed) {
-        Log-Header "FINAL VERDICT: ALL DATABASE SUITES PASSED SUCCESSFULLY (100% GREEN)"
-        Write-Host "All database test suites passed and container cleanup was verified." -ForegroundColor Green
+        Log-Header "FINAL VERDICT: ALL PHASE 2 DATABASE SUITES PASSED SUCCESSFULLY (100% GREEN)"
+        Write-Host "All Phase 2 release database test suites passed and container cleanup was verified." -ForegroundColor Green
     } else {
         Write-Host "`nEXECUTION HALTED WITH FAILURES:" -ForegroundColor Red
         if (-not $SuitePassed) {

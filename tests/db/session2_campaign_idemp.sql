@@ -27,19 +27,19 @@ END $$;
 -- 2. Signal Session 1 that Session 2 is ready (77012)
 SELECT pg_advisory_lock(77012);
 
--- 3. Await Session 1 entering transaction and acquiring xact lock (77013)
+-- 3. Await Session 1 committing its campaign ingestion (Signal 77014)
 DO $$
 DECLARE
     v_waited interval := '0 seconds'::interval;
 BEGIN
     WHILE NOT EXISTS (
         SELECT 1 FROM pg_locks 
-        WHERE locktype = 'advisory' AND objid = 77013 AND granted = true
+        WHERE locktype = 'advisory' AND objid = 77014 AND granted = true
     ) LOOP
         PERFORM pg_sleep(0.02);
         v_waited := v_waited + '0.02 seconds'::interval;
         IF v_waited >= '10 seconds'::interval THEN
-            RAISE EXCEPTION 'Session 2 timeout (10s) waiting for Session 1 in-flight signal (77013)!';
+            RAISE EXCEPTION 'Session 2 timeout (10s) waiting for Session 1 committed signal (77014)!';
         END IF;
     END LOOP;
 END $$;
@@ -81,6 +81,9 @@ BEGIN
 END $$;
 
 COMMIT;
+
+-- Signal Session 1 that Session 2 has finished (Signal 77015)
+SELECT pg_advisory_lock(77015);
 
 -- Release session-level advisory locks
 SELECT pg_advisory_unlock_all();

@@ -57,10 +57,54 @@ CREATE OR REPLACE FUNCTION auth.role() RETURNS text AS $$
     );
 $$ LANGUAGE sql STABLE;
 
--- 4. Create Mock Table public.admin_users for Local Tests
+-- 4. Create Mock Table public.admin_users and core application tables for Local Tests
 CREATE TABLE IF NOT EXISTS public.admin_users (
     user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     created_at timestamptz DEFAULT NOW()
+);
+
+-- Seed default admin user (matches default auth.uid() = 00000000-0000-0000-0000-000000000001)
+INSERT INTO auth.users (id, email)
+VALUES ('00000000-0000-0000-0000-000000000001', 'admin@movieverify.com')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.admin_users (user_id)
+VALUES ('00000000-0000-0000-0000-000000000001')
+ON CONFLICT (user_id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS public.download_links (id serial PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS public.movie_reports (id serial PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS public.movie_reviews (id serial PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS public.site_settings (id serial PRIMARY KEY);
+
+-- 5. Mock Legacy Quarantine Tables (historical tables matching pre-Phase 2 schema)
+CREATE TABLE IF NOT EXISTS public.legacy_token_quarantine (
+    quarantine_id serial PRIMARY KEY,
+    token_id text,
+    user_id text,
+    raw_token text,
+    reason text NOT NULL,
+    quarantined_at timestamptz NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.legacy_subscription_quarantine (
+    quarantine_id serial PRIMARY KEY,
+    table_source text NOT NULL,
+    record_id text,
+    user_id text,
+    target_id text,
+    reason text NOT NULL,
+    quarantined_at timestamptz NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.legacy_delivery_quarantine (
+    quarantine_id serial PRIMARY KEY,
+    delivery_id text,
+    campaign_id text,
+    recipient_id text,
+    token_id text,
+    reason text NOT NULL,
+    quarantined_at timestamptz NOT NULL DEFAULT NOW()
 );
 
 COMMIT;

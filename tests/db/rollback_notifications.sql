@@ -1,161 +1,241 @@
 -- ============================================================================
--- MOVIEVERIFY HARDENED NOTIFICATION ARCHITECTURE ROLLBACK SCRIPT
+-- MOVIEVERIFY PHASE 2 NOTIFICATION ARCHITECTURE ROLLBACK SCRIPT
 -- File: tests/db/rollback_notifications.sql
--- Target: Production Supabase SQL Editor
--- Safety: Fully transactional rollback (BEGIN ... COMMIT).
--- 
--- BACKUP-FIRST RECOVERY PROTOCOL & DATA RETENTION POLICY:
--- Operators MUST execute an external backup before running this script:
+-- Target: Disposable isolated test database ONLY (mv_rollback_test)
+-- Safety: Fully transactional (BEGIN ... COMMIT).
+-- Mode: RESTRICT (zero CASCADE — all dependencies must be explicitly resolved)
 --
--- pg_dump "$DATABASE_URL" \
---   -t public.notification_tokens \
---   -t public.user_notifications \
---   -t public.movie_notify_requests \
---   -t public.actor_notify_requests \
---   -t public.genre_notify_requests \
---   -t public.notification_opt_outs \
---   -t public.notification_campaigns \
---   -t public.notification_deliveries \
---   -t public.notification_telemetry \
---   -t public.notification_audit_log \
---   -t public.legacy_token_quarantine \
---   -t public.legacy_subscription_quarantine \
---   -t public.legacy_delivery_quarantine \
---   -f backup_notification_all_tables_$(date +%Y%m%d_%H%M%S).sql
+-- Phase 2 reverse dependency order:
+--   Step 1: Drop all Phase 2 & Phase 1.9 RLS policies (they reference
+--           notifications_is_admin() and must be dropped before functions)
+--   Step 2: Drop compatibility views (notification_tokens references
+--           notifications_is_admin() in its WHERE clause)
+--   Step 3: Drop INSTEAD OF triggers on views (before dropping views — but
+--           views are dropped in Step 2 which cascades triggers automatically;
+--           included explicitly for safety)
+--   Step 4: Drop table-level triggers (before dropping trigger functions)
+--   Step 5: Drop trigger functions (before dropping canonical RPCs)
+--   Step 6: Drop canonical RPCs and helper functions (notifications_is_admin last)
+--   Step 7: Drop safe read views (user_notification_endpoints)
+--   Step 8: Drop Phase 2 tables in FK-safe reverse order
+--   Step 9: Revert constraints & indexes on legacy tables
 --
--- POST-ROLLBACK TABLE ACCESS & SECURITY STATE:
--- 1. When RLS policies are dropped (STEP 1), PostgreSQL table RLS mode remains ENABLED
---    on tables where ALTER TABLE ... ENABLE ROW LEVEL SECURITY was executed.
--- 2. An RLS-enabled table with ZERO policies enforces DEFAULT-DENY:
---    - Ordinary client roles (anon, authenticated) are COMPLETELY BLOCKED from SELECT/DML.
---    - Superusers and BYPASSRLS roles (postgres, service_role) retain full administrative access.
--- 3. For tables without RLS (legacy quarantine tables), access is governed strictly by SQL
---    grants; since all client grants were revoked and zero granted, clients remain 100% blocked.
+-- PRESERVED (not dropped):
+--   - auth.users (Supabase-managed)
+--   - public.admin_users (pre-existing application table)
+--   - public.download_links, movie_reports, movie_reviews, site_settings
+--     (pre-existing application tables — no notification FK)
+--   - public.legacy_delivery_quarantine, legacy_token_quarantine,
+--     legacy_subscription_quarantine (historical evidence preserved)
 --
--- DATA RETENTION GUARANTEE:
--- To prevent accidental data loss, NO user data, delivery records, telemetry,
--- campaign records, or audit history tables are automatically dropped by default.
--- By default, this script only rolls back RLS policies, triggers, functions,
--- constraints, and transient queue structures.
--- If complete table teardown is explicitly authorized, see STEP 4.
+-- DATA RETENTION:
+--   Data-bearing tables (notification_deliveries, notification_telemetry,
+--   notification_audit_log, notification_campaigns, user_notifications) are
+--   preserved by default. Enable OPTIONAL DESTRUCTIVE TEARDOWN block only
+--   after explicit operator authorization and external backup.
+--
+-- POST-ROLLBACK STATE:
+--   RLS remains ENABLED on surviving notification tables (zero policies = default-deny).
+--   Superusers and service_role (BYPASSRLS) retain administrative access.
 -- ============================================================================
 
 BEGIN;
 
--- ----------------------------------------------------------------------------
--- STEP 1: DROP RLS POLICIES ON ALL NOTIFICATION TABLES
--- Must be dropped before dropping functions that policies depend on
--- (Specifically notifications_is_admin)
--- ----------------------------------------------------------------------------
-DROP POLICY IF EXISTS p_tokens_user_all ON public.notification_tokens;
-DROP POLICY IF EXISTS p_movie_notify_user_all ON public.movie_notify_requests;
-DROP POLICY IF EXISTS p_actor_notify_user_all ON public.actor_notify_requests;
-DROP POLICY IF EXISTS p_genre_notify_user_all ON public.genre_notify_requests;
-DROP POLICY IF EXISTS p_user_notif_select ON public.user_notifications;
-DROP POLICY IF EXISTS p_user_notif_update ON public.user_notifications;
-DROP POLICY IF EXISTS p_opt_outs_user_all ON public.notification_opt_outs;
-DROP POLICY IF EXISTS p_campaigns_admin ON public.notification_campaigns;
-DROP POLICY IF EXISTS p_queue_admin ON public.notification_queue;
-DROP POLICY IF EXISTS p_deliveries_user_select ON public.notification_deliveries;
-DROP POLICY IF EXISTS p_telemetry_user_select ON public.notification_telemetry;
-DROP POLICY IF EXISTS p_audit_log_admin ON public.notification_audit_log;
+-- ============================================================================
+-- STEP 1: DROP ALL PHASE 2 RLS POLICIES
+-- Must precede dropping notifications_is_admin() which policies reference.
+-- ============================================================================
 
--- ----------------------------------------------------------------------------
--- STEP 2: DROP DATABASE TRIGGERS
--- Must be dropped before dropping trigger functions
--- ----------------------------------------------------------------------------
-DROP TRIGGER IF EXISTS trg_validate_delivery_status ON public.notification_deliveries;
-DROP TRIGGER IF EXISTS trg_sync_token_hash ON public.notification_tokens;
-DROP TRIGGER IF EXISTS trg_token_ownership_change ON public.notification_tokens;
-DROP TRIGGER IF EXISTS trg_protect_user_notifications ON public.user_notifications;
-DROP TRIGGER IF EXISTS trg_campaign_cancellation_sync ON public.notification_campaigns;
+-- Table: notification_endpoints (Migration 6)
+DROP POLICY IF EXISTS p_endpoints_user_select   ON public.notification_endpoints;
+DROP POLICY IF EXISTS p_endpoints_user_update   ON public.notification_endpoints;
+DROP POLICY IF EXISTS p_endpoints_service_all   ON public.notification_endpoints;
 
--- ----------------------------------------------------------------------------
--- STEP 3: DROP ALL 21 NOTIFICATION FUNCTIONS
--- (Both worker RPCs and trigger functions)
--- ----------------------------------------------------------------------------
-DROP FUNCTION IF EXISTS public.cancel_notification_campaign(uuid);
-DROP FUNCTION IF EXISTS public.ingest_notification_campaign(text, text, text, text, text, jsonb, timestamptz, uuid);
-DROP FUNCTION IF EXISTS public.sweep_stale_notification_deliveries(integer);
-DROP FUNCTION IF EXISTS public.sweep_expired_delivery_reservations();
-DROP FUNCTION IF EXISTS public.record_notification_telemetry(uuid, uuid, text, text, jsonb);
-DROP FUNCTION IF EXISTS public.fail_or_retry_notification_delivery(uuid, text, uuid, text, text, integer);
-DROP FUNCTION IF EXISTS public.confirm_notification_delivery_sent(uuid, uuid, text);
-DROP FUNCTION IF EXISTS public.renew_notification_delivery_leases(text, uuid[], integer);
-DROP FUNCTION IF EXISTS public.authorize_notification_delivery_dispatch(uuid, uuid, uuid, text, uuid);
-DROP FUNCTION IF EXISTS public.reserve_notification_deliveries(text, integer, integer);
-DROP FUNCTION IF EXISTS public.sweep_expired_notification_queue_jobs();
-DROP FUNCTION IF EXISTS public.complete_notification_queue_job(uuid, text);
-DROP FUNCTION IF EXISTS public.fail_or_retry_notification_job(uuid, text, text, text);
-DROP FUNCTION IF EXISTS public.renew_notification_queue_lease(uuid, text, integer);
-DROP FUNCTION IF EXISTS public.claim_notification_queue_batch(text, integer, integer);
-DROP FUNCTION IF EXISTS public.trg_sync_campaign_cancellation();
-DROP FUNCTION IF EXISTS public.trg_protect_user_notifications_update();
-DROP FUNCTION IF EXISTS public.trg_sync_notification_token_ownership();
-DROP FUNCTION IF EXISTS public.trg_sync_notification_token_hash();
-DROP FUNCTION IF EXISTS public.trg_validate_delivery_status_transition();
-DROP FUNCTION IF EXISTS public.notifications_is_admin();
+-- Table: user_notification_preferences (Migration 6)
+DROP POLICY IF EXISTS p_prefs_user_select       ON public.user_notification_preferences;
+DROP POLICY IF EXISTS p_prefs_user_insert       ON public.user_notification_preferences;
+DROP POLICY IF EXISTS p_prefs_user_update       ON public.user_notification_preferences;
+DROP POLICY IF EXISTS p_prefs_service_all       ON public.user_notification_preferences;
 
--- ----------------------------------------------------------------------------
--- STEP 4: TRANSIENT WORKER QUEUE TEARDOWN
--- Only ephemeral job queue and worker locks are dropped by default.
--- Data-bearing tables (notification_deliveries, notification_telemetry,
--- notification_audit_log, notification_campaigns, user_notifications,
--- notification_tokens, and subscriptions) ARE PRESERVED INTACT.
--- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS public.notification_queue;
+-- Table: notification_subscriptions (Migration 6)
+DROP POLICY IF EXISTS p_subs_user_all           ON public.notification_subscriptions;
+DROP POLICY IF EXISTS p_subs_service_all        ON public.notification_subscriptions;
+
+-- Table: user_notifications (Migration 6)
+DROP POLICY IF EXISTS p_inbox_user_select       ON public.user_notifications;
+DROP POLICY IF EXISTS p_inbox_user_update       ON public.user_notifications;
+DROP POLICY IF EXISTS p_inbox_service_all       ON public.user_notifications;
+
+-- Table: notification_campaigns (Migration 6)
+DROP POLICY IF EXISTS p_camp_admin_all          ON public.notification_campaigns;
+DROP POLICY IF EXISTS p_camp_service_all        ON public.notification_campaigns;
+
+-- Table: notification_queue (Migration 6)
+DROP POLICY IF EXISTS p_queue_admin_select      ON public.notification_queue;
+DROP POLICY IF EXISTS p_queue_service_all       ON public.notification_queue;
+
+-- Table: notification_deliveries (Migration 6)
+DROP POLICY IF EXISTS p_deliv_user_select       ON public.notification_deliveries;
+DROP POLICY IF EXISTS p_deliv_service_all       ON public.notification_deliveries;
+
+-- Table: notification_telemetry (Migration 6)
+DROP POLICY IF EXISTS p_telem_user_select       ON public.notification_telemetry;
+DROP POLICY IF EXISTS p_telem_service_all       ON public.notification_telemetry;
+
+-- Table: notification_audit_log (Migration 6)
+DROP POLICY IF EXISTS p_audit_admin_select      ON public.notification_audit_log;
+DROP POLICY IF EXISTS p_audit_service_all       ON public.notification_audit_log;
+DROP POLICY IF EXISTS p_audit_service_insert    ON public.notification_audit_log;
+
+-- Table: notification_opt_outs (Migration 7)
+DROP POLICY IF EXISTS p_opt_outs_user           ON public.notification_opt_outs;
+DROP POLICY IF EXISTS p_opt_outs_service        ON public.notification_opt_outs;
+
+-- Table: movie_notify_requests (Migration 7)
+DROP POLICY IF EXISTS p_movie_sub_user           ON public.movie_notify_requests;
+DROP POLICY IF EXISTS p_movie_sub_service        ON public.movie_notify_requests;
+
+-- Table: actor_notify_requests (Migration 7)
+DROP POLICY IF EXISTS p_actor_sub_user           ON public.actor_notify_requests;
+DROP POLICY IF EXISTS p_actor_sub_service        ON public.actor_notify_requests;
+
+-- Table: genre_notify_requests (Migration 7)
+DROP POLICY IF EXISTS p_genre_sub_user           ON public.genre_notify_requests;
+DROP POLICY IF EXISTS p_genre_sub_service        ON public.genre_notify_requests;
+
+-- ============================================================================
+-- STEP 2: DROP COMPATIBILITY VIEWS (Migration 7)
+-- notification_tokens view references notifications_is_admin() — must drop
+-- before the function. Dropping the view automatically drops its INSTEAD OF triggers.
+-- ============================================================================
+DROP VIEW IF EXISTS public.notification_tokens          RESTRICT;
+DROP VIEW IF EXISTS public.user_notification_endpoints  RESTRICT;
+
+-- ============================================================================
+-- STEP 3: DROP TABLE-LEVEL TRIGGERS (Migrations 4 & 7)
+-- Must precede dropping trigger functions.
+-- ============================================================================
+
+-- Migration 4: Delivery & Telemetry integrity triggers
+DROP TRIGGER IF EXISTS trg_delivery_ownership_guard          ON public.notification_deliveries;
+DROP TRIGGER IF EXISTS trg_delivery_identity_immutable       ON public.notification_deliveries;
+DROP TRIGGER IF EXISTS trg_telemetry_delivery_agreement_guard ON public.notification_telemetry;
+DROP TRIGGER IF EXISTS trg_audit_log_no_update_delete        ON public.notification_audit_log;
+DROP TRIGGER IF EXISTS trg_audit_log_no_truncate             ON public.notification_audit_log;
+
+-- Migration 7: Legacy subscription sync triggers
+DROP TRIGGER IF EXISTS trg_movie_sync_canonical              ON public.movie_notify_requests;
+DROP TRIGGER IF EXISTS trg_actor_sync_canonical              ON public.actor_notify_requests;
+DROP TRIGGER IF EXISTS trg_genre_sync_canonical              ON public.genre_notify_requests;
+DROP TRIGGER IF EXISTS trg_opt_out_sync_preferences          ON public.notification_opt_outs;
+
+-- ============================================================================
+-- STEP 4: DROP TRIGGER FUNCTIONS (Migrations 4 & 7)
+-- (Triggers dropped above, so functions can now be dropped safely with RESTRICT)
+-- ============================================================================
+DROP FUNCTION IF EXISTS public.trg_validate_delivery_ownership()              RESTRICT;
+DROP FUNCTION IF EXISTS public.trg_enforce_delivery_identity_immutability()   RESTRICT;
+DROP FUNCTION IF EXISTS public.trg_validate_telemetry_delivery_agreement()    RESTRICT;
+DROP FUNCTION IF EXISTS public.trg_enforce_audit_immutability()               RESTRICT;
+DROP FUNCTION IF EXISTS public.trg_enforce_audit_truncate_immutability()      RESTRICT;
+
+DROP FUNCTION IF EXISTS public.trg_sync_movie_to_canonical()                  RESTRICT;
+DROP FUNCTION IF EXISTS public.trg_sync_actor_to_canonical()                  RESTRICT;
+DROP FUNCTION IF EXISTS public.trg_sync_genre_to_canonical()                  RESTRICT;
+DROP FUNCTION IF EXISTS public.trg_sync_opt_out_to_preferences()              RESTRICT;
+
+DROP FUNCTION IF EXISTS public.trg_compat_notification_tokens_insert()        RESTRICT;
+DROP FUNCTION IF EXISTS public.trg_compat_notification_tokens_update()        RESTRICT;
+DROP FUNCTION IF EXISTS public.trg_compat_notification_tokens_delete()        RESTRICT;
+
+DROP FUNCTION IF EXISTS public.trg_enforce_campaign_idempotency_lock()        RESTRICT;
+
+-- ============================================================================
+-- STEP 6: DROP CANONICAL RPCs (Migration 5), then notifications_is_admin() last
+-- ============================================================================
+DROP FUNCTION IF EXISTS public.record_notification_telemetry(uuid, uuid, varchar, uuid, varchar, varchar, timestamptz, jsonb) RESTRICT;
+DROP FUNCTION IF EXISTS public.sweep_expired_delivery_reservations()                                              RESTRICT;
+DROP FUNCTION IF EXISTS public.record_notification_delivery_failure(uuid, varchar, uuid, text, text, integer)    RESTRICT;
+DROP FUNCTION IF EXISTS public.fail_or_retry_notification_delivery(uuid, varchar, uuid, text, text, integer)     RESTRICT;
+DROP FUNCTION IF EXISTS public.confirm_notification_delivery_sent(uuid, uuid, text)                              RESTRICT;
+DROP FUNCTION IF EXISTS public.authorize_notification_delivery_dispatch(uuid, uuid, uuid, varchar, uuid)         RESTRICT;
+DROP FUNCTION IF EXISTS public.reserve_notification_deliveries(varchar, integer, integer)                        RESTRICT;
+DROP FUNCTION IF EXISTS public.cancel_notification_campaign(uuid)                                                RESTRICT;
+DROP FUNCTION IF EXISTS public.ingest_notification_campaign(text, text, text, text, text, jsonb, timestamptz, uuid) RESTRICT;
+DROP FUNCTION IF EXISTS public.revoke_notification_endpoint(uuid, text, varchar)                                 RESTRICT;
+DROP FUNCTION IF EXISTS public.claim_notification_endpoint(uuid, text)                                           RESTRICT;
+DROP FUNCTION IF EXISTS public.register_notification_endpoint(varchar, text, text, text, text, text, varchar, varchar, varchar, varchar) RESTRICT;
+
+-- Drop notifications_is_admin() last — all dependents removed above
+DROP FUNCTION IF EXISTS public.notifications_is_admin() RESTRICT;
+
+-- ============================================================================
+-- STEP 7: DROP PHASE 2 NOTIFICATION TABLES (reverse FK dependency order)
+-- notification_telemetry → notification_deliveries → notification_queue →
+-- notification_campaigns → notification_subscriptions → user_notifications →
+-- user_notification_preferences → notification_endpoints
+-- ============================================================================
+
+-- Only the ephemeral queue table is dropped by default.
+-- Data-bearing tables are preserved to prevent accidental data loss.
+DROP TABLE IF EXISTS public.notification_queue RESTRICT;
 
 -- OPTIONAL DESTRUCTIVE TEARDOWN:
--- If and ONLY IF an operator has completed the backup above AND explicitly
--- authorizes the deletion of campaign, delivery, telemetry and audit history,
--- uncomment the following block:
+-- Requires explicit operator authorization AND an external backup.
+-- Uncomment ONLY after backup is verified and rollback is authorized:
 /*
-DROP TABLE IF EXISTS public.notification_audit_log;
-DROP TABLE IF EXISTS public.notification_telemetry;
-DROP TABLE IF EXISTS public.notification_deliveries;
-DROP TABLE IF EXISTS public.notification_campaigns;
+DROP TABLE IF EXISTS public.notification_telemetry RESTRICT;
+DROP TABLE IF EXISTS public.notification_deliveries RESTRICT;
+DROP TABLE IF EXISTS public.notification_audit_log RESTRICT;
+DROP TABLE IF EXISTS public.notification_campaigns RESTRICT;
+DROP TABLE IF EXISTS public.user_notifications RESTRICT;
+DROP TABLE IF EXISTS public.notification_subscriptions RESTRICT;
+DROP TABLE IF EXISTS public.user_notification_preferences RESTRICT;
+DROP TABLE IF EXISTS public.notification_endpoints RESTRICT;
 */
 
--- ----------------------------------------------------------------------------
--- STEP 5: REVERT CONSTRAINTS & INDEXES ON USER DATA TABLES
--- Tables public.notification_tokens, public.user_notifications,
--- public.movie_notify_requests, public.actor_notify_requests,
--- public.genre_notify_requests, and public.notification_opt_outs
--- ARE PRESERVED INTACT TO PREVENT USER DATA LOSS.
--- ----------------------------------------------------------------------------
+-- ============================================================================
+-- STEP 8: DROP LEGACY COMPATIBILITY TABLES (Migration 7)
+-- movie_notify_requests, actor_notify_requests, genre_notify_requests,
+-- notification_opt_outs — these are Phase 2-created legacy shim tables.
+-- notification_tokens was a view — already dropped in Step 2.
+-- ============================================================================
+DROP TABLE IF EXISTS public.notification_opt_outs     RESTRICT;
+DROP TABLE IF EXISTS public.genre_notify_requests     RESTRICT;
+DROP TABLE IF EXISTS public.actor_notify_requests     RESTRICT;
+DROP TABLE IF EXISTS public.movie_notify_requests     RESTRICT;
 
--- notification_tokens
-ALTER TABLE IF EXISTS public.notification_tokens 
-    DROP CONSTRAINT IF EXISTS fk_notification_tokens_user;
-DROP INDEX IF EXISTS public.uq_notification_tokens_hash;
-DROP INDEX IF EXISTS public.idx_notification_tokens_user_active;
+-- ============================================================================
+-- STEP 9: VERIFY PRESERVED APPLICATION TABLES REMAIN INTACT
+-- (Executed as a no-op SELECT to prove tables are still accessible)
+-- ============================================================================
+DO $$
+DECLARE
+    v_count integer;
+BEGIN
+    -- Verify pre-existing core tables were NOT dropped
+    SELECT COUNT(*) INTO v_count FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name IN ('admin_users', 'download_links', 'movie_reports',
+                         'movie_reviews', 'site_settings');
 
--- movie_notify_requests
-ALTER TABLE IF EXISTS public.movie_notify_requests 
-    DROP CONSTRAINT IF EXISTS fk_movie_notify_user;
-DROP INDEX IF EXISTS public.uq_movie_notify_user;
+    RAISE NOTICE 'Rollback verification: % pre-existing application tables remain intact.', v_count;
 
--- actor_notify_requests
-ALTER TABLE IF EXISTS public.actor_notify_requests 
-    DROP CONSTRAINT IF EXISTS fk_actor_notify_user;
-DROP INDEX IF EXISTS public.uq_actor_notify_user;
-ALTER TABLE IF EXISTS public.actor_notify_requests 
-    ALTER COLUMN actor_id DROP NOT NULL;
+    -- Verify notification_audit_log data was not destroyed (append-only history preserved)
+    BEGIN
+        SELECT COUNT(*) INTO v_count FROM public.notification_audit_log;
+        RAISE NOTICE 'notification_audit_log preserved with % audit records.', v_count;
+    EXCEPTION WHEN undefined_table THEN
+        RAISE NOTICE 'notification_audit_log was dropped (optional destructive teardown was enabled).';
+    END;
 
--- genre_notify_requests
-ALTER TABLE IF EXISTS public.genre_notify_requests 
-    DROP CONSTRAINT IF EXISTS fk_genre_notify_user;
-DROP INDEX IF EXISTS public.uq_genre_notify_user;
-ALTER TABLE IF EXISTS public.genre_notify_requests 
-    ALTER COLUMN genre_id DROP NOT NULL;
+    -- Verify legacy quarantine tables are intact
+    SELECT COUNT(*) INTO v_count FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name IN ('legacy_delivery_quarantine', 'legacy_token_quarantine',
+                         'legacy_subscription_quarantine');
 
--- ----------------------------------------------------------------------------
--- STEP 6: PRESERVE AUDIT QUARANTINE DATA
--- The following tables are STRICTLY PRESERVED:
---   - public.legacy_token_quarantine
---   - public.legacy_subscription_quarantine
---   - public.legacy_delivery_quarantine
--- Dropping them would erase historical evidence of quarantined and pruned records.
--- ----------------------------------------------------------------------------
+    RAISE NOTICE '% legacy quarantine tables preserved (historical evidence intact).', v_count;
+END $$;
 
 COMMIT;

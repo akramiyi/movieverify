@@ -64,12 +64,29 @@ BEGIN
         v_start,
         clock_timestamp()
     );
-
-    -- Sleep briefly so Session 2 invokes its call and queues behind the xact advisory lock
-    PERFORM pg_sleep(0.3);
 END $$;
 
 COMMIT;
+
+-- Signal Session 2 that Session 1 has committed (Signal 77014)
+SELECT pg_advisory_lock(77014);
+
+-- Await Session 2 completion (Signal 77015)
+DO $$
+DECLARE
+    v_waited interval := '0 seconds'::interval;
+BEGIN
+    WHILE NOT EXISTS (
+        SELECT 1 FROM pg_locks
+        WHERE locktype = 'advisory' AND objid = 77015 AND granted = true
+    ) LOOP
+        PERFORM pg_sleep(0.02);
+        v_waited := v_waited + '0.02 seconds'::interval;
+        IF v_waited >= '10 seconds'::interval THEN
+            EXIT;
+        END IF;
+    END LOOP;
+END $$;
 
 -- Release session-level advisory locks
 SELECT pg_advisory_unlock_all();

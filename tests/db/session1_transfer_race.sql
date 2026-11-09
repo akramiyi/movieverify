@@ -1,6 +1,12 @@
 -- ============================================================================
--- TRANSFER RACE: Session 1 Two-Way Handshake Token Transfer (R3.1)
+-- TRANSFER RACE: Session 1 Two-Way Handshake Endpoint Deactivation (Phase 2 — R4.0)
 -- File: tests/db/session1_transfer_race.sql
+--
+-- Phase 2 change: Instead of transferring token ownership (Phase 1.5),
+-- this session deactivates the transfer_seed_device endpoint (simulating
+-- revocation/device replacement). The reserve_notification_deliveries RPC
+-- joins on notification_endpoints.is_active=true, so active deliveries to
+-- the deactivated endpoint cannot be claimed by Session 2 after deactivation.
 -- ============================================================================
 
 \set ON_ERROR_STOP on
@@ -8,13 +14,13 @@
 -- Ensure clean session state
 SELECT pg_advisory_unlock_all();
 
--- 1. Start Transfer Transaction
+-- 1. Start Deactivation Transaction
 BEGIN;
 
 DO $$
 DECLARE
-    v_start timestamptz := clock_timestamp();
-    v_xact bigint := txid_current();
+    v_start  timestamptz := clock_timestamp();
+    v_xact   bigint := txid_current();
     v_waited interval := '0 seconds'::interval;
 BEGIN
     -- Record transfer session start
@@ -24,18 +30,22 @@ BEGIN
         'session_1_transfer', 0, false, v_xact, v_start
     );
 
-    -- Execute ownership transfer (triggers cancellation of in-flight deliveries)
-    UPDATE public.notification_tokens
-    SET user_id = '00000000-0000-0000-0000-000000000002',
-        updated_at = NOW()
+    -- Deactivate the endpoint (revoke device — simulates ownership transfer or device removal)
+    -- Phase 2: authorize_notification_delivery_dispatch checks is_active and returns
+    -- ENDPOINT_REVOKED_OR_INACTIVE when endpoint is inactive.
+    UPDATE public.notification_endpoints
+    SET is_active         = false,
+        revoked_at        = NOW(),
+        revocation_reason = 'transfer_race_test',
+        updated_at        = NOW()
     WHERE device_name = 'transfer_seed_device';
 
-    -- Signal Session 2: Transfer ownership update is in progress (Signal 88001)
+    -- Signal Session 2: Endpoint deactivation is in progress (Signal 88001)
     PERFORM pg_advisory_lock(88001);
 
     -- Await Session 2's concurrent arrival signal (Signal 88002)
     WHILE NOT EXISTS (
-        SELECT 1 FROM pg_locks 
+        SELECT 1 FROM pg_locks
         WHERE locktype = 'advisory' AND objid = 88002 AND granted = true
     ) LOOP
         PERFORM pg_sleep(0.02);
@@ -62,7 +72,7 @@ DECLARE
     v_waited interval := '0 seconds'::interval;
 BEGIN
     WHILE EXISTS (
-        SELECT 1 FROM pg_locks 
+        SELECT 1 FROM pg_locks
         WHERE locktype = 'advisory' AND objid = 88002 AND granted = true
     ) LOOP
         PERFORM pg_sleep(0.02);
