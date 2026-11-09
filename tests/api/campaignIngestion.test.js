@@ -31,6 +31,7 @@ import {
 } from '../../api/_lib/campaignService.js';
 
 import campaignsHandler from '../../api/notifications/campaigns.js';
+import { getSupabaseUserClient } from '../../api/_lib/supabaseServer.js';
 
 /**
  * Creates mock HTTP Request & Response objects
@@ -719,5 +720,166 @@ test('HTTP Handler Endpoints Suite (POST & DELETE /api/notifications/campaigns)'
     assert.equal(responseBody.includes('fcm_sample_token'), false);
     assert.equal(responseBody.includes('token_hash'), false);
     assert.equal(responseBody.includes('private_key'), false);
+  });
+});
+
+test('Phase 6A: Request-Scoped Admin Supabase Client & RPC Authorization Suite', async (t) => {
+  await t.test('1. getSupabaseUserClient: creates client with user JWT in Authorization header', () => {
+    const prevUrl = process.env.SUPABASE_URL;
+    const prevAnon = process.env.VITE_SUPABASE_ANON_KEY;
+    try {
+      process.env.SUPABASE_URL = 'https://mock.supabase.co';
+      process.env.VITE_SUPABASE_ANON_KEY = 'mock-anon-key';
+
+      const userJwt = 'sample-admin-jwt-token';
+      const client = getSupabaseUserClient(userJwt);
+      assert.ok(client, 'User client should be instantiated');
+    } finally {
+      process.env.SUPABASE_URL = prevUrl;
+      process.env.VITE_SUPABASE_ANON_KEY = prevAnon;
+    }
+  });
+
+  await t.test('2. getSupabaseUserClient: fails closed when JWT or anon key is missing', () => {
+    const prevUrl = process.env.SUPABASE_URL;
+    const prevAnon = process.env.VITE_SUPABASE_ANON_KEY;
+    const prevSupAnon = process.env.SUPABASE_ANON_KEY;
+    try {
+      delete process.env.SUPABASE_ANON_KEY;
+      delete process.env.VITE_SUPABASE_ANON_KEY;
+      process.env.SUPABASE_URL = 'https://mock.supabase.co';
+
+      assert.throws(
+        () => getSupabaseUserClient('valid-token'),
+        /SUPABASE_ANON_KEY/,
+        'Should throw when anon key is missing'
+      );
+
+      process.env.VITE_SUPABASE_ANON_KEY = 'mock-anon-key';
+      assert.throws(
+        () => getSupabaseUserClient(null),
+        /userJwt is required/,
+        'Should throw when user JWT is missing'
+      );
+    } finally {
+      process.env.SUPABASE_URL = prevUrl;
+      process.env.VITE_SUPABASE_ANON_KEY = prevAnon;
+      process.env.SUPABASE_ANON_KEY = prevSupAnon;
+    }
+  });
+
+  await t.test('3. Ingest and Cancel invoke RPC via user-scoped client when context.token is provided', async () => {
+    const mockUserScopedClient = {
+      async rpc(fnName) {
+        return {
+          data: {
+            success: true,
+            campaign_id: '88888888-8888-8888-8888-888888888888',
+            status: fnName === 'cancel_notification_campaign' ? 'cancelled' : 'processing',
+            total_recipients: 10,
+            total_deliveries: 10,
+          },
+          error: null,
+        };
+      },
+    };
+
+    const adminContext = {
+      isM2M: false,
+      user: { id: '00000000-0000-0000-0000-000000000001' },
+      token: 'verified-admin-jwt-12345',
+    };
+
+    // Test ingestion with custom client override
+    const ingestRes = await ingestCampaign(
+      {
+        title: 'User Client Test',
+        body: 'Testing user client forwarding',
+        category: 'user_alert',
+      },
+      adminContext,
+      mockUserScopedClient
+    );
+    assert.equal(ingestRes.status, 201);
+    assert.equal(ingestRes.body.success, true);
+
+    // Test cancellation with custom client override
+    const cancelRes = await cancelCampaign(
+      '88888888-8888-8888-8888-888888888888',
+      adminContext,
+      mockUserScopedClient
+    );
+    assert.equal(cancelRes.status, 200);
+    assert.equal(cancelRes.body.success, true);
+  });
+
+  await t.test('4. End-to-end HTTP Handler: preserves token and completes ingestion for verified admin', async () => {
+    let rpcCalledWithToken = false;
+    const mockSupabase = {
+      auth: {
+        async getUser(token) {
+          if (token === 'valid-admin-bearer-token') {
+            return {
+              data: {
+                user: {
+                  id: '00000000-0000-0000-0000-000000000001',
+                  email: 'admin@movieverify.com',
+                },
+              },
+              error: null,
+            };
+          }
+          return { data: { user: null }, error: { message: 'Invalid' } };
+        },
+      },
+      from() {
+        return {
+          select() {
+            return {
+              eq(_col, val) {
+                return {
+                  async maybeSingle() {
+                    // admin user exists
+                    if (val === '00000000-0000-0000-0000-000000000001') {
+                      return { data: { user_id: val }, error: null };
+                    }
+                    return { data: null, error: null };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+      async rpc() {
+        rpcCalledWithToken = true;
+        return {
+          data: {
+            success: true,
+            already_exists: false,
+            campaign_id: '99999999-9999-9999-9999-999999999999',
+            status: 'processing',
+            total_recipients: 5,
+            total_deliveries: 5,
+          },
+          error: null,
+        };
+      },
+    };
+
+    const { req, res } = createMockHttp({
+      method: 'POST',
+      headers: { authorization: 'Bearer valid-admin-bearer-token' },
+      body: {
+        title: 'Phase 6A Verified Admin Campaign',
+        body: 'Admin created campaign with preserved bearer token',
+        category: 'movie_release',
+      },
+    });
+
+    await campaignsHandler(req, res, { supabase: mockSupabase });
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.json().success, true);
+    assert.equal(rpcCalledWithToken, true);
   });
 });

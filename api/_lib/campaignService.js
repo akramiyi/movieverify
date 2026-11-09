@@ -16,7 +16,7 @@
  */
 
 import crypto from 'node:crypto';
-import { getSupabaseServerClient } from './supabaseServer.js';
+import { getSupabaseServerClient, getSupabaseUserClient } from './supabaseServer.js';
 
 export const VALID_CATEGORIES = [
   'movie_release',
@@ -307,7 +307,12 @@ export async function ingestCampaign(payload, context = {}, customSupabase = nul
   const createdBy = context.user?.id || null;
 
   try {
-    const supabase = getSupabaseServerClient(customSupabase);
+    // For authenticated admin users, use request-scoped client carrying the user's JWT
+    // so PostgreSQL auth.uid() reflects the admin and passes notifications_is_admin().
+    // For M2M or fallback, use server client.
+    const supabase = (context.token && !context.isM2M)
+      ? getSupabaseUserClient(context.token, customSupabase)
+      : getSupabaseServerClient(customSupabase);
 
     const rpcParams = {
       p_title: sanitized.title,
@@ -378,7 +383,12 @@ export async function cancelCampaign(input, context = {}, customSupabase = null)
   const { campaignId } = validation;
 
   try {
-    const supabase = getSupabaseServerClient(customSupabase);
+    // For authenticated admin users, use request-scoped client carrying the user's JWT
+    // so PostgreSQL auth.uid() reflects the admin and passes notifications_is_admin().
+    // For M2M or fallback, use server client.
+    const supabase = (context.token && !context.isM2M)
+      ? getSupabaseUserClient(context.token, customSupabase)
+      : getSupabaseServerClient(customSupabase);
 
     const { data, error } = await supabase.rpc('cancel_notification_campaign', {
       p_campaign_id: campaignId,

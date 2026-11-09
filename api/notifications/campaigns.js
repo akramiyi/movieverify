@@ -92,7 +92,7 @@ export default async function handler(req, res, customDependencies = {}) {
       });
     }
 
-    context = { isM2M: false, user: authResult.user };
+    context = { isM2M: false, user: authResult.user, token: authResult.token };
   }
 
   // 4. Dispatch by Method & Action
