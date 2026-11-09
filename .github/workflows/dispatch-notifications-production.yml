@@ -2,8 +2,8 @@ name: Notification Dispatch Cycle (Production Scheduler)
 
 on:
   schedule:
-    # Every 5 minutes, offset away from the start of the hour (minutes 2, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57)
-    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+    # Every 5 minutes, offset away from the start of the hour (minutes 4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59)
+    - cron: '4-59/5 * * * *'
   workflow_dispatch:
     inputs:
       batch_size:
