@@ -33,7 +33,11 @@ export default async function handler(req, res, customSupabase = null) {
   const result = await registerDeviceToken(user, body, customSupabase);
 
   if (!result.success) {
-    return sendJson(res, result.status || 400, { error: result.error });
+    return sendJson(res, result.status || 400, {
+      error: result.error,
+      code: result.code,
+      data: result.data,
+    });
   }
 
   return sendJson(res, result.status || 200, result.data);

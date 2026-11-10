@@ -110,10 +110,10 @@ function createMockSupabaseWithRpc(initialState = {}) {
           del.failure_reason = 'OWNERSHIP_TRANSFERRED';
           return { data: { authorized: false, reason: 'DISPATCH_REJECTED_OWNERSHIP_MISMATCH' }, error: null };
         }
-        if (!tok.is_active) {
+        if (!tok.is_active || (tok.revoked_at !== undefined && tok.revoked_at !== null)) {
           del.delivery_status = 'failed';
-          del.failure_reason = 'TOKEN_INACTIVE';
-          return { data: { authorized: false, reason: 'DISPATCH_REJECTED_TOKEN_INACTIVE' }, error: null };
+          del.failure_reason = 'ENDPOINT_REVOKED_OR_INACTIVE';
+          return { data: { authorized: false, reason: 'ENDPOINT_REVOKED_OR_INACTIVE' }, error: null };
         }
 
         const attemptId = 'attempt-' + Math.random().toString(36).substring(2, 8);
@@ -411,6 +411,54 @@ test('Dispatch Worker Core Unit & Reliability Suite', async (t) => {
     const updated = mockSupabase._deliveries.get('del-transfer-race-1');
     assert.equal(updated.delivery_status, 'cancelled');
     assert.equal(updated.failure_reason, 'OWNERSHIP_TRANSFERRED');
+  });
+
+  await t.test('7b. Revoked Token Pre-Dispatch: Rejects dispatch when endpoint is revoked, marks delivery failed', async () => {
+    const mockDelivery = {
+      id: 'del-revoked-1',
+      recipient_id: 'user-1',
+      token_id: 'tok-revoked',
+      delivery_status: 'reserved',
+      reservation_token: 'res-revoked-1',
+      worker_id: 'worker-1',
+      attempt_count: 1,
+    };
+    const mockToken = {
+      id: 'tok-revoked',
+      user_id: 'user-1',
+      token: 'revoked-token',
+      is_active: true, // Suppose it was reactivated or is_active was true
+      revoked_at: '2026-11-10T06:00:00.000Z', // But revoked_at is set!
+    };
+
+    const mockSupabase = createMockSupabaseWithRpc({
+      deliveries: [mockDelivery],
+      tokens: [mockToken],
+    });
+    const mockMessaging = createMockMessaging();
+
+    const context = {
+      supabase: mockSupabase,
+      messaging: mockMessaging,
+      workerId: 'worker-1',
+      campaignCache: new Map(),
+    };
+
+    const res = await processDelivery({
+      delivery_id: 'del-revoked-1',
+      token_id: 'tok-revoked',
+      reservation_token: 'res-revoked-1',
+      recipient_id: 'user-1',
+      raw_token: 'revoked-token',
+    }, context);
+
+    assert.equal(res.status, 'rejected');
+    assert.equal(res.reason, 'ENDPOINT_REVOKED_OR_INACTIVE');
+    assert.equal(mockMessaging._sentMessages.length, 0, 'No notification sent to revoked endpoint');
+
+    const updated = mockSupabase._deliveries.get('del-revoked-1');
+    assert.equal(updated.delivery_status, 'failed');
+    assert.equal(updated.failure_reason, 'ENDPOINT_REVOKED_OR_INACTIVE');
   });
 
   await t.test('8. Permanent Failure: Unregistered token deactivates token & marks delivery failed', async () => {
