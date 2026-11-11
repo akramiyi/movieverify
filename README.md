@@ -2,13 +2,14 @@
 
 # 🎬 MovieVerify
 
-**A Netflix-inspired movie & TV discovery platform with a secure admin panel, Telegram bot control and PWA support.**
+**A Netflix-inspired movie & TV discovery platform with user accounts, push notifications, a secure admin console, Telegram bot control and PWA support.**
 
 [![Live Demo](https://img.shields.io/badge/Live-movieverify.vercel.app-E50914?style=for-the-badge)](https://movieverify.vercel.app)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind-3-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-FCM-FFCA28?style=flat-square&logo=firebase&logoColor=black)
 ![TMDB](https://img.shields.io/badge/Data-TMDB%20API-01B4E4?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-Installable-5A0FC8?style=flat-square)
 
@@ -25,7 +26,10 @@
 - [Screenshots](#screenshots)
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
-- [Database Setup](#database-setup)
+- [Database](#database)
+- [API Reference](#api-reference)
+- [Telegram Bot](#telegram-bot)
+- [Notification System](#notification-system)
 - [Project Structure](#project-structure)
 - [Deployment](#deployment)
 - [Security Notes](#security-notes)
@@ -38,9 +42,9 @@
 
 ## About
 
-MovieVerify is a full-stack movie and TV discovery app. Metadata (posters, ratings, cast, trailers) comes live from **TMDB**, while **Supabase** powers the admin-managed content layer, user reviews, reports and site settings. A separate **Node.js service** runs a Telegram bot and a payment API.
+MovieVerify is a full-stack movie and TV discovery platform. Metadata (posters, ratings, cast, trailers) comes from **TMDB**. **Supabase** provides authentication, the Postgres database and row-level security. **Vercel serverless functions** power the notification pipeline and shareable link previews, while a **Node.js service on Render** runs the Telegram bot, the payment API and a TMDB proxy.
 
-It started as a UI exercise and grew into a complete product with authentication, row-level security, real-time admin tooling, an installable PWA and bot-based administration.
+What began as a UI exercise has grown into a complete product: Google sign-in, per-user subscriptions, scheduled push campaigns, an admin console, bot-based administration and an installable PWA.
 
 ---
 
@@ -48,39 +52,47 @@ It started as a UI exercise and grew into a complete product with authentication
 
 ### For visitors
 
-- **Netflix-style interface** with a rotating hero carousel and auto-scrolling content rows (touch/drag scrolling supported on mobile)
-- **Smart search** with instant suggestions and filters (genre, language, rating, sort order)
+- **Netflix-style interface**: rotating hero carousel, auto-scrolling content rows (with touch and drag scrolling on mobile), category tabs for Home, TV Shows, Movies and New & Popular
+- **Smart search**: live typeahead suggestions plus filters for genre, language, minimum rating and sort order
 - **Genre pages** with "Load more" pagination
-- **Actors & actresses browsing**: profile cards resolved via TMDB person search, with full filmography per person
-- **Movie details modal**: cast, runtime, trailer, similar titles, TV seasons and episodes
-- **My List** and **Continue Browsing** (stored locally in the browser)
-- **Reviews & ratings** with basic content moderation
-- **Report a problem** on any title, plus **share** via WhatsApp / copy link / native share sheet
-- **Download history** and **"Notify me"** for titles without links yet
-- **Latest releases row** that rotates a weekly pick across Bollywood, South Indian and Hollywood titles
-- **Cinematic intro animation**, shown once per session
-- **Installable PWA** with a custom install prompt
-- **Support section** (₹5 / ₹10 / ₹50 / custom) using Razorpay in **test mode**
+- **Actor and actress directories**: TMDB person lookup with a full filmography per person
+- **Title details modal**: cast, runtime, trailer, links per quality, TV seasons and episodes
+- **Latest releases row**: recent Indian-language releases surfaced on the home feed
+- **Personalisation**: *My List*, *Continue Browsing* and download history, stored locally in the browser
+- **Accounts**: Google OAuth sign-in
+- **Subscriptions ("Notify me")**: follow movies, TV series, individual seasons, actors and genres
+- **Notification centre**: in-app inbox with unread badge, mark-as-read, deep-links and a welcome message for new users
+- **Browser push (FCM)**: per-category toggles, timezone-aware quiet hours and a daily push cap
+- **Reviews and ratings** (1–5 stars) with basic content moderation
+- **Report a problem** on any title
+- **Sharing**: WhatsApp, copy link and native share, with dynamic Open Graph previews for movies and TV shows
+- **Deep links**: `/?type=movie&id=…` opens a title directly
+- **Support section**: ₹5 / ₹10 / ₹50 / custom donations through Razorpay (test mode)
+- **Site lock gate** and a cinematic first-visit intro animation
+- **Installable PWA** with an in-app install button
 
 ### For the admin
 
-- **Secure admin panel**: Supabase Auth plus an `admin_users` allow-list check
-- **Content manager**: search TMDB, attach links per quality, edit or delete entries, with multi-season / multi-episode support for TV
-- **Dashboard & analytics**: totals, missing-quality counters, most reviewed titles, recent activity
-- **Reports inbox** with a notification badge, mark-as-resolved and delete
-- **Site lock**: toggle a password gate over the entire site from the panel, no redeploy needed
-- **Telegram bot control**: manage entries and search from chat (admin-ID protected)
+- **Secure admin console**: Supabase Auth plus an `admin_users` allow-list check, available at `/admin` or through the sign-in modal
+- **Catalog manager**: TMDB lookup, per-quality links, custom descriptions, and season/episode editing for TV, with filters for missing 720p, missing 1080p and complete entries
+- **Automatic release alerts**: saving a new title, season or update posts an event that becomes a notification campaign
+- **Campaign manager**: create immediate or scheduled broadcast or targeted campaigns, preview the push, and track sent, success, failed, open and click counts
+- **Reports inbox**: resolve or delete user reports
+- **Analytics dashboard**: catalog completeness, pending reports, average rating, most reviewed titles and recent reviews
+- **Site lock control**: toggle the gate and set the key without redeploying
+- **Telegram bot** administration (see [Telegram Bot](#telegram-bot))
 
 ### Engineering highlights
 
-- Server-verified payment flow (HMAC signature check); the secret never reaches the browser
-- Row Level Security on every Supabase table, with separate public and admin policies
-- Defensive data handling throughout (missing genres, non-numeric ratings, failed lookups)
-- Service worker limited to same-origin requests, so API calls are never intercepted
-- Batched TMDB metadata requests to stay under rate limits
-- Session and in-memory caching of TMDB responses
-- Image fallback chain: poster → backdrop → placeholder
-- Dynamic Open Graph previews for shared movie and TV links (via `vercel.json`)
+- **Row Level Security** on the notification schema with `FORCE ROW LEVEL SECURITY`, column-scoped grants, `security_invoker` views and an append-only audit log
+- **Idempotent campaign ingestion** and a **lease-based delivery worker** with retries, quiet-hour handling and daily caps
+- **Delivery telemetry**: received, displayed, opened, clicked and dismissed events
+- **Server-verified payments**: HMAC-SHA256 signature check, with the secret kept server-side
+- **Service worker**: network-first caching for same-origin GETs only, push de-duplication in IndexedDB (24 h) and open-redirect-safe notification clicks
+- **TMDB proxy** on the backend to avoid exposing tokens and to work on networks that block TMDB directly
+- **Resilient data layer**: batched TMDB lookups, session and in-memory caching, and defensive handling of missing genres, ratings and images
+- **Image pipeline**: concurrency-limited loader with a poster → backdrop → placeholder fallback chain
+- **Open Graph prewarming** so WhatsApp link previews render with artwork
 
 ---
 
@@ -89,11 +101,13 @@ It started as a UI exercise and grew into a complete product with authentication
 | Layer | Technology |
 | --- | --- |
 | Frontend | React 19, Vite 8, React Router 7 |
-| Styling & motion | Tailwind CSS 3, Framer Motion, Lucide icons |
-| Data | TMDB API (metadata), Supabase / PostgreSQL (app data) |
-| Auth | Supabase Auth |
+| Styling and motion | Tailwind CSS 3, Framer Motion, Lucide icons |
+| Data and auth | Supabase (PostgreSQL, Auth, RLS), TMDB API |
+| Notifications | Firebase Cloud Messaging (FCM v1), Web Push, service worker |
+| Serverless API | Vercel Functions (Node.js) |
 | Backend service | Node.js, Express, `node-telegram-bot-api`, Razorpay SDK |
-| Hosting | Vercel (frontend), Render (backend service) |
+| Scheduling | GitHub Actions (cron) |
+| Hosting | Vercel (frontend and serverless), Render (backend service) |
 | Tooling | oxlint, PostCSS, Autoprefixer |
 
 ---
@@ -101,23 +115,30 @@ It started as a UI exercise and grew into a complete product with authentication
 ## Architecture
 
 ```
-                    ┌──────────────────────────┐
-                    │         Browser          │
-                    │   React + Vite (PWA)     │
-                    └───────┬─────────┬────────┘
-                            │         │
-            metadata        │         │  app data / auth
-                            ▼         ▼
-                  ┌──────────────┐  ┌─────────────────────┐
-                  │   TMDB API   │  │  Supabase (Postgres)│
-                  └──────────────┘  │  Auth · RLS · Tables│
-                                    └──────────▲──────────┘
-                                               │ service role
-                            payments           │
-         ┌─────────────────────────────────────┴────────┐
-         │   Render Web Service  (telegram-bot/)        │
-         │   Express API  +  Telegram Bot  +  Razorpay  │
-         └──────────────────────────────────────────────┘
+                          ┌───────────────────────────┐
+                          │          Browser          │
+                          │   React SPA · PWA · SW    │
+                          └──┬─────────┬───────────┬──┘
+                             │         │           │
+        titles / search      │         │ auth,     │ push token,
+        (via proxy)          │         │ app data  │ subscriptions
+                             ▼         ▼           ▼
+                   ┌──────────────┐  ┌─────────────────────────────┐
+                   │  Render Web  │  │   Vercel (SPA + /api)       │
+                   │   Service    │  │   share · notifications/*   │
+                   │ Express API  │  └───────┬──────────────▲──────┘
+                   │ TMDB proxy   │          │              │ every 5 min
+                   │ Razorpay     │          ▼              │
+                   │ Telegram bot │  ┌──────────────┐  ┌────┴────────────┐
+                   └──────┬───────┘  │   Supabase   │  │ GitHub Actions  │
+                          │          │ Postgres·RLS │  │ dispatch cron   │
+                          ▼          │ Auth · RPCs  │  └─────────────────┘
+                   ┌──────────────┐  └──────┬───────┘
+                   │   TMDB API   │         │
+                   └──────────────┘         ▼
+                                     ┌──────────────┐
+                                     │ Firebase FCM │ ──▶ user devices
+                                     └──────────────┘
 ```
 
 ---
@@ -126,13 +147,13 @@ It started as a UI exercise and grew into a complete product with authentication
 
 > Add your screenshots to `docs/screenshots/` and update the paths below.
 
-| Home | Movie Details |
+| Home | Title Details |
 | --- | --- |
 | ![Home](docs/screenshots/home.png) | ![Details](docs/screenshots/details.png) |
 
-| Actors | Admin Panel |
+| Notifications | Admin Console |
 | --- | --- |
-| ![Actors](docs/screenshots/actors.png) | ![Admin](docs/screenshots/admin.png) |
+| ![Notifications](docs/screenshots/notifications.png) | ![Admin](docs/screenshots/admin.png) |
 
 ---
 
@@ -142,7 +163,8 @@ It started as a UI exercise and grew into a complete product with authentication
 
 - Node.js 20+
 - A [TMDB](https://www.themoviedb.org/settings/api) account (v4 read access token)
-- A [Supabase](https://supabase.com) project
+- A [Supabase](https://supabase.com) project (Google provider enabled for sign-in)
+- A [Firebase](https://firebase.google.com) project with Cloud Messaging (only for push notifications)
 
 ### Installation
 
@@ -155,7 +177,7 @@ cd movieverify
 npm install
 
 # 3. Configure environment
-cp .env.example .env     # then fill in the values below
+cp .env.example .env     # then fill in the values (see below)
 
 # 4. Start the dev server
 npm run dev
@@ -172,7 +194,7 @@ npm run dev
 
 ### Backend service (optional)
 
-The Telegram bot and payment API live in `telegram-bot/`:
+The Telegram bot, payment API and TMDB proxy live in `telegram-bot/`:
 
 ```bash
 cd telegram-bot
@@ -186,16 +208,33 @@ node index.js
 
 ## Environment Variables
 
+> Never commit `.env` files. Anything prefixed with `VITE_` is bundled into the browser, so never put secrets there.
+
 ### Frontend (`.env`)
 
 | Variable | Description |
 | --- | --- |
-| `VITE_TMDB_TOKEN` | TMDB v4 read access token |
 | `VITE_SUPABASE_URL` | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon (public) key |
-| `VITE_API_URL` | Base URL of the backend service |
+| `VITE_TMDB_TOKEN` | TMDB v4 read access token (used by a few direct calls) |
+| `VITE_API_URL` | Base URL of the Render backend service |
+| `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID` | Firebase web app config |
+| `VITE_FIREBASE_VAPID_KEY` | Web Push certificate key for FCM |
 
-### Backend (`telegram-bot/.env`)
+### Vercel serverless functions (`api/`)
+
+| Variable | Description |
+| --- | --- |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (**server only**) |
+| `SUPABASE_ANON_KEY` | Anon key used to validate user JWTs |
+| `INTERNAL_WORKER_SECRET` / `CRON_SECRET` | Shared secret for the dispatch endpoint |
+| `NOTIFICATION_DISPATCH_ENABLED` | Kill switch, must be `true` to send |
+| `CAMPAIGN_API_SECRET` | Machine-to-machine secret for campaign and event ingestion |
+| `FIREBASE_SERVICE_ACCOUNT` *or* `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Firebase Admin credentials for FCM v1 |
+| `TMDB_READ_TOKEN` | TMDB token used by the share-preview endpoint |
+
+### Render backend (`telegram-bot/`)
 
 | Variable | Description |
 | --- | --- |
@@ -207,31 +246,118 @@ node index.js
 | `RAZORPAY_KEY_ID` | Razorpay key ID (test or live) |
 | `RAZORPAY_KEY_SECRET` | Razorpay secret (**server only**) |
 | `FRONTEND_URL` | Allowed CORS origin, e.g. `https://movieverify.vercel.app` |
+| `PORT` | Provided by the host (defaults to `3000`) |
 
-> ⚠️ Never commit `.env` files. Anything prefixed with `VITE_` is bundled into the browser, so never put secrets there.
+### GitHub Actions
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `PRODUCTION_NOTIFICATION_DISPATCH_ENABLED` | Repository variable | Enables the 5-minute production dispatcher |
+| `CRON_SECRET` | Repository secret | Authenticates the dispatch call |
 
 ---
 
-## Database Setup
+## Database
 
-Create the following tables in Supabase and enable Row Level Security on each:
+### Application tables
 
-| Table | Purpose | Public access |
-| --- | --- | --- |
-| `download_links` | Admin-managed entries (per-quality URLs, TV `seasons` as JSONB) | Read |
-| `movie_reviews` | User reviews and ratings | Read, insert |
-| `movie_reports` | "Report a problem" submissions | Insert only |
-| `site_settings` | Single-row site lock configuration | Read |
-| `admin_users` | Allow-list of admin user IDs | None |
+| Table | Purpose |
+| --- | --- |
+| `download_links` | Admin-managed entries: per-quality URLs and TV `seasons` as JSONB |
+| `movie_reviews` | User reviews and ratings |
+| `movie_reports` | "Report a problem" submissions |
+| `site_settings` | Single-row site lock configuration |
+| `admin_users` | Allow-list of admin user IDs |
 
-Write access (update / delete) is restricted to authenticated admins through RLS policies.
-
-> Tables created through the SQL editor also need explicit grants, otherwise requests fail with `403`:
+> These five tables are created manually in the Supabase SQL editor. Tables created that way also need explicit grants, otherwise requests fail with `403`:
 >
 > ```sql
 > GRANT SELECT, INSERT ON movie_reviews TO anon, authenticated;
 > GRANT DELETE ON movie_reviews TO authenticated;
 > ```
+
+### Notification schema (`supabase/migrations/`)
+
+| Group | Tables |
+| --- | --- |
+| Devices and preferences | `notification_endpoints`, `user_notification_preferences`, `notification_opt_outs` |
+| Subscriptions | `notification_subscriptions`, `movie_notify_requests`, `actor_notify_requests`, `genre_notify_requests` |
+| Campaigns and delivery | `notification_campaigns`, `notification_queue`, `notification_deliveries` |
+| Inbox and analytics | `user_notifications`, `notification_telemetry`, `user_welcome_dispatches` |
+| Compliance | `notification_audit_log` (append-only) |
+
+All notification tables have RLS **enabled and forced**. Anonymous access is revoked, authenticated users are limited to their own rows, and campaign, queue and audit data is admin- or service-role-only. Dispatch, scheduling, welcome and telemetry logic runs through `SECURITY DEFINER` RPCs that only the service role may execute.
+
+Run the migrations in order with the Supabase CLI:
+
+```bash
+supabase db push
+```
+
+---
+
+## API Reference
+
+### Vercel serverless (`/api`)
+
+| Endpoint | Auth | Purpose |
+| --- | --- | --- |
+| `GET /api/share` | None | Open Graph / Twitter Card HTML for shared titles, then redirects to the app |
+| `GET, POST /api/notifications/preferences` | User JWT | Read and update notification preferences |
+| `POST /api/notifications/register` | User JWT | Register or refresh an FCM token |
+| `POST, DELETE /api/notifications/revoke` | User JWT | Revoke a device token |
+| `GET, POST, DELETE /api/notifications/subscriptions` | User JWT | Manage release subscriptions |
+| `GET, PATCH /api/notifications/user` | User JWT | Fetch inbox and mark as read |
+| `POST /api/notifications/welcome` | User JWT | Issue the first-login welcome notification |
+| `POST /api/notifications/telemetry` | User JWT | Record delivery engagement events |
+| `POST, DELETE /api/notifications/campaigns` | Admin JWT or M2M secret | Create or cancel campaigns |
+| `POST /api/notifications/events` | Admin JWT or M2M secret | Turn release events into campaigns |
+| `POST /api/notifications/dispatch` | Worker secret + kill switch | Promote scheduled campaigns and send due deliveries |
+
+### Render backend
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Health check, returns `{ "status": "ok" }` |
+| `GET /api/tmdb/*` | TMDB proxy |
+| `POST /api/razorpay/create-order` | Create a Razorpay order (amount in INR) |
+| `POST /api/razorpay/verify-payment` | Verify the payment signature server-side |
+
+---
+
+## Telegram Bot
+
+| Command | Access | Description |
+| --- | --- | --- |
+| `/start`, `/help` | Everyone | Welcome message and usage guide |
+| `/search <query>` | Everyone | Search TMDB and get quality buttons or season/episode keyboards for titles that have links |
+| `/admin` | Admin | Open the admin menu |
+| `/stats` | Admin | Totals for movies, TV and each quality |
+| `/list` | Admin | Paginated list of configured titles |
+| `/searchadmin <query>` | Admin | Search TMDB, then add, update or delete links through a guided 480p → 720p → 1080p flow |
+
+Admin access is enforced by checking the sender's numeric Telegram ID against `TELEGRAM_ADMIN_IDS`.
+
+---
+
+## Notification System
+
+```
+Admin saves a title ──▶ /api/notifications/events ──▶ idempotent campaign
+Admin campaign UI   ──▶ /api/notifications/campaigns ─┘
+                                                       │
+GitHub Actions (every 5 min) ──▶ /api/notifications/dispatch
+                                      │
+                 promote scheduled ▶ reserve (lease) ▶ send via FCM v1
+                                      │                     │
+                          retry / fail / sweep leases       ▼
+                                                    service worker shows
+                                                    notification (deduped)
+                                                            │
+                                      telemetry ◀── open / click events
+```
+
+Quiet hours, per-category opt-outs and daily caps are enforced before a push is leased. An in-app inbox copy is always kept, even when push is suppressed.
 
 ---
 
@@ -239,19 +365,38 @@ Write access (update / delete) is restricted to authenticated admins through RLS
 
 ```
 movieverify/
-├── public/                 # manifest.json, sw.js, icons
+├── api/                      # Vercel serverless functions
+│   ├── share.js              # Open Graph share pages
+│   ├── notifications/        # campaigns, events, dispatch, register, ...
+│   └── _lib/                 # Supabase server client, FCM worker, services
+├── public/                   # manifest.json, sw.js, og-fallback.jpg
 ├── src/
-│   ├── components/         # UI: rows, cards, modals, admin panel, ...
-│   ├── hooks/              # useTMDB, useActorSearch, useRecentlyViewed, ...
-│   ├── pages/              # Genre and actor listing pages
-│   ├── data/               # Supabase client, static data
+│   ├── components/           # UI, admin panel, notification center, ...
+│   ├── hooks/                # useTMDB, useSubscriptions, usePushNotifications, ...
+│   ├── pages/                # Genre and actor listing pages
+│   ├── services/             # Firebase client
+│   ├── utils/                # Image manager, moderation, notification helpers
+│   ├── data/                 # Supabase client, static data
 │   ├── App.jsx
 │   └── main.jsx
-├── telegram-bot/           # Express API + Telegram bot + Razorpay
-├── vercel.json             # Routing and Open Graph previews
-├── tailwind.config.js
-└── vite.config.js
+├── telegram-bot/             # Express API, Telegram bot, Razorpay, TMDB proxy
+│   ├── handlers/             # userHandlers.js, adminHandlers.js
+│   └── index.js
+├── supabase/migrations/      # Notification schema, RLS, RPCs, triggers
+├── tests/db/                 # Database fixtures and preflight scripts
+├── .github/workflows/        # Dispatch cron, Supabase keep-alive
+└── vercel.json               # Rewrites for share links and SPA fallback
 ```
+
+### Routes
+
+| Route | Description |
+| --- | --- |
+| `/` | Home feed, search, support section, modals |
+| `/genre/:genreSlug` | Genre listing with load-more |
+| `/actors`, `/actresses` | Full actor and actress directories |
+| `/admin` | Admin console |
+| `/share/:type/:id` | Rewritten server-side to `/api/share` |
 
 ---
 
@@ -259,29 +404,32 @@ movieverify/
 
 | Part | Platform | Notes |
 | --- | --- | --- |
-| Frontend | **Vercel** | Add the `VITE_*` variables, then redeploy (they are inlined at build time) |
-| Backend | **Render** (Web Service) | Root directory `telegram-bot`, build `npm install`, start `node index.js` |
-
-Health check: `GET /health` → `{ "status": "ok" }`
+| Frontend and `/api` | **Vercel** | Set all `VITE_*` and server variables, then redeploy (`VITE_*` values are inlined at build time) |
+| Backend service | **Render** (Web Service) | Root directory `telegram-bot`, build `npm install`, start `node index.js`, health check `/health` |
+| Scheduling | **GitHub Actions** | Dispatch every 5 minutes (gated by a repository variable) and a twice-daily Supabase keep-alive |
 
 ---
 
 ## Security Notes
 
-- Admin access requires both a valid Supabase session **and** a row in `admin_users`.
-- Payment success is trusted only after **server-side signature verification**.
-- The site lock is a **soft gate**: its key is stored in a publicly readable row. Treat it as a "keep casual visitors out" feature, not as real access control.
-- Keep the Supabase **service role key** and Razorpay **secret** on the server only.
+- Admin access requires a valid Supabase session **and** a row in `admin_users`.
+- Notification tables use forced RLS, column-scoped grants and an append-only audit log.
+- Payment success is trusted only after **server-side signature verification**. A Razorpay webhook and payment ledger are not implemented yet.
+- The **site lock is a soft gate**: its key is stored in a publicly readable row. Treat it as "keep casual visitors out", not as real access control.
+- Keep the Supabase **service role key**, Razorpay **secret**, Firebase **private key** and worker secrets on the server only.
+- Review CORS before going live: the backend allows any origin if `FRONTEND_URL` is not set.
 
 ---
 
 ## Roadmap
 
-- [ ] Server-side TMDB proxy with CDN caching (hide the token, share cache across users)
-- [ ] Hash-based, server-verified site lock
-- [ ] Email / push notifications for the "Notify me" list
-- [ ] Multi-admin management UI
-- [ ] Automated tests and CI
+- [ ] Route all remaining direct TMDB calls (genre pages, actor search, latest releases) through the proxy
+- [ ] Server-verified, hashed site lock
+- [ ] Razorpay webhook and payment ledger
+- [ ] Move core table DDL and RLS policies into `supabase/migrations/`
+- [ ] Remove unused components and legacy files
+- [ ] Frontend unit and end-to-end tests
+- [ ] Email notification channel
 
 ---
 
@@ -294,7 +442,7 @@ MovieVerify does **not** host, store or stream any media files. Titles, images a
 ## Acknowledgements
 
 - [TMDB](https://www.themoviedb.org/): *This product uses the TMDB API but is not endorsed or certified by TMDB.*
-- [Supabase](https://supabase.com), [Vercel](https://vercel.com), [Render](https://render.com), [Razorpay](https://razorpay.com)
+- [Supabase](https://supabase.com), [Firebase](https://firebase.google.com), [Vercel](https://vercel.com), [Render](https://render.com), [Razorpay](https://razorpay.com)
 - [Framer Motion](https://www.framer.com/motion/), [Lucide](https://lucide.dev), [Tailwind CSS](https://tailwindcss.com)
 
 ---
