@@ -114,31 +114,75 @@ What began as a UI exercise has grown into a complete product: Google sign-in, p
 
 ## Architecture
 
+### System Architecture
+
+```mermaid
+flowchart TB
+    subgraph Clients["Clients"]
+        V["Visitor browser / PWA"]
+        A["Admin browser"]
+        T["Telegram user / admin"]
+    end
+
+    subgraph Vercel["Vercel hosting"]
+        SPA["React + Vite SPA"]
+        API["Serverless API<br/>/api/share, /api/notifications/*"]
+    end
+
+    subgraph Render["Render Web Service"]
+        EXP["Express API<br/>health, TMDB proxy, Razorpay"]
+        BOT["Telegram bot"]
+    end
+
+    subgraph SB["Supabase"]
+        AUTH["Auth: Google + email"]
+        DB[("Postgres + RLS")]
+        RPC["RPCs and triggers"]
+    end
+
+    TMDB["TMDB API"]
+    FCM["Firebase Cloud Messaging"]
+    RZP["Razorpay"]
+    GHA["GitHub Actions<br/>cron every 5 min"]
+
+    V --> SPA
+    A --> SPA
+    SPA -- "Sign in, session" --> AUTH
+    SPA -- "Reviews, reports, links" --> DB
+    SPA -- "Catalog and search" --> EXP
+    SPA -- "Subscriptions, push token, inbox" --> API
+    SPA -- "Checkout" --> RZP
+    EXP --> TMDB
+    EXP -- "Create and verify order" --> RZP
+    T --> BOT
+    BOT --> DB
+    BOT --> TMDB
+    API --> DB
+    API --> RPC
+    API -- "Send push" --> FCM
+    FCM -. "Push to device" .-> V
+    GHA -- "Dispatch" --> API
 ```
-                          ┌───────────────────────────┐
-                          │          Browser          │
-                          │   React SPA · PWA · SW    │
-                          └──┬─────────┬───────────┬──┘
-                             │         │           │
-        titles / search      │         │ auth,     │ push token,
-        (via proxy)          │         │ app data  │ subscriptions
-                             ▼         ▼           ▼
-                   ┌──────────────┐  ┌─────────────────────────────┐
-                   │  Render Web  │  │   Vercel (SPA + /api)       │
-                   │   Service    │  │   share · notifications/*   │
-                   │ Express API  │  └───────┬──────────────▲──────┘
-                   │ TMDB proxy   │          │              │ every 5 min
-                   │ Razorpay     │          ▼              │
-                   │ Telegram bot │  ┌──────────────┐  ┌────┴────────────┐
-                   └──────┬───────┘  │   Supabase   │  │ GitHub Actions  │
-                          │          │ Postgres·RLS │  │ dispatch cron   │
-                          ▼          │ Auth · RPCs  │  └─────────────────┘
-                   ┌──────────────┐  └──────┬───────┘
-                   │   TMDB API   │         │
-                   └──────────────┘         ▼
-                                     ┌──────────────┐
-                                     │ Firebase FCM │ ──▶ user devices
-                                     └──────────────┘
+
+### Payment Flow
+
+```mermaid
+sequenceDiagram
+    actor U as Visitor
+    participant F as React SPA
+    participant B as Render API
+    participant R as Razorpay
+
+    U->>F: Choose amount
+    F->>B: POST /api/razorpay/create-order
+    B->>R: Create order in INR
+    R-->>B: order_id
+    B-->>F: order_id, key_id
+    F->>R: Open Checkout and pay
+    R-->>F: payment_id, signature
+    F->>B: POST /api/razorpay/verify-payment
+    B->>B: HMAC-SHA256 signature check
+    B-->>F: success true or false
 ```
 
 ---
@@ -342,19 +386,22 @@ Admin access is enforced by checking the sender's numeric Telegram ID against `T
 
 ## Notification System
 
-```
-Admin saves a title ──▶ /api/notifications/events ──▶ idempotent campaign
-Admin campaign UI   ──▶ /api/notifications/campaigns ─┘
-                                                       │
-GitHub Actions (every 5 min) ──▶ /api/notifications/dispatch
-                                      │
-                 promote scheduled ▶ reserve (lease) ▶ send via FCM v1
-                                      │                     │
-                          retry / fail / sweep leases       ▼
-                                                    service worker shows
-                                                    notification (deduped)
-                                                            │
-                                      telemetry ◀── open / click events
+```mermaid
+flowchart LR
+    A1["Admin saves a title"] --> EV["POST /api/notifications/events"]
+    A2["Campaign manager"] --> CP["POST /api/notifications/campaigns"]
+    EV --> CAMP["Idempotent campaign"]
+    CP --> CAMP
+
+    CRON["GitHub Actions<br/>every 5 min"] --> DIS["POST /api/notifications/dispatch"]
+    CAMP --> DIS
+
+    DIS --> PROMO["Promote scheduled campaigns"]
+    PROMO --> LEASE["Reserve deliveries with a lease"]
+    LEASE --> SEND["Send via FCM v1"]
+    SEND -- "failure" --> RETRY["Retry, fail or sweep expired leases"]
+    SEND --> SW["Service worker shows notification<br/>deduplicated for 24 h"]
+    SW --> TEL["Telemetry: open and click events"]
 ```
 
 Quiet hours, per-category opt-outs and daily caps are enforced before a push is leased. An in-app inbox copy is always kept, even when push is suppressed.
