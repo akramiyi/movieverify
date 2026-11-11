@@ -1,10 +1,12 @@
 -- Migration: 20261111000000_endpoint_revocation_security_remediation.sql
 -- Description: Endpoint Revocation & Reauthorization Security Hardening
 --              1. Prevents silent reactivation of revoked endpoints via compatibility view triggers.
---              2. Clears historical revoked_at on explicit reauthorization or ownership transfer.
---              3. Hardens reserve_notification_deliveries to filter out revoked_at IS NOT NULL.
---              4. Hardens authorize_notification_delivery_dispatch to reject endpoints with revoked_at IS NOT NULL.
---              5. Reconciles existing production endpoints with is_active = true and revoked_at IS NOT NULL.
+--              2. Enforces trusted-caller gating (service_role or database admin) for reauthorization.
+--              3. Prevents unauthorized ownership reassignment on compatibility view updates.
+--              4. Atomically clears historical revoked_at and revocation_reason on explicit reauthorization.
+--              5. Hardens reserve_notification_deliveries to filter out revoked_at AND revocation_reason.
+--              6. Hardens authorize_notification_delivery_dispatch to reject revoked endpoints symmetrically.
+--              7. Reconciles existing production endpoints with inconsistent revocation states.
 
 BEGIN;
 
@@ -18,30 +20,99 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 DECLARE
+    v_base_is_active boolean;
+    v_base_revoked_at timestamptz;
+    v_base_revocation_reason text;
+    v_base_user_id uuid;
+    v_is_trusted_caller boolean;
+    v_is_currently_revoked boolean;
     v_is_ownership_transfer boolean;
     v_explicit_reauthorize boolean;
     v_final_is_active boolean;
     v_final_revoked_at timestamptz;
+    v_final_revocation_reason text;
+    v_final_user_id uuid;
 BEGIN
-    v_is_ownership_transfer := (NEW.user_id IS DISTINCT FROM OLD.user_id);
-    v_explicit_reauthorize := (NEW.revoked_at IS NULL AND OLD.revoked_at IS NOT NULL);
+    -- Step 1: Read and lock the physical base table record to serialize concurrent operations
+    SELECT e.is_active, e.revoked_at, e.revocation_reason, e.user_id
+    INTO v_base_is_active, v_base_revoked_at, v_base_revocation_reason, v_base_user_id
+    FROM public.notification_endpoints e
+    WHERE e.id = OLD.id
+    FOR UPDATE;
 
-    -- Security Guard: If endpoint was revoked, do not silently reactivate via normal update.
-    -- Reactivation is only permitted if NEW.revoked_at is explicitly NULL or ownership is transferred.
-    IF OLD.revoked_at IS NOT NULL AND NEW.is_active = true AND NOT v_is_ownership_transfer AND NOT v_explicit_reauthorize THEN
-        v_final_is_active := false;
-        v_final_revoked_at := OLD.revoked_at;
-    ELSE
-        v_final_is_active := COALESCE(NEW.is_active, OLD.is_active);
-        v_final_revoked_at := CASE 
-            WHEN v_final_is_active = false THEN COALESCE(NEW.revoked_at, OLD.revoked_at, NOW())
-            WHEN v_explicit_reauthorize OR v_is_ownership_transfer THEN NULL
-            ELSE OLD.revoked_at 
-        END;
+    IF NOT FOUND THEN
+        RETURN NULL;
     END IF;
 
+    -- Step 2: Establish trusted caller provenance (service_role or verified database admin)
+    -- Crucial: Inside a SECURITY DEFINER function owned by postgres, current_user is always postgres!
+    -- Therefore, caller trust MUST be verified via auth.role(), session_user, or admin membership.
+    v_is_trusted_caller := (
+        COALESCE(auth.role(), '') = 'service_role'
+        OR (auth.role() IS NULL AND session_user IN ('postgres', 'supabase_admin'))
+        OR public.notifications_is_admin()
+    );
+
+    -- Step 3: Symmetrical evaluation of current revocation status across all markers
+    v_is_currently_revoked := (
+        v_base_is_active = false
+        OR v_base_revoked_at IS NOT NULL
+        OR v_base_revocation_reason IS NOT NULL
+        OR OLD.is_active = false
+        OR OLD.revoked_at IS NOT NULL
+    );
+
+    -- Step 4: Ownership transfer validation
+    v_is_ownership_transfer := (NEW.user_id IS DISTINCT FROM v_base_user_id);
+    IF v_is_ownership_transfer AND NOT v_is_trusted_caller THEN
+        -- Prevent unauthorized ownership reassignment by direct view callers
+        v_final_user_id := v_base_user_id;
+    ELSE
+        v_final_user_id := COALESCE(NEW.user_id, v_base_user_id);
+    END IF;
+
+    -- Step 5: Explicit reauthorization determination
+    -- Reauthorization is ONLY valid when executed by a trusted caller (e.g. deviceTokenService via register API)
+    -- with explicit intent (NEW.is_active = true AND NEW.revoked_at IS NULL).
+    v_explicit_reauthorize := (
+        v_is_trusted_caller
+        AND NEW.is_active = true
+        AND NEW.revoked_at IS NULL
+        AND v_is_currently_revoked
+    );
+
+    -- Step 6: Enforce anti-silent-reactivation guard and state resolution
+    IF v_is_currently_revoked THEN
+        IF v_explicit_reauthorize THEN
+            -- Legitimate, authorized reauthorization: atomically clear all revocation markers
+            v_final_is_active := true;
+            v_final_revoked_at := NULL;
+            v_final_revocation_reason := NULL;
+        ELSE
+            -- Untrusted direct view update, silent client heartbeat, or un-reauthorized ownership transfer:
+            -- Force endpoint to remain revoked and preserve historical revocation metadata.
+            v_final_is_active := false;
+            v_final_revoked_at := COALESCE(v_base_revoked_at, OLD.revoked_at, NOW());
+            v_final_revocation_reason := COALESCE(v_base_revocation_reason, 'previously_revoked');
+        END IF;
+    ELSE
+        -- Endpoint was not previously revoked
+        IF NEW.is_active = false THEN
+            -- Explicit voluntary deactivation by user or API
+            v_final_is_active := false;
+            v_final_revoked_at := COALESCE(NEW.revoked_at, NOW());
+            v_final_revocation_reason := COALESCE(v_base_revocation_reason, 'user_revoked');
+        ELSE
+            -- Normal heartbeat / metadata refresh on active endpoint
+            v_final_is_active := true;
+            v_final_revoked_at := NULL;
+            v_final_revocation_reason := NULL;
+        END IF;
+    END IF;
+
+    -- Step 7: Apply atomic update on physical base table
     UPDATE public.notification_endpoints
-    SET user_id = COALESCE(NEW.user_id, OLD.user_id),
+    SET user_id = v_final_user_id,
         token = COALESCE(NEW.token, OLD.token),
         device_type = COALESCE(NEW.device_type, OLD.device_type),
         device_name = COALESCE(NEW.device_name, OLD.device_name),
@@ -49,11 +120,7 @@ BEGIN
         os = COALESCE(NEW.os, OLD.os),
         is_active = v_final_is_active,
         revoked_at = v_final_revoked_at,
-        revocation_reason = CASE 
-            WHEN v_final_is_active = true THEN NULL 
-            WHEN NEW.is_active = false THEN COALESCE(notification_endpoints.revocation_reason, 'user_revoked')
-            ELSE notification_endpoints.revocation_reason 
-        END,
+        revocation_reason = v_final_revocation_reason,
         last_seen_at = COALESCE(NEW.last_seen_at, NOW()),
         updated_at = NOW()
     WHERE id = OLD.id;
@@ -62,7 +129,13 @@ BEGIN
 END;
 $$;
 
--- 2. Hardened reservation query: filter out revoked_at IS NOT NULL
+-- Ensure compatibility trigger is attached to view
+DROP TRIGGER IF EXISTS trg_tokens_update ON public.notification_tokens;
+CREATE TRIGGER trg_tokens_update
+INSTEAD OF UPDATE ON public.notification_tokens
+FOR EACH ROW EXECUTE FUNCTION public.trg_compat_notification_tokens_update();
+
+-- 2. Hardened reservation query: symmetrically filter out revoked_at AND revocation_reason
 CREATE OR REPLACE FUNCTION public.reserve_notification_deliveries(
     p_worker_id varchar(64),
     p_batch_size integer DEFAULT 25,
@@ -89,10 +162,14 @@ BEGIN
         SELECT d.id
         FROM public.notification_deliveries d
         JOIN public.notification_endpoints e ON e.id = d.endpoint_id
+        JOIN public.notification_campaigns c ON c.id = d.campaign_id
         WHERE d.delivery_status = 'pending'
           AND (d.next_retry_at IS NULL OR d.next_retry_at <= NOW())
+          AND c.status IN ('queued', 'processing')
           AND e.is_active = true
           AND e.revoked_at IS NULL
+          AND e.revocation_reason IS NULL
+          AND (e.user_id IS NOT DISTINCT FROM d.recipient_id)
         ORDER BY d.created_at ASC
         LIMIT p_batch_size
         FOR UPDATE OF d SKIP LOCKED
@@ -103,6 +180,7 @@ BEGIN
             lease_token = v_lease_token,
             lease_expires_at = v_lease_expiry,
             worker_id = p_worker_id,
+            dispatch_attempt_id = NULL,
             updated_at = NOW()
         FROM claimable c
         WHERE d.id = c.id
@@ -120,7 +198,7 @@ BEGIN
 END;
 $$;
 
--- 3. Hardened dispatch authorization: reject revoked_at IS NOT NULL
+-- 3. Hardened dispatch authorization: symmetrically reject revoked_at AND revocation_reason
 CREATE OR REPLACE FUNCTION public.authorize_notification_delivery_dispatch(
     p_delivery_id uuid,
     p_token_id uuid,
@@ -205,12 +283,17 @@ BEGIN
         RETURN jsonb_build_object('authorized', false, 'reason', 'RECIPIENT_MISMATCH');
     END IF;
 
-    -- Preflight check on target endpoint: Enforce is_active = true AND revoked_at IS NULL
+    -- Preflight check on target endpoint: Lock row FOR SHARE to serialize against concurrent revocation
+    -- while preserving active AND zero revocation marker invariants
     SELECT * INTO v_endpoint
     FROM public.notification_endpoints
-    WHERE id = v_delivery.endpoint_id;
+    WHERE id = v_delivery.endpoint_id
+    FOR SHARE;
 
-    IF NOT FOUND OR NOT v_endpoint.is_active OR v_endpoint.revoked_at IS NOT NULL THEN
+    IF NOT FOUND 
+       OR NOT v_endpoint.is_active 
+       OR v_endpoint.revoked_at IS NOT NULL 
+       OR v_endpoint.revocation_reason IS NOT NULL THEN
         UPDATE public.notification_deliveries
         SET delivery_status = 'failed',
             lease_token = NULL,
@@ -222,6 +305,21 @@ BEGIN
         WHERE id = p_delivery_id;
 
         RETURN jsonb_build_object('authorized', false, 'reason', 'ENDPOINT_REVOKED_OR_INACTIVE');
+    END IF;
+
+    -- Endpoint recipient ownership check (null-safe for guest support)
+    IF v_endpoint.user_id IS DISTINCT FROM v_delivery.recipient_id THEN
+        UPDATE public.notification_deliveries
+        SET delivery_status = 'failed',
+            lease_token = NULL,
+            lease_expires_at = NULL,
+            worker_id = NULL,
+            dispatch_attempt_id = NULL,
+            provider_response = jsonb_build_object('error', 'RECIPIENT_OWNERSHIP_MISMATCH'),
+            updated_at = NOW()
+        WHERE id = p_delivery_id;
+
+        RETURN jsonb_build_object('authorized', false, 'reason', 'RECIPIENT_OWNERSHIP_MISMATCH');
     END IF;
 
     -- Generate and atomically bind new dispatch attempt ID
@@ -242,11 +340,18 @@ BEGIN
 END;
 $$;
 
--- 4. Reconcile existing endpoints having inconsistent state (is_active = true and revoked_at IS NOT NULL)
+-- 4. Reconcile ALL existing endpoints having inconsistent revocation states
+-- Handles:
+-- - State 2: is_active = true AND revoked_at IS NOT NULL (e.g. faa972b2-3cd7-4ed9-bb67-f931ca6a0601)
+-- - State 3: is_active = true AND revocation_reason IS NOT NULL
+-- - State 4: is_active = true AND both markers present
 UPDATE public.notification_endpoints
 SET is_active = false,
+    revoked_at = COALESCE(revoked_at, NOW()),
+    revocation_reason = COALESCE(revocation_reason, 'legacy_inconsistent_state_reconciled'),
     updated_at = NOW()
-WHERE revoked_at IS NOT NULL AND is_active = true;
+WHERE is_active = true 
+  AND (revoked_at IS NOT NULL OR revocation_reason IS NOT NULL);
 
 -- 5. Explicit Least-Privilege Grants
 REVOKE ALL ON FUNCTION public.reserve_notification_deliveries(varchar, integer, integer) FROM PUBLIC;
