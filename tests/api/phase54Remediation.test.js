@@ -348,7 +348,9 @@ test('Phase 5.4 API & Client Fixes - welcome created_at fail-closed, TZ validati
 
   // 3. Dispatch surfaces HTTP 500 when promote_due_scheduled_campaigns fails in DB while still processing queue
   const prevSecret = process.env.INTERNAL_WORKER_SECRET;
+  const prevDispatchEnabled = process.env.NOTIFICATION_DISPATCH_ENABLED;
   process.env.INTERNAL_WORKER_SECRET = 'test-worker-secret-p54';
+  process.env.NOTIFICATION_DISPATCH_ENABLED = 'true';
   try {
     const dispatchRpcs = [];
     const resPromoFail = createMockRes();
@@ -382,6 +384,8 @@ test('Phase 5.4 API & Client Fixes - welcome created_at fail-closed, TZ validati
   } finally {
     if (prevSecret === undefined) delete process.env.INTERNAL_WORKER_SECRET;
     else process.env.INTERNAL_WORKER_SECRET = prevSecret;
+    if (prevDispatchEnabled === undefined) delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+    else process.env.NOTIFICATION_DISPATCH_ENABLED = prevDispatchEnabled;
   }
 
   // 4. AdminPanel deterministic content_update idempotency key

@@ -12,7 +12,7 @@
  */
 
 import crypto from 'node:crypto';
-import { runDispatchCycle, sweepExpiredReservations } from '../_lib/dispatchWorker.js';
+import { isNotificationDispatchEnabled, runDispatchCycle, sweepExpiredReservations } from '../_lib/dispatchWorker.js';
 import { promoteDueScheduledCampaigns } from '../_lib/scheduledCampaignService.js';
 import { sendJson, parseJsonBody } from '../_lib/requestUtils.js';
 
@@ -83,6 +83,16 @@ export default async function handler(req, res, customDependencies = {}) {
   // 2. Validate Worker Authorization (strictly x-worker-secret only, fail closed)
   if (!isAuthorizedWorker(req.headers)) {
     return sendJson(res, 401, { error: 'Unauthorized: Valid x-worker-secret header required.' });
+  }
+
+  // 2b. Runtime Kill Switch (fail closed unless NOTIFICATION_DISPATCH_ENABLED === 'true')
+  if (!isNotificationDispatchEnabled()) {
+    return sendJson(res, 503, {
+      success: false,
+      code: 'DISPATCH_DISABLED',
+      error: 'Notification dispatch is disabled.',
+      message: 'Set NOTIFICATION_DISPATCH_ENABLED=true to enable server-side dispatch execution.',
+    });
   }
 
   // 3. Parse & Validate Strict Dispatch Configuration (Fail closed, never silently default)
@@ -214,6 +224,14 @@ export default async function handler(req, res, customDependencies = {}) {
       results: cycleResult.results,
     });
   } catch (err) {
+    if (err?.code === 'DISPATCH_DISABLED') {
+      return sendJson(res, 503, {
+        success: false,
+        code: 'DISPATCH_DISABLED',
+        error: 'Notification dispatch is disabled.',
+        message: err.message,
+      });
+    }
     console.error('[DispatchEndpoint] Fatal dispatch execution error:', err.message);
     return sendJson(res, 500, {
       success: false,

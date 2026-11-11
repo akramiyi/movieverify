@@ -315,7 +315,9 @@ test('Phase 5.2 Subscriptions & Preferences APIs - series/season subscriptions a
 
 test('Phase 5.2 Dispatch Integration - promotes due scheduled campaigns before reserving deliveries', async () => {
   const prevWorkerSecret = process.env.INTERNAL_WORKER_SECRET;
+  const prevDispatchEnabled = process.env.NOTIFICATION_DISPATCH_ENABLED;
   process.env.INTERNAL_WORKER_SECRET = 'test-worker-secret-p52';
+  process.env.NOTIFICATION_DISPATCH_ENABLED = 'true';
 
   try {
     const calledRpcs = [];
@@ -353,6 +355,8 @@ test('Phase 5.2 Dispatch Integration - promotes due scheduled campaigns before r
   } finally {
     if (prevWorkerSecret === undefined) delete process.env.INTERNAL_WORKER_SECRET;
     else process.env.INTERNAL_WORKER_SECRET = prevWorkerSecret;
+    if (prevDispatchEnabled === undefined) delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+    else process.env.NOTIFICATION_DISPATCH_ENABLED = prevDispatchEnabled;
   }
 });
 

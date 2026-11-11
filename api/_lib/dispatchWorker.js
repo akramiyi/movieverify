@@ -422,11 +422,30 @@ export async function processDelivery(delivery, context) {
 }
 
 /**
+ * Runtime dispatch kill switch.
+ * Fails closed unless NOTIFICATION_DISPATCH_ENABLED is explicitly set to 'true'.
+ * @returns {boolean}
+ */
+export function isNotificationDispatchEnabled() {
+  return process.env.NOTIFICATION_DISPATCH_ENABLED === 'true';
+}
+
+function createDispatchDisabledError() {
+  const err = new Error('Notification dispatch is disabled. Set NOTIFICATION_DISPATCH_ENABLED=true to enable execution.');
+  err.code = 'DISPATCH_DISABLED';
+  return err;
+}
+
+/**
  * Execute a complete dispatch cycle for reserved deliveries
  * @param {object} options Worker options
  * @returns {Promise<{ workerId: string, processed: number, sent: number, failed: number, rejected: number, results: Array }>}
  */
 export async function runDispatchCycle(options = {}) {
+  if (!isNotificationDispatchEnabled()) {
+    throw createDispatchDisabledError();
+  }
+
   const workerId = options.workerId || generateWorkerId();
   const batchSize = options.batchSize || 25;
   const leaseSeconds = options.leaseSeconds || 60;

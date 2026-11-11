@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  isNotificationDispatchEnabled,
   generateWorkerId,
   mapFcmError,
   buildFcmPayload,
@@ -277,66 +278,80 @@ test('Dispatch Worker Core Unit & Reliability Suite', async (t) => {
   });
 
   await t.test('4. Empty Queue: Worker handles zero available deliveries safely', async () => {
-    const mockSupabase = createMockSupabaseWithRpc({ deliveries: [], tokens: [] });
-    const mockMessaging = createMockMessaging();
+    const prevDispatchEnabled = process.env.NOTIFICATION_DISPATCH_ENABLED;
+    process.env.NOTIFICATION_DISPATCH_ENABLED = 'true';
+    try {
+      const mockSupabase = createMockSupabaseWithRpc({ deliveries: [], tokens: [] });
+      const mockMessaging = createMockMessaging();
 
-    const result = await runDispatchCycle({
-      customSupabase: mockSupabase,
-      customMessaging: mockMessaging,
-    });
+      const result = await runDispatchCycle({
+        customSupabase: mockSupabase,
+        customMessaging: mockMessaging,
+      });
 
-    assert.equal(result.processed, 0);
-    assert.equal(result.sent, 0);
-    assert.equal(result.failed, 0);
-    assert.equal(mockMessaging._sentMessages.length, 0);
+      assert.equal(result.processed, 0);
+      assert.equal(result.sent, 0);
+      assert.equal(result.failed, 0);
+      assert.equal(mockMessaging._sentMessages.length, 0);
+    } finally {
+      if (prevDispatchEnabled === undefined) delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+      else process.env.NOTIFICATION_DISPATCH_ENABLED = prevDispatchEnabled;
+    }
   });
 
   await t.test('5. Successful Dispatch: Reserves, Authorizes, Dispatches, and Confirms (Sent)', async () => {
-    const mockDelivery = {
-      id: 'del-success-1',
-      recipient_id: 'user-1',
-      token_id: 'tok-1',
-      campaign_id: 'camp-1',
-      delivery_status: 'pending',
-      attempt_count: 0,
-      max_attempts: 3,
-    };
-    const mockToken = {
-      id: 'tok-1',
-      user_id: 'user-1',
-      token: 'raw-sample-fcm-token',
-      is_active: true,
-    };
-    const mockCampaign = {
-      id: 'camp-1',
-      title: 'New Movie Added',
-      body: 'Check out the latest release',
-    };
+    const prevDispatchEnabled = process.env.NOTIFICATION_DISPATCH_ENABLED;
+    process.env.NOTIFICATION_DISPATCH_ENABLED = 'true';
+    try {
+      const mockDelivery = {
+        id: 'del-success-1',
+        recipient_id: 'user-1',
+        token_id: 'tok-1',
+        campaign_id: 'camp-1',
+        delivery_status: 'pending',
+        attempt_count: 0,
+        max_attempts: 3,
+      };
+      const mockToken = {
+        id: 'tok-1',
+        user_id: 'user-1',
+        token: 'raw-sample-fcm-token',
+        is_active: true,
+      };
+      const mockCampaign = {
+        id: 'camp-1',
+        title: 'New Movie Added',
+        body: 'Check out the latest release',
+      };
 
-    const mockSupabase = createMockSupabaseWithRpc({
-      deliveries: [mockDelivery],
-      tokens: [mockToken],
-      campaigns: [mockCampaign],
-    });
-    const mockMessaging = createMockMessaging({ sendResult: 'projects/mv/messages/msg-test-777' });
+      const mockSupabase = createMockSupabaseWithRpc({
+        deliveries: [mockDelivery],
+        tokens: [mockToken],
+        campaigns: [mockCampaign],
+      });
+      const mockMessaging = createMockMessaging({ sendResult: 'projects/mv/messages/msg-test-777' });
 
-    const result = await runDispatchCycle({
-      customSupabase: mockSupabase,
-      customMessaging: mockMessaging,
-      batchSize: 10,
-    });
+      const result = await runDispatchCycle({
+        customSupabase: mockSupabase,
+        customMessaging: mockMessaging,
+        batchSize: 10,
+      });
 
-    assert.equal(result.processed, 1);
-    assert.equal(result.sent, 1);
-    assert.equal(result.failed, 0);
-    assert.equal(result.results[0].status, 'sent');
-    assert.equal(result.results[0].messageId, 'projects/mv/messages/msg-test-777');
+      assert.equal(result.processed, 1);
+      assert.equal(result.sent, 1);
+      assert.equal(result.failed, 0);
+      assert.equal(result.results[0].status, 'sent');
+      assert.equal(result.results[0].messageId, 'projects/mv/messages/msg-test-777');
 
-    // Verify database record transitioned to 'sent'
-    const updated = mockSupabase._deliveries.get('del-success-1');
-    assert.equal(updated.delivery_status, 'sent');
-    assert.equal(updated.fcm_message_id, 'projects/mv/messages/msg-test-777');
-    assert.equal(updated.current_dispatch_attempt_id, null);
+      // Verify database record transitioned to 'sent'
+      const updated = mockSupabase._deliveries.get('del-success-1');
+      assert.equal(updated.delivery_status, 'sent');
+      assert.equal(updated.fcm_message_id, 'projects/mv/messages/msg-test-777');
+      assert.equal(updated.current_dispatch_attempt_id, null);
+    } finally {
+      if (prevDispatchEnabled === undefined) delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+      else process.env.NOTIFICATION_DISPATCH_ENABLED = prevDispatchEnabled;
+    }
   });
 
   await t.test('6. Pre-Dispatch Fence: Rejects already dispatching deliveries (Duplicate Guard)', async () => {
@@ -707,12 +722,19 @@ test('Dispatch Worker Core Unit & Reliability Suite', async (t) => {
     assert.equal(inDb.delivery_status, 'dispatching');
 
     // Run cycle with unconfirmed sent: does not crash, increments sentCount
-    const cycleRes = await runDispatchCycle({
-      workerId: 'worker-1',
-      customSupabase: mockSupabase,
-      customMessaging: mockMessaging,
-    });
-    assert.equal(typeof cycleRes.processed, 'number');
+    const prevDispatchEnabled = process.env.NOTIFICATION_DISPATCH_ENABLED;
+    process.env.NOTIFICATION_DISPATCH_ENABLED = 'true';
+    try {
+      const cycleRes = await runDispatchCycle({
+        workerId: 'worker-1',
+        customSupabase: mockSupabase,
+        customMessaging: mockMessaging,
+      });
+      assert.equal(typeof cycleRes.processed, 'number');
+    } finally {
+      if (prevDispatchEnabled === undefined) delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+      else process.env.NOTIFICATION_DISPATCH_ENABLED = prevDispatchEnabled;
+    }
   });
 
   await t.test('14. Reservation Fencing: Prevents concurrent authorization and mismatched worker claims', async () => {
@@ -814,6 +836,7 @@ test('HTTP Dispatch Endpoint Suite (POST /api/notifications/dispatch)', async (t
 
   t.beforeEach(() => {
     process.env.INTERNAL_WORKER_SECRET = 'secret-test-key-xyz';
+    process.env.NOTIFICATION_DISPATCH_ENABLED = 'true';
   });
 
   t.afterEach(() => {
@@ -1548,7 +1571,9 @@ test('Phase 4.28 Option 2 Regression Suite (B5E SQL Static Contract & Mocked Wor
 
     // D. Uninstalled promote_due_scheduled_campaigns (PGRST202) degrades to HTTP 200 in standalone B5D/B5E
     const prevSecret = process.env.INTERNAL_WORKER_SECRET;
+    const prevDispatchEnabled = process.env.NOTIFICATION_DISPATCH_ENABLED;
     process.env.INTERNAL_WORKER_SECRET = 'test-secret-595';
+    process.env.NOTIFICATION_DISPATCH_ENABLED = 'true';
     try {
       const res = {
         statusCode: 200,
@@ -1582,6 +1607,144 @@ test('Phase 4.28 Option 2 Regression Suite (B5E SQL Static Contract & Mocked Wor
     } finally {
       if (prevSecret === undefined) delete process.env.INTERNAL_WORKER_SECRET;
       else process.env.INTERNAL_WORKER_SECRET = prevSecret;
+      if (prevDispatchEnabled === undefined) delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+      else process.env.NOTIFICATION_DISPATCH_ENABLED = prevDispatchEnabled;
     }
+  });
+});
+
+test('Phase 5.9.21 Runtime Dispatch Kill Switch Suite', async (t) => {
+  const originalEnv = { ...process.env };
+
+  function createSpyDependencies() {
+    const rpcCalls = [];
+    const mockMessaging = createMockMessaging();
+    const mockSupabase = {
+      async rpc(fnName, args) {
+        rpcCalls.push({ fnName, args });
+        if (fnName === 'promote_due_scheduled_campaigns') {
+          return { data: 0, error: null };
+        }
+        if (fnName === 'sweep_expired_delivery_reservations') {
+          return { data: 0, error: null };
+        }
+        if (fnName === 'reserve_notification_deliveries') {
+          return { data: [], error: null };
+        }
+        return { data: null, error: null };
+      },
+    };
+    return { rpcCalls, mockMessaging, mockSupabase };
+  }
+
+  function createMockRes() {
+    return {
+      statusCode: 200,
+      headers: {},
+      body: '',
+      setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
+      end(d) { this.body = d; },
+    };
+  }
+
+  t.afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  await t.test('1. isNotificationDispatchEnabled() fails closed unless strictly "true"', () => {
+    delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+    assert.equal(isNotificationDispatchEnabled(), false);
+
+    for (const val of ['', 'false', '0', '1', 'TRUE', 'True', ' yes ', 'true ']) {
+      process.env.NOTIFICATION_DISPATCH_ENABLED = val;
+      assert.equal(isNotificationDispatchEnabled(), false, `Expected disabled for "${val}"`);
+    }
+
+    process.env.NOTIFICATION_DISPATCH_ENABLED = 'true';
+    assert.equal(isNotificationDispatchEnabled(), true);
+  });
+
+  await t.test('2. runDispatchCycle() fails closed with DISPATCH_DISABLED before DB or FCM calls', async () => {
+    for (const val of [undefined, '', 'false', 'TRUE', '1']) {
+      if (val === undefined) delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+      else process.env.NOTIFICATION_DISPATCH_ENABLED = val;
+
+      const { rpcCalls, mockMessaging, mockSupabase } = createSpyDependencies();
+
+      await assert.rejects(
+        () => runDispatchCycle({ customSupabase: mockSupabase, customMessaging: mockMessaging }),
+        (err) => err?.code === 'DISPATCH_DISABLED'
+      );
+      assert.equal(rpcCalls.length, 0);
+      assert.equal(mockMessaging._sentMessages.length, 0);
+    }
+  });
+
+  await t.test('3. HTTP handler preserves 405 and 401 checks while dispatch flag is disabled', async () => {
+    delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+    process.env.INTERNAL_WORKER_SECRET = 'kill-switch-secret';
+
+    const getRes = createMockRes();
+    await dispatchHandler({ method: 'GET', headers: {} }, getRes);
+    assert.equal(getRes.statusCode, 405);
+
+    const unauthRes = createMockRes();
+    await dispatchHandler({ method: 'POST', headers: { 'x-worker-secret': 'wrong-secret' }, body: {} }, unauthRes);
+    assert.equal(unauthRes.statusCode, 401);
+  });
+
+  await t.test('4. HTTP POST returns 503 DISPATCH_DISABLED and prevents promotion, sweep, reserve, and send', async () => {
+    process.env.INTERNAL_WORKER_SECRET = 'kill-switch-secret';
+
+    for (const val of [undefined, '', 'false', 'TRUE', '1']) {
+      if (val === undefined) delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+      else process.env.NOTIFICATION_DISPATCH_ENABLED = val;
+
+      const { rpcCalls, mockMessaging, mockSupabase } = createSpyDependencies();
+      const res = createMockRes();
+
+      await dispatchHandler(
+        {
+          method: 'POST',
+          headers: { 'x-worker-secret': 'kill-switch-secret' },
+          body: { batch_size: 25, sweep_expired: true },
+        },
+        res,
+        { supabase: mockSupabase, messaging: mockMessaging }
+      );
+
+      assert.equal(res.statusCode, 503);
+      const parsed = JSON.parse(res.body);
+      assert.equal(parsed.success, false);
+      assert.equal(parsed.code, 'DISPATCH_DISABLED');
+      assert.equal(rpcCalls.length, 0, 'No campaign promotion, sweep, or reservation RPC may run while disabled');
+      assert.equal(mockMessaging._sentMessages.length, 0, 'No FCM message may be sent while disabled');
+    }
+  });
+
+  await t.test('5. HTTP POST executes normally only when NOTIFICATION_DISPATCH_ENABLED === "true"', async () => {
+    process.env.INTERNAL_WORKER_SECRET = 'kill-switch-secret';
+    process.env.NOTIFICATION_DISPATCH_ENABLED = 'true';
+
+    const { rpcCalls, mockMessaging, mockSupabase } = createSpyDependencies();
+    const res = createMockRes();
+
+    await dispatchHandler(
+      {
+        method: 'POST',
+        headers: { 'x-worker-secret': 'kill-switch-secret' },
+        body: { batch_size: 25, sweep_expired: true },
+      },
+      res,
+      { supabase: mockSupabase, messaging: mockMessaging }
+    );
+
+    assert.equal(res.statusCode, 200);
+    const parsed = JSON.parse(res.body);
+    assert.equal(parsed.success, true);
+    assert.deepEqual(
+      rpcCalls.map((c) => c.fnName),
+      ['promote_due_scheduled_campaigns', 'sweep_expired_delivery_reservations', 'reserve_notification_deliveries']
+    );
   });
 });
