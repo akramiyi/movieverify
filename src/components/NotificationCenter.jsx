@@ -3,13 +3,26 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, CheckCircle2, Clock, ExternalLink, Settings, X, Film, CheckCheck, Loader2 } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import NotificationPreferences from './NotificationPreferences';
+import {
+  resolveNotificationTargetUrl,
+  parseNotificationMovieLink,
+} from '../utils/notificationLinks';
+import { reportNotificationTelemetry } from '../utils/notificationTelemetry';
 
-export default function NotificationCenter({ isOpen, onClose, onSelectMovie, onSelectActor }) {
+export default function NotificationCenter({
+  isOpen,
+  onClose,
+  onSelectMovie,
+  onSelectActor,
+  onUnreadCountChange,
+  refreshTrigger = 0,
+}) {
   const [activeTab, setActiveTab] = useState('inbox'); // 'inbox' | 'preferences'
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
+  const displayedTrackedRef = React.useRef(new Set());
 
   const fetchNotifications = async () => {
     try {
@@ -18,6 +31,7 @@ export default function NotificationCenter({ isOpen, onClose, onSelectMovie, onS
       if (!session) {
         setNotifications([]);
         setUnreadCount(0);
+        onUnreadCountChange?.(0);
         return;
       }
 
@@ -27,8 +41,25 @@ export default function NotificationCenter({ isOpen, onClose, onSelectMovie, onS
 
       if (res.ok) {
         const json = await res.json();
-        setNotifications(json.notifications || []);
-        setUnreadCount(json.unread_count || 0);
+        const nextUnread = json.unread_count || 0;
+        const rows = json.notifications || [];
+        setNotifications(rows);
+        setUnreadCount(nextUnread);
+        onUnreadCountChange?.(nextUnread);
+
+        // Fire non-blocking 'displayed' telemetry once per inbox session for each delivery-backed alert
+        for (const item of rows) {
+          if (item.delivery_id && !displayedTrackedRef.current.has(item.id)) {
+            displayedTrackedRef.current.add(item.id);
+            reportNotificationTelemetry({
+              deliveryId: item.delivery_id,
+              notificationId: item.id,
+              eventType: 'displayed',
+              eventNonce: `inbox-display-${item.id}`,
+              metadata: { surface: 'notification_center' },
+            });
+          }
+        }
       }
     } catch (err) {
       console.warn('Failed to load notifications:', err.message);
@@ -41,14 +72,14 @@ export default function NotificationCenter({ isOpen, onClose, onSelectMovie, onS
     if (isOpen) {
       fetchNotifications();
     }
-  }, [isOpen]);
+  }, [isOpen, refreshTrigger]);
 
   const handleMarkAsRead = async (id) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      await fetch('/api/notifications/user', {
+      const res = await fetch('/api/notifications/user', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -57,10 +88,16 @@ export default function NotificationCenter({ isOpen, onClose, onSelectMovie, onS
         body: JSON.stringify({ notification_id: id }),
       });
 
+      if (!res.ok) return;
+
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
-      setUnreadCount((c) => Math.max(0, c - 1));
+      setUnreadCount((prevCount) => {
+        const nextCount = Math.max(0, prevCount - 1);
+        onUnreadCountChange?.(nextCount);
+        return nextCount;
+      });
     } catch (err) {
       console.warn('Failed to mark read:', err.message);
     }
@@ -72,7 +109,7 @@ export default function NotificationCenter({ isOpen, onClose, onSelectMovie, onS
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      await fetch('/api/notifications/user', {
+      const res = await fetch('/api/notifications/user', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -81,8 +118,11 @@ export default function NotificationCenter({ isOpen, onClose, onSelectMovie, onS
         body: JSON.stringify({ mark_all: true }),
       });
 
+      if (!res.ok) return;
+
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
+      onUnreadCountChange?.(0);
     } catch (err) {
       console.warn('Failed to mark all read:', err.message);
     } finally {
@@ -95,20 +135,34 @@ export default function NotificationCenter({ isOpen, onClose, onSelectMovie, onS
       handleMarkAsRead(item.id);
     }
 
-    if (item.url) {
-      // Check for deep link
-      if (item.url.includes('id=') && onSelectMovie) {
-        try {
-          const match = item.url.match(/id=([0-9a-zA-Z_-]+)/);
-          if (match && match[1]) {
-            const cleanId = match[1].split('-')[0];
-            onSelectMovie({ id: cleanId, title: item.title });
-            onClose();
-            return;
-          }
-        } catch {}
+    if (item.delivery_id) {
+      reportNotificationTelemetry({
+        deliveryId: item.delivery_id,
+        notificationId: item.id,
+        eventType: 'opened',
+        eventNonce: `inbox-open-${item.id}`,
+        metadata: { surface: 'notification_center' },
+      });
+    }
+
+    const targetUrl = resolveNotificationTargetUrl(item);
+    if (targetUrl) {
+      if (item.delivery_id) {
+        reportNotificationTelemetry({
+          deliveryId: item.delivery_id,
+          notificationId: item.id,
+          eventType: 'clicked',
+          eventNonce: `inbox-click-${item.id}-${Date.now()}`,
+          metadata: { surface: 'notification_center', target_url: targetUrl },
+        });
       }
-      window.location.href = item.url;
+      const movieTarget = parseNotificationMovieLink(targetUrl, item.title);
+      if (movieTarget && onSelectMovie) {
+        onSelectMovie(movieTarget);
+        onClose();
+        return;
+      }
+      window.location.href = targetUrl;
     }
   };
 

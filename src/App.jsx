@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { Bell, X } from 'lucide-react';
 import SiteLockScreen from './components/SiteLockScreen';
 import { supabase } from './data/supabaseClient';
 
@@ -30,6 +31,9 @@ import { useRecentlyViewed } from './hooks/useRecentlyViewed';
 import { useDownloadHistory } from './hooks/useDownloadHistory';
 import DownloadHistoryModal from './components/DownloadHistoryModal';
 import NotificationCenter from './components/NotificationCenter';
+import { usePushNotifications } from './hooks/usePushNotifications';
+import { resolveNotificationTargetUrl, parseNotificationMovieLink } from './utils/notificationLinks';
+import { reportNotificationTelemetry } from './utils/notificationTelemetry';
 
 const getActors = () => actors.filter(a => a.type === 'actor');
 const getActresses = () => actors.filter(a => a.type === 'actress');
@@ -52,6 +56,10 @@ function App() {
   const { history, addToHistory, clearHistory } = useDownloadHistory();
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [inboxRefreshTrigger, setInboxRefreshTrigger] = useState(0);
+  const [foregroundPushAlert, setForegroundPushAlert] = useState(null);
+  const welcomeCheckedUsersRef = useRef(new Set());
   const [showIntro, setShowIntro] = useState(() => {
     return !localStorage.getItem('introShown');
   });
@@ -59,6 +67,116 @@ function App() {
   const [deepLinkLoading, setDeepLinkLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
+
+  const refreshUnreadNotifications = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setUnreadNotifications(0);
+        return;
+      }
+
+      const res = await fetch('/api/notifications/user', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setUnreadNotifications(json.unread_count || 0);
+      }
+    } catch {
+      // Preserve current unread count on transient network failure
+    }
+  }, []);
+
+  const handleForegroundMessage = useCallback(
+    (payload) => {
+      const notification = payload?.notification || {};
+      const data = payload?.data || {};
+      const title = notification.title || data.title || 'New MovieVerify Alert';
+      const body = notification.body || data.body || 'Tap to view details.';
+      const targetUrl = resolveNotificationTargetUrl({
+        action_url: data.action_url || data.url || payload?.fcmOptions?.link,
+        url: data.url,
+      });
+
+      const deliveryId = data.delivery_id || null;
+      setForegroundPushAlert({
+        id: deliveryId || `${Date.now()}`,
+        deliveryId,
+        title,
+        body,
+        url: targetUrl,
+      });
+      if (deliveryId) {
+        reportNotificationTelemetry({
+          deliveryId,
+          eventType: 'displayed',
+          eventNonce: `fg-display-${deliveryId}`,
+          metadata: { surface: 'foreground_toast' },
+        });
+      }
+      setInboxRefreshTrigger((prev) => prev + 1);
+      refreshUnreadNotifications();
+    },
+    [refreshUnreadNotifications]
+  );
+
+  usePushNotifications({ onForegroundMessage: handleForegroundMessage });
+
+  useEffect(() => {
+    const triggerWelcomeForSession = async (session, eventName = 'initial') => {
+      const userId = session?.user?.id;
+      const token = session?.access_token;
+      if (!userId || !token || welcomeCheckedUsersRef.current.has(userId)) {
+        return;
+      }
+      welcomeCheckedUsersRef.current.add(userId);
+      try {
+        const res = await fetch('/api/notifications/welcome', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ source: eventName === 'SIGNED_IN' ? 'signin' : 'api_signin' }),
+        });
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}));
+          if (json.created) {
+            setInboxRefreshTrigger((prev) => prev + 1);
+            refreshUnreadNotifications();
+          }
+        }
+      } catch {
+        // Non-blocking welcome check
+      }
+    };
+
+    refreshUnreadNotifications();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        triggerWelcomeForSession(session, 'initial');
+      }
+    }).catch(() => {});
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session?.user) {
+        setUnreadNotifications(0);
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        refreshUnreadNotifications();
+        triggerWelcomeForSession(session, event);
+      }
+    });
+    return () => subscription?.unsubscribe();
+  }, [refreshUnreadNotifications]);
+
+  useEffect(() => {
+    if (!foregroundPushAlert) return;
+    const timer = setTimeout(() => {
+      setForegroundPushAlert(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [foregroundPushAlert]);
 
   const handleMovieSelect = (movie) => {
     if (!movie) return;
@@ -558,6 +676,7 @@ function App() {
               onAdminClick={handleOpenAdmin}
               onHistoryClick={() => setIsHistoryModalOpen(true)}
               onNotificationClick={() => setIsNotificationCenterOpen(true)}
+              unreadNotificationCount={unreadNotifications}
             />
 
       {tmdbError && (
@@ -793,6 +912,7 @@ function App() {
         myList={myList}
         onToggleMyList={toggleMyList}
         onDownloadTracked={addToHistory}
+        onRequireAuth={handleOpenAuthModal}
       />
 
       <DownloadHistoryModal
@@ -810,6 +930,8 @@ function App() {
           setSelectedActor(actor);
           setIsActorModalOpen(true);
         }}
+        onUnreadCountChange={setUnreadNotifications}
+        refreshTrigger={inboxRefreshTrigger}
       />
 
       <ActorModal
@@ -856,6 +978,79 @@ function App() {
             setShowToast(true);
           }}
         />
+      )}
+      {foregroundPushAlert && (
+        <div
+          role="status"
+          data-testid="foreground-push-toast"
+          className="fixed top-20 right-4 md:right-8 z-[220] max-w-sm w-[calc(100vw-2rem)] bg-[#181818]/95 backdrop-blur-md border border-[#E50914]/50 rounded-2xl p-4 shadow-2xl flex items-start gap-3"
+        >
+          <div className="w-9 h-9 rounded-xl bg-[#E50914]/15 border border-[#E50914]/30 flex items-center justify-center text-[#E50914] shrink-0">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-bold truncate">{foregroundPushAlert.title}</p>
+            {foregroundPushAlert.body && (
+              <p className="text-gray-300 text-xs mt-0.5 line-clamp-2">{foregroundPushAlert.body}</p>
+            )}
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetUrl = foregroundPushAlert.url;
+                  const title = foregroundPushAlert.title;
+                  const deliveryId = foregroundPushAlert.deliveryId;
+                  setForegroundPushAlert(null);
+                  if (deliveryId) {
+                    reportNotificationTelemetry({
+                      deliveryId,
+                      eventType: 'clicked',
+                      eventNonce: `fg-click-${deliveryId}-${Date.now()}`,
+                      metadata: { surface: 'foreground_toast', target_url: targetUrl },
+                    });
+                  }
+                  if (targetUrl) {
+                    const movieTarget = parseNotificationMovieLink(targetUrl, title);
+                    if (movieTarget) {
+                      handleMovieSelect(movieTarget);
+                      return;
+                    }
+                  }
+                  setIsNotificationCenterOpen(true);
+                }}
+                className="text-xs font-bold text-[#E50914] hover:underline cursor-pointer"
+              >
+                View
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const deliveryId = foregroundPushAlert.deliveryId;
+                  setForegroundPushAlert(null);
+                  if (deliveryId) {
+                    reportNotificationTelemetry({
+                      deliveryId,
+                      eventType: 'dismissed',
+                      eventNonce: `fg-dismiss-${deliveryId}-${Date.now()}`,
+                      metadata: { surface: 'foreground_toast' },
+                    });
+                  }
+                }}
+                className="text-xs text-gray-400 hover:text-white cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setForegroundPushAlert(null)}
+            aria-label="Dismiss foreground notification"
+            className="text-gray-400 hover:text-white p-0.5 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       )}
       <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
     </div>

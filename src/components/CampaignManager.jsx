@@ -3,8 +3,10 @@ import { Send, Calendar, Users, Film, User, Layers, AlertCircle, CheckCircle, Cl
 import { supabase } from '../data/supabaseClient';
 
 const TARGET_TYPES = [
-  { value: 'all', label: 'All Subscribers', icon: Users, desc: 'Send to all active registered devices' },
+  { value: 'all', label: 'All Subscribers', icon: Users, desc: 'Send to all opted-in subscribers and active devices' },
   { value: 'movie', label: 'Movie Subscribers', icon: Film, desc: 'Target users subscribed to a specific TMDB movie' },
+  { value: 'series', label: 'Series Subscribers', icon: Film, desc: 'Target users subscribed to a TV series' },
+  { value: 'season', label: 'Season Subscribers', icon: Layers, desc: 'Target TV season & series followers' },
   { value: 'actor', label: 'Actor Fans', icon: User, desc: 'Target users subscribed to a specific actor' },
   { value: 'genre', label: 'Genre Enthusiasts', icon: Layers, desc: 'Target users interested in a specific genre' },
 ];
@@ -28,6 +30,7 @@ export default function CampaignManager() {
   const [category, setCategory] = useState('movie_release');
   const [targetType, setTargetType] = useState('all');
   const [targetId, setTargetId] = useState('');
+  const [seasonNumber, setSeasonNumber] = useState('');
   const [url, setUrl] = useState('/');
   const [isDraft, setIsDraft] = useState(false);
   const [isScheduled, setIsScheduled] = useState(false);
@@ -74,6 +77,17 @@ export default function CampaignManager() {
 
       const target_criteria = { type: targetType };
       if (targetType === 'movie') target_criteria.movie_id = targetId;
+      if (targetType === 'series') {
+        target_criteria.series_id = targetId;
+        target_criteria.movie_id = targetId;
+        target_criteria.media_type = 'tv';
+      }
+      if (targetType === 'season') {
+        target_criteria.series_id = targetId;
+        target_criteria.movie_id = targetId;
+        target_criteria.media_type = 'tv';
+        target_criteria.season_number = parseInt(seasonNumber, 10) || 1;
+      }
       if (targetType === 'actor') target_criteria.actor_id = targetId;
       if (targetType === 'genre') target_criteria.genre_id = targetId;
 
@@ -112,6 +126,7 @@ export default function CampaignManager() {
       setTitle('');
       setBody('');
       setTargetId('');
+      setSeasonNumber('');
       fetchCampaigns();
     } catch (err) {
       setActionStatus({ type: 'error', message: err.message });
@@ -267,7 +282,7 @@ export default function CampaignManager() {
               </div>
 
               {targetType !== 'all' && (
-                <div>
+                <div className={targetType === 'season' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : ''}>
                   <input
                     type="text"
                     value={targetId}
@@ -276,6 +291,18 @@ export default function CampaignManager() {
                     required
                     className="w-full bg-[#141414] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-[#E50914]"
                   />
+                  {targetType === 'season' && (
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={seasonNumber}
+                      onChange={(e) => setSeasonNumber(e.target.value)}
+                      placeholder="Season number (e.g. 2)"
+                      required
+                      className="w-full bg-[#141414] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-[#E50914]"
+                    />
+                  )}
                 </div>
               )}
             </div>

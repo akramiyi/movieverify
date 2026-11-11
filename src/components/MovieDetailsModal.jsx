@@ -7,22 +7,32 @@ import ImageWithFallback from './ImageWithFallback';
 import ReportProblemButton from './ReportProblemButton';
 import ShareButton from './ShareButton';
 import ReviewSection from './ReviewSection';
-import { useNotifyList } from '../hooks/useNotifyList';
-import { Bell, BellRing } from 'lucide-react';
+import { useSubscriptions } from '../hooks/useSubscriptions';
+import { Bell, BellRing, LogIn } from 'lucide-react';
 
 const getMatchPercent = (rating) => {
   const num = parseFloat(rating);
   return isNaN(num) ? 'N/A' : `${Math.round(num * 10)}%`;
 };
 
-const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList = [], onToggleMyList, onSelectMovie, onDownloadTracked }) => {
-  const { toggleNotify, isNotifying } = useNotifyList();
-  const notifying = movie ? isNotifying(movie.id) : false;
+const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList = [], onToggleMyList, onSelectMovie, onDownloadTracked, onRequireAuth }) => {
+  const {
+    isAuthenticated,
+    isLoading: isSubUpdating,
+    toggleMovieNotify,
+    isMovieNotifying,
+  } = useSubscriptions();
+  const notifying = movie ? isMovieNotifying(movie) : false;
+  const [notifyFeedback, setNotifyFeedback] = useState(null);
   const [details, setDetails] = useState({
     cast: 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
     trailerUrl: '',
     runtime: null
   });
+
+  useEffect(() => {
+    setNotifyFeedback(null);
+  }, [movie?.id, isAuthenticated]);
 
   const liveLinks = movie ? getDownloadLinks(movie.id, movie.title) : {};
   const download480p = liveLinks.download480p || movie?.download480p;
@@ -205,49 +215,45 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                 {/* Download Options */}
                 <div>
                   <h3 id="download-options" className="text-xl font-bold text-white mb-4">Download Options</h3>
-                  {seasons ? (
-                     <div className="flex flex-col gap-4">
-                       {seasons.map((s, idx) => {
-                         const hasAnySeasonLink = s.parts.some(p => p.download480p || p.download720p || p.download1080p);
-                         if (!hasAnySeasonLink) return null;
+                  {(() => {
+                    const hasAnySeasonLinks =
+                      Array.isArray(seasons) &&
+                      seasons.some(
+                        (s) => Array.isArray(s.parts) && s.parts.some((p) => p.download480p || p.download720p || p.download1080p)
+                      );
+                    const hasAnyMovieLinks = Boolean(download480p || download720p || download1080p);
 
-                         return (
-                           <div key={idx} className="bg-[#242424] p-4 rounded-lg">
-                             <h4 className="font-bold text-gray-300 mb-3">Season {s.season}</h4>
-                             <div className="flex flex-col gap-2">
-                               {s.parts.map((part, pIdx) => (
-                                 <div key={pIdx} className="flex flex-col sm:flex-row justify-between items-center bg-[#181818] p-3 rounded">
-                                   <span>{part.name}</span>
-                                   <div className="flex gap-2 mt-2 sm:mt-0">
-                                     {part.download480p && <button onClick={() => handleDownload('480p', part.download480p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">480p</button>}
-                                     {part.download720p && <button onClick={() => handleDownload('720p', part.download720p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">720p</button>}
-                                     {part.download1080p && <button onClick={() => handleDownload('1080p', part.download1080p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">1080p</button>}
-                                   </div>
-                                 </div>
-                               ))}
-                             </div>
-                           </div>
-                         );
-                       })}
-                     </div>
-                  ) : (
-                    <div>
-                      {!(download480p || download720p || download1080p) ? (
-                        <div className="py-2">
-                          <p className="text-gray-400 text-sm mb-3">Download links unavailable yet</p>
-                          <button
-                            onClick={() => toggleNotify(movie)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                              notifying
-                                ? 'bg-[#E50914]/20 text-[#E50914] border border-[#E50914]'
-                                : 'bg-[#242424] text-gray-300 hover:bg-[#333]'
-                            }`}
-                          >
-                            {notifying ? <BellRing className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
-                            {notifying ? "You'll be notified" : "Notify Me When Available"}
-                          </button>
+                    if (hasAnySeasonLinks) {
+                      return (
+                        <div className="flex flex-col gap-4">
+                          {seasons.map((s, idx) => {
+                            const hasAnySeasonLink = s.parts.some(p => p.download480p || p.download720p || p.download1080p);
+                            if (!hasAnySeasonLink) return null;
+
+                            return (
+                              <div key={idx} className="bg-[#242424] p-4 rounded-lg">
+                                <h4 className="font-bold text-gray-300 mb-3">Season {s.season}</h4>
+                                <div className="flex flex-col gap-2">
+                                  {s.parts.map((part, pIdx) => (
+                                    <div key={pIdx} className="flex flex-col sm:flex-row justify-between items-center bg-[#181818] p-3 rounded">
+                                      <span>{part.name}</span>
+                                      <div className="flex gap-2 mt-2 sm:mt-0">
+                                        {part.download480p && <button onClick={() => handleDownload('480p', part.download480p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">480p</button>}
+                                        {part.download720p && <button onClick={() => handleDownload('720p', part.download720p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">720p</button>}
+                                        {part.download1080p && <button onClick={() => handleDownload('1080p', part.download1080p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">1080p</button>}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      ) : (
+                      );
+                    }
+
+                    if (hasAnyMovieLinks) {
+                      return (
                         <div className="grid grid-cols-3 gap-4">
                           {download480p && (
                             <button onClick={() => handleDownload('480p', download480p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
@@ -268,9 +274,106 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                             </button>
                           )}
                         </div>
-                      )}
-                    </div>
-                  )}
+                      );
+                    }
+
+                    const handleNotifyClick = async () => {
+                      if (!isAuthenticated) {
+                        setNotifyFeedback({
+                          type: 'auth',
+                          message: 'Please sign in with Google to save release alerts to your account.',
+                        });
+                        return;
+                      }
+                      setNotifyFeedback(null);
+                      const result = await toggleMovieNotify({
+                        ...movie,
+                        mediaType: resolvedMediaType,
+                        media_type: resolvedMediaType,
+                      });
+                      if (result?.requiresAuth) {
+                        setNotifyFeedback({
+                          type: 'auth',
+                          message: 'Please sign in with Google to save release alerts to your account.',
+                        });
+                      } else if (!result?.success) {
+                        setNotifyFeedback({
+                          type: 'error',
+                          message: result?.error || 'Could not update alert subscription.',
+                        });
+                      } else {
+                        setNotifyFeedback({
+                          type: 'success',
+                          message: result.subscribed
+                            ? 'Release alert saved to your account.'
+                            : 'Release alert removed.',
+                        });
+                      }
+                    };
+
+                    return (
+                      <div className="py-2 space-y-3">
+                        <p className="text-gray-400 text-sm">Download links unavailable yet</p>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            disabled={isSubUpdating}
+                            onClick={handleNotifyClick}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition cursor-pointer disabled:opacity-50 ${
+                              isAuthenticated && notifying
+                                ? 'bg-[#E50914]/20 text-[#E50914] border border-[#E50914]'
+                                : 'bg-[#242424] text-gray-300 hover:bg-[#333]'
+                            }`}
+                          >
+                            {isAuthenticated && notifying ? <BellRing className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                            {isAuthenticated && notifying ? "You'll be notified" : 'Notify Me When Available'}
+                          </button>
+
+                          {!isAuthenticated && (
+                            <button
+                              type="button"
+                              onClick={() => onRequireAuth && onRequireAuth()}
+                              data-testid="notify-signin-btn"
+                              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-[#E50914] hover:bg-[#b80710] text-white transition cursor-pointer"
+                            >
+                              <LogIn className="w-3.5 h-3.5" />
+                              Sign In to Notify
+                            </button>
+                          )}
+                        </div>
+
+                        {(!isAuthenticated || notifyFeedback?.type === 'auth') && (
+                          <div
+                            data-testid="notify-signin-prompt"
+                            className="p-3 rounded-lg bg-white/5 border border-white/10 text-xs text-gray-300 flex items-center justify-between gap-3"
+                          >
+                            <span>
+                              {notifyFeedback?.message || 'Sign in to save release notifications and sync alerts across your devices.'}
+                            </span>
+                            {onRequireAuth && (
+                              <button
+                                type="button"
+                                onClick={onRequireAuth}
+                                className="shrink-0 text-[#E50914] hover:underline font-bold cursor-pointer"
+                              >
+                                Sign In
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {notifyFeedback && notifyFeedback.type !== 'auth' && (
+                          <p
+                            className={`text-xs ${
+                              notifyFeedback.type === 'error' ? 'text-rose-400' : 'text-emerald-400'
+                            }`}
+                          >
+                            {notifyFeedback.message}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex items-center gap-8 mt-4 pb-6 border-b border-white/10">

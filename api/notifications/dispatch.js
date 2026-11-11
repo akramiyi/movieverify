@@ -13,6 +13,7 @@
 
 import crypto from 'node:crypto';
 import { runDispatchCycle, sweepExpiredReservations } from '../_lib/dispatchWorker.js';
+import { promoteDueScheduledCampaigns } from '../_lib/scheduledCampaignService.js';
 import { sendJson, parseJsonBody } from '../_lib/requestUtils.js';
 
 /**
@@ -143,19 +144,62 @@ export default async function handler(req, res, customDependencies = {}) {
     const customSupabase = customDependencies.supabase || null;
     const customMessaging = customDependencies.messaging || null;
 
+    // Promote due scheduled campaigns into notification_deliveries & user_notifications
+    // ahead of B5E reservation. Gracefully skip only when scheduled promotion RPC is
+    // not yet installed (standalone B5D/B5E deployments) or omitted by a test mock.
+    let promotionResult = { promoted_count: 0, campaigns: [] };
+    let promotionError = null;
+    let promotionSkipped = false;
+    if (customDependencies.promoteScheduled !== false) {
+      try {
+        promotionResult = await promoteDueScheduledCampaigns(customSupabase);
+      } catch (promoErr) {
+        const promoMsg = promoErr.message || '';
+        const isMockRpcOmitted =
+          Boolean(customSupabase) &&
+          /Unhandled RPC promote_due_scheduled_campaigns/i.test(promoMsg);
+        const isUninstalledScheduledRpc =
+          /PGRST202|42883|Could not find the function public\.promote_due_scheduled_campaigns|function public\.promote_due_scheduled_campaigns.*does not exist/i.test(promoMsg);
+        if (isMockRpcOmitted || isUninstalledScheduledRpc) {
+          promotionSkipped = true;
+          console.warn('[DispatchEndpoint] Scheduled campaign promotion unavailable/skipped:', promoMsg);
+        } else {
+          promotionError = promoMsg || 'Scheduled campaign promotion failed';
+          console.error('[DispatchEndpoint] Scheduled campaign promotion error:', promotionError);
+        }
+      }
+    }
+
     // Optional sweep of abandoned reservations from dead workers
     let sweptCount = 0;
     if (sweepFirst) {
       sweptCount = await sweepExpiredReservations(customSupabase);
     }
 
-    // Run Dispatch Cycle
+    // Run Dispatch Cycle even if scheduler failed so queued deliveries are not starved
     const cycleResult = await runDispatchCycle({
       batchSize,
       leaseSeconds,
       customSupabase,
       customMessaging,
     });
+
+    if (promotionError) {
+      return sendJson(res, 500, {
+        success: false,
+        error: 'Scheduled campaign promotion failed.',
+        details: promotionError,
+        promotion_error: promotionError,
+        worker_id: cycleResult.workerId,
+        processed: cycleResult.processed,
+        sent: cycleResult.sent,
+        failed: cycleResult.failed,
+        rejected: cycleResult.rejected,
+        swept_expired: sweptCount,
+        promoted_campaigns: 0,
+        results: cycleResult.results,
+      });
+    }
 
     return sendJson(res, 200, {
       success: true,
@@ -165,6 +209,8 @@ export default async function handler(req, res, customDependencies = {}) {
       failed: cycleResult.failed,
       rejected: cycleResult.rejected,
       swept_expired: sweptCount,
+      promoted_campaigns: promotionResult.promoted_count,
+      ...(promotionSkipped ? { scheduled_promotion_skipped: true } : {}),
       results: cycleResult.results,
     });
   } catch (err) {
