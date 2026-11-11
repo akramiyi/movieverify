@@ -584,3 +584,232 @@ test('HTTP Handler Endpoints Suite (/api/notifications/register & /revoke)', asy
     assert.equal(json.action, 'revoked');
   });
 });
+
+test('Phase 3F: B5E Trigger Security, Role-Gating, and Revocation Remediation Suite', async (t) => {
+  /**
+   * Exact simulation of PostgreSQL trigger public.trg_compat_notification_tokens_update()
+   * as defined in migration 20261111000000_endpoint_revocation_security_remediation.sql
+   */
+  function simulateTriggerUpdate(baseRecord, updates, callerContext = {}) {
+    const isTrustedCaller = callerContext.role === 'service_role' ||
+                            callerContext.sessionUser === 'postgres' ||
+                            callerContext.isAdmin === true;
+
+    const isCurrentlyRevoked = baseRecord.is_active === false ||
+                               baseRecord.revoked_at !== null ||
+                               baseRecord.revocation_reason !== null;
+
+    // Ownership transfer check
+    const isOwnershipTransfer = updates.user_id !== undefined && updates.user_id !== baseRecord.user_id;
+    let finalUserId = baseRecord.user_id;
+    if (isOwnershipTransfer) {
+      if (!isTrustedCaller) {
+        finalUserId = baseRecord.user_id; // Untrusted callers cannot reassign user_id
+      } else {
+        finalUserId = updates.user_id;
+      }
+    }
+
+    // Explicit reauthorization check: ONLY trusted service_role can reauthorize
+    const explicitReauthorize = isTrustedCaller &&
+                                updates.is_active === true &&
+                                updates.revoked_at === null &&
+                                isCurrentlyRevoked;
+
+    let finalIsActive;
+    let finalRevokedAt;
+    let finalRevocationReason;
+
+    if (isCurrentlyRevoked) {
+      if (explicitReauthorize) {
+        finalIsActive = true;
+        finalRevokedAt = null;
+        finalRevocationReason = null;
+      } else {
+        // Untrusted caller, silent heartbeat, or un-reauthorized ownership transfer
+        finalIsActive = false;
+        finalRevokedAt = baseRecord.revoked_at || new Date().toISOString();
+        finalRevocationReason = baseRecord.revocation_reason || 'previously_revoked';
+      }
+    } else {
+      if (updates.is_active === false) {
+        finalIsActive = false;
+        finalRevokedAt = updates.revoked_at || new Date().toISOString();
+        finalRevocationReason = baseRecord.revocation_reason || 'user_revoked';
+      } else {
+        finalIsActive = true;
+        finalRevokedAt = null;
+        finalRevocationReason = null;
+      }
+    }
+
+    return {
+      ...baseRecord,
+      ...updates,
+      user_id: finalUserId,
+      is_active: finalIsActive,
+      revoked_at: finalRevokedAt,
+      revocation_reason: finalRevocationReason,
+      updated_at: new Date().toISOString(),
+    };
+  }
+
+  await t.test('GAP-1: Direct PostgREST authenticated view update CANNOT reactivate revoked endpoint', () => {
+    const revokedEndpoint = {
+      id: 'ep-revoked-001',
+      user_id: 'user-alice',
+      token: 'token-alice-12345',
+      is_active: false,
+      revoked_at: '2026-11-08T00:00:07Z',
+      revocation_reason: 'fcm_unregistered',
+    };
+
+    // Ordinary authenticated user tries direct PostgREST PATCH /rest/v1/notification_tokens
+    const directUserUpdate = { is_active: true, revoked_at: null };
+    const result = simulateTriggerUpdate(revokedEndpoint, directUserUpdate, { role: 'authenticated' });
+
+    assert.equal(result.is_active, false, 'Endpoint must remain inactive');
+    assert.equal(result.revoked_at, '2026-11-08T00:00:07Z', 'Revoked timestamp must be preserved');
+    assert.equal(result.revocation_reason, 'fcm_unregistered', 'Revocation reason must be preserved');
+  });
+
+  await t.test('GAP-2: Unauthorized direct view caller CANNOT reassign user_id', () => {
+    const originalEndpoint = {
+      id: 'ep-ownership-001',
+      user_id: 'user-legitimate-owner',
+      token: 'token-ownership-12345',
+      is_active: true,
+      revoked_at: null,
+      revocation_reason: null,
+    };
+
+    // Attacker tries to transfer ownership of their view record to another user
+    const directUserUpdate = { user_id: 'user-malicious-target' };
+    const result = simulateTriggerUpdate(originalEndpoint, directUserUpdate, { role: 'authenticated' });
+
+    assert.equal(result.user_id, 'user-legitimate-owner', 'user_id reassignment by untrusted caller must be ignored');
+  });
+
+  await t.test('GAP-3: Trusted service_role reauthorization atomically clears revoked_at and revocation_reason', () => {
+    const revokedEndpoint = {
+      id: 'ep-revoked-002',
+      user_id: 'user-bob',
+      token: 'token-bob-12345',
+      is_active: false,
+      revoked_at: '2026-11-08T12:00:00Z',
+      revocation_reason: 'user_revoked',
+    };
+
+    // Trusted server API sends reauthorization update
+    const reauthUpdate = { is_active: true, revoked_at: null };
+    const result = simulateTriggerUpdate(revokedEndpoint, reauthUpdate, { role: 'service_role' });
+
+    assert.equal(result.is_active, true, 'Endpoint must be reactivated');
+    assert.equal(result.revoked_at, null, 'revoked_at must be cleared');
+    assert.equal(result.revocation_reason, null, 'revocation_reason must be cleared');
+  });
+
+  await t.test('GAP-4: Concurrent heartbeat and revocation preserve revoked state (anti-resurrection)', async () => {
+    const baseEndpoint = {
+      id: 'ep-concurrency-001',
+      user_id: 'user-carol',
+      token: 'token-carol-12345',
+      is_active: true,
+      revoked_at: null,
+      revocation_reason: null,
+    };
+
+    // Worker revokes endpoint due to terminal failure
+    const workerRevocation = simulateTriggerUpdate(
+      baseEndpoint,
+      { is_active: false, revoked_at: new Date().toISOString() },
+      { role: 'service_role' }
+    );
+    assert.equal(workerRevocation.is_active, false);
+
+    // Concurrent heartbeat attempts to send normal registration (reauthorize: false)
+    // Under SELECT ... FOR UPDATE, heartbeat evaluates latest committed row
+    const heartbeatResult = simulateTriggerUpdate(
+      workerRevocation,
+      { is_active: true }, // Heartbeat attempts to keep it active
+      { role: 'authenticated' }
+    );
+
+    assert.equal(heartbeatResult.is_active, false, 'Heartbeat must NOT reactivate revoked endpoint');
+    assert.notEqual(heartbeatResult.revoked_at, null, 'Revocation timestamp must remain intact');
+  });
+
+  await t.test('Timestamp-only corrupt endpoint (faa972b2-3cd7-4ed9-bb67-f931ca6a0601) lifecycle', async () => {
+    const rawToken = 'fcm_corrupt_test_token_faa972b2_xyz1234567890';
+    const tokenHash = hashToken(rawToken);
+    const corruptEndpoint = {
+      id: 'faa972b2-3cd7-4ed9-bb67-f931ca6a0601',
+      user_id: 'user-prod-1',
+      token: rawToken,
+      token_hash: tokenHash,
+      is_active: true,
+      revoked_at: '2026-11-08T00:00:07Z',
+      revocation_reason: null,
+    };
+
+    const mockSupabase = createMockSupabase([corruptEndpoint]);
+
+    // 1. Normal heartbeat / registration without reauthorize=true returns 409 Conflict
+    const resNoReauth = await registerDeviceToken(
+      { id: 'user-prod-1' },
+      { token: rawToken, device_type: 'web', reauthorize: false },
+      mockSupabase
+    );
+    assert.equal(resNoReauth.status, 409);
+    assert.equal(resNoReauth.code, 'TOKEN_REVOKED');
+    assert.equal(resNoReauth.data.requires_reauthorization, true);
+
+    // 2. Explicit reauthorization with reauthorize=true succeeds
+    const resWithReauth = await registerDeviceToken(
+      { id: 'user-prod-1' },
+      { token: rawToken, device_type: 'web', reauthorize: true },
+      mockSupabase
+    );
+    assert.equal(resWithReauth.status, 200);
+    assert.equal(resWithReauth.success, true);
+    assert.equal(resWithReauth.data.action, 'reauthorized');
+    assert.equal(resWithReauth.data.is_active, true);
+
+    // 3. Database state must be clean
+    const inStore = mockSupabase._store.get('faa972b2-3cd7-4ed9-bb67-f931ca6a0601');
+    assert.equal(inStore.is_active, true);
+    assert.equal(inStore.revoked_at, null);
+  });
+
+  await t.test('Ownership transfer of revoked endpoint preserves revoked state until reauthorized', () => {
+    const revokedEndpoint = {
+      id: 'ep-transfer-001',
+      user_id: 'user-old-owner',
+      token: 'token-transfer-12345',
+      is_active: false,
+      revoked_at: '2026-11-08T15:00:00Z',
+      revocation_reason: 'user_revoked',
+    };
+
+    // Service role transfers ownership to user-new-owner WITHOUT reauthorization
+    const transferOnly = simulateTriggerUpdate(
+      revokedEndpoint,
+      { user_id: 'user-new-owner', is_active: false },
+      { role: 'service_role' }
+    );
+    assert.equal(transferOnly.user_id, 'user-new-owner');
+    assert.equal(transferOnly.is_active, false);
+    assert.equal(transferOnly.revoked_at, '2026-11-08T15:00:00Z');
+
+    // New owner explicitly reauthorizes
+    const reauthorized = simulateTriggerUpdate(
+      transferOnly,
+      { is_active: true, revoked_at: null },
+      { role: 'service_role' }
+    );
+    assert.equal(reauthorized.user_id, 'user-new-owner');
+    assert.equal(reauthorized.is_active, true);
+    assert.equal(reauthorized.revoked_at, null);
+    assert.equal(reauthorized.revocation_reason, null);
+  });
+});

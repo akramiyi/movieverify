@@ -6,6 +6,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import {
   generateWorkerId,
@@ -69,7 +71,7 @@ function createMockSupabaseWithRpc(initialState = {}) {
           if (
             (del.delivery_status === 'pending' || del.delivery_status === 'reserved') &&
             del.attempt_count < (del.max_attempts || 3) &&
-            tok && tok.is_active && tok.user_id === del.recipient_id
+            tok && tok.is_active && !tok.revoked_at && !tok.revocation_reason && tok.user_id === del.recipient_id
           ) {
             del.delivery_status = 'reserved';
             del.worker_id = workerId;
@@ -110,7 +112,7 @@ function createMockSupabaseWithRpc(initialState = {}) {
           del.failure_reason = 'OWNERSHIP_TRANSFERRED';
           return { data: { authorized: false, reason: 'DISPATCH_REJECTED_OWNERSHIP_MISMATCH' }, error: null };
         }
-        if (!tok.is_active || (tok.revoked_at !== undefined && tok.revoked_at !== null)) {
+        if (!tok.is_active || (tok.revoked_at !== undefined && tok.revoked_at !== null) || (tok.revocation_reason !== undefined && tok.revocation_reason !== null)) {
           del.delivery_status = 'failed';
           del.failure_reason = 'ENDPOINT_REVOKED_OR_INACTIVE';
           return { data: { authorized: false, reason: 'ENDPOINT_REVOKED_OR_INACTIVE' }, error: null };
@@ -125,6 +127,7 @@ function createMockSupabaseWithRpc(initialState = {}) {
             authorized: true,
             status: 'DISPATCH_AUTHORIZED',
             dispatch_attempt_id: attemptId,
+            provider_token: tok.token,
           },
           error: null,
         };
@@ -1046,5 +1049,539 @@ test('HTTP Dispatch Endpoint Suite (POST /api/notifications/dispatch)', async (t
       assert.equal(res.statusCode, 200);
       assert.equal(res.json().success, true);
     });
+
+    await st.test('GAP-5: Reason-only corrupt endpoint (revocation_reason is not null) is excluded from reservation and rejected at authorization', async () => {
+      const corruptToken = {
+        id: 'tok-corrupt-reason-only',
+        user_id: 'user-corrupt-1',
+        token: 'fcm-corrupt-token-12345',
+        is_active: true,
+        revoked_at: null,
+        revocation_reason: 'fcm_unregistered',
+      };
+      const delivery = {
+        id: 'del-corrupt-1',
+        campaign_id: 'camp-1',
+        recipient_id: 'user-corrupt-1',
+        token_id: 'tok-corrupt-reason-only',
+        delivery_status: 'pending',
+        attempt_count: 0,
+        max_attempts: 3,
+      };
+      const mockSupabase = createMockSupabaseWithRpc({
+        deliveries: [delivery],
+        tokens: [corruptToken],
+        campaigns: [{ id: 'camp-1', status: 'processing' }],
+      });
+
+      // 1. Verification in reserve_notification_deliveries
+      const reserveRes = await mockSupabase.rpc('reserve_notification_deliveries', {
+        p_worker_id: 'worker-1',
+        p_batch_size: 10,
+      });
+      assert.equal(reserveRes.data.length, 0, 'Reason-only corrupt endpoint must be excluded from reservation');
+
+      // 2. Verification in authorize_notification_delivery_dispatch if manually forced
+      const delInMock = mockSupabase._deliveries.get(delivery.id);
+      delInMock.delivery_status = 'reserved';
+      delInMock.worker_id = 'worker-1';
+      delInMock.reservation_token = 'res-token-corrupt';
+      const authRes = await mockSupabase.rpc('authorize_notification_delivery_dispatch', {
+        p_delivery_id: delivery.id,
+        p_token_id: corruptToken.id,
+        p_reservation_token: 'res-token-corrupt',
+        p_worker_id: 'worker-1',
+        p_recipient_id: 'user-corrupt-1',
+      });
+      assert.equal(authRes.data.authorized, false);
+      assert.equal(authRes.data.reason, 'ENDPOINT_REVOKED_OR_INACTIVE');
+      assert.equal(delInMock.delivery_status, 'failed');
+    });
+  });
+});
+
+test('Phase 4.28 Option 2 Regression Suite (B5E SQL Static Contract & Mocked Worker Mechanics)', async (t) => {
+  const b5ePath = path.resolve('supabase/migrations_superseded/20261111000000_endpoint_revocation_security_remediation.sql');
+  const b5eSql = fs.readFileSync(b5ePath, 'utf8');
+
+  function extractSqlBlock(sql, startMarker, endMarker) {
+    const startIdx = sql.indexOf(startMarker);
+    assert.notEqual(startIdx, -1, `Missing start marker in B5E SQL: ${startMarker}`);
+    const endIdx = sql.indexOf(endMarker, startIdx + startMarker.length);
+    assert.notEqual(endIdx, -1, `Missing end marker in B5E SQL: ${endMarker}`);
+    return sql.slice(startIdx, endIdx);
+  }
+
+  await t.test('1. Static Contract + Mocked Interleaving (Revocation-First): FOR UPDATE revocation blocks FOR SHARE authorization and cancels dispatch before FCM', async () => {
+    // Note: Real PostgreSQL MVCC lock serialization requires live PostgreSQL runtime;
+    // this verifies B5E SQL lock clauses and mocked lock-handoff behavior in Node.
+    const triggerSql = extractSqlBlock(
+      b5eSql,
+      'CREATE OR REPLACE FUNCTION public.trg_compat_notification_tokens_update()',
+      '-- 2. Hardened reservation query:'
+    );
+    const authSql = extractSqlBlock(
+      b5eSql,
+      'CREATE OR REPLACE FUNCTION public.authorize_notification_delivery_dispatch(',
+      '-- 4. Reconcile ALL existing endpoints'
+    );
+
+    assert.match(
+      triggerSql,
+      /FROM\s+public\.notification_endpoints\s+e\s+WHERE\s+e\.id\s*=\s*OLD\.id\s+FOR\s+UPDATE\s*;/is,
+      'Revocation trigger must lock endpoint FOR UPDATE'
+    );
+    assert.match(
+      authSql,
+      /FROM\s+public\.notification_endpoints\s+WHERE\s+id\s*=\s*v_delivery\.endpoint_id\s+FOR\s+SHARE\s*;/is,
+      'authorize_notification_delivery_dispatch must lock endpoint FOR SHARE'
+    );
+
+    const campaignLockIdx = authSql.search(/FROM\s+public\.notification_campaigns\s+WHERE\s+id\s*=\s*v_camp_id\s+FOR\s+SHARE\s*;/i);
+    const deliveryLockIdx = authSql.search(/FROM\s+public\.notification_deliveries\s+WHERE\s+id\s*=\s*p_delivery_id\s+FOR\s+UPDATE\s*;/i);
+    const endpointLockIdx = authSql.search(/FROM\s+public\.notification_endpoints\s+WHERE\s+id\s*=\s*v_delivery\.endpoint_id\s+FOR\s+SHARE\s*;/i);
+    assert.ok(campaignLockIdx >= 0 && deliveryLockIdx > campaignLockIdx && endpointLockIdx > deliveryLockIdx,
+      'Lock order must remain campaigns (FOR SHARE) -> deliveries (FOR UPDATE) -> endpoints (FOR SHARE)'
+    );
+
+    // Mocked lock contention simulation: Revocation holds endpoint lock and commits first
+    const endpoint = { id: 'ep-race-1', user_id: 'user-1', is_active: true, revoked_at: null, revocation_reason: null };
+    const delivery = { id: 'del-race-rev-first', recipient_id: 'user-1', token_id: 'ep-race-1', delivery_status: 'reserved', reservation_token: 'lease-1', worker_id: 'w-1', dispatch_attempt_id: null };
+
+    let releaseRevocationLock;
+    const revocationCommitted = new Promise((resolve) => {
+      releaseRevocationLock = resolve;
+    });
+
+    const mockSupabase = {
+      from() {
+        return { select() { return { eq() { return { async maybeSingle() { return { data: null, error: null }; } }; } }; } };
+      },
+      async rpc(fnName, params) {
+        if (fnName === 'authorize_notification_delivery_dispatch') {
+          await revocationCommitted; // Blocked behind FOR UPDATE revocation
+          if (!endpoint.is_active || endpoint.revoked_at !== null || endpoint.revocation_reason !== null) {
+            delivery.delivery_status = 'failed';
+            delivery.failure_reason = 'ENDPOINT_REVOKED_OR_INACTIVE';
+            return { data: { authorized: false, reason: 'ENDPOINT_REVOKED_OR_INACTIVE' }, error: null };
+          }
+          return { data: { authorized: true, dispatch_attempt_id: `att-${params.p_delivery_id}`, provider_token: 'raw-tok-1' }, error: null };
+        }
+        throw new Error(`Unexpected RPC ${fnName}`);
+      },
+    };
+    const mockMessaging = createMockMessaging();
+
+    const workerPromise = processDelivery({
+      delivery_id: delivery.id,
+      recipient_id: 'user-1',
+      token_id: 'ep-race-1',
+      reservation_token: 'lease-1',
+      raw_token: 'raw-tok-1',
+    }, { supabase: mockSupabase, messaging: mockMessaging, workerId: 'w-1', campaignCache: new Map() });
+
+    // Revocation acquires FOR UPDATE first and commits
+    endpoint.is_active = false;
+    endpoint.revoked_at = '2026-11-11T08:00:00Z';
+    endpoint.revocation_reason = 'user_revoked';
+    releaseRevocationLock();
+
+    const res = await workerPromise;
+    assert.equal(res.status, 'rejected');
+    assert.equal(res.reason, 'ENDPOINT_REVOKED_OR_INACTIVE');
+    assert.equal(mockMessaging._sentMessages.length, 0, 'Revoked endpoint must never reach FCM');
+  });
+
+  await t.test('2. Mocked Interleaving (Authorization-First): Authorization FOR SHARE commits before queued FOR UPDATE revocation and fences downstream confirmation', async () => {
+    // Note: Simulated Node concurrency barrier (real MVCC locking is validated in PostgreSQL).
+    const endpoint = { id: 'ep-race-2', user_id: 'user-1', is_active: true, revoked_at: null, revocation_reason: null };
+    const delivery = { id: 'del-race-auth-first', recipient_id: 'user-1', token_id: 'ep-race-2', delivery_status: 'leased', lease_token: 'lease-2', worker_id: 'w-2', dispatch_attempt_id: null };
+
+    const events = [];
+    let releaseShareLock;
+    const shareLockReleased = new Promise((resolve) => {
+      releaseShareLock = resolve;
+    });
+
+    const mockSupabase = {
+      from() {
+        return { select() { return { eq() { return { async maybeSingle() { return { data: null, error: null }; } }; } }; } };
+      },
+      async rpc(fnName, params) {
+        if (fnName === 'authorize_notification_delivery_dispatch') {
+          events.push('auth_acquired_for_share');
+          assert.equal(endpoint.is_active, true);
+          assert.equal(endpoint.revoked_at, null);
+          const attemptId = 'att-locked-first-99';
+          delivery.dispatch_attempt_id = attemptId;
+          events.push('auth_committed_and_released_share');
+          releaseShareLock();
+          return { data: { authorized: true, dispatch_attempt_id: attemptId, provider_token: 'raw-tok-2' }, error: null };
+        }
+        if (fnName === 'confirm_notification_delivery_sent') {
+          events.push(`confirm_called_with:${params.p_dispatch_attempt_id}`);
+          assert.equal(params.p_dispatch_attempt_id, 'att-locked-first-99');
+          if (delivery.delivery_status !== 'leased' || delivery.dispatch_attempt_id !== params.p_dispatch_attempt_id) {
+            return { data: { success: false, reason: 'CONFIRMATION_REJECTED_ALREADY_TERMINAL' }, error: null };
+          }
+          delivery.delivery_status = 'sent';
+          delivery.dispatch_attempt_id = null;
+          return { data: { success: true, status: 'SENT' }, error: null };
+        }
+        throw new Error(`Unexpected RPC ${fnName}`);
+      },
+    };
+    const mockMessaging = createMockMessaging();
+
+    const workerPromise = processDelivery({
+      delivery_id: delivery.id,
+      recipient_id: 'user-1',
+      token_id: 'ep-race-2',
+      reservation_token: 'lease-2',
+      raw_token: 'raw-tok-2',
+    }, { supabase: mockSupabase, messaging: mockMessaging, workerId: 'w-2', campaignCache: new Map() });
+
+    const revocationPromise = (async () => {
+      await shareLockReleased;
+      events.push('revocation_acquired_for_update');
+      endpoint.is_active = false;
+      endpoint.revoked_at = '2026-11-11T08:00:01Z';
+      endpoint.revocation_reason = 'user_revoked';
+    })();
+
+    const [workerRes] = await Promise.all([workerPromise, revocationPromise]);
+    assert.equal(workerRes.status, 'sent');
+    assert.equal(mockMessaging._sentMessages.length, 1);
+    assert.equal(events[0], 'auth_acquired_for_share');
+    assert.equal(events[1], 'auth_committed_and_released_share');
+    assert.ok(events.includes('revocation_acquired_for_update'));
+    assert.ok(events.includes('confirm_called_with:att-locked-first-99'));
+  });
+
+  await t.test('3. Static Contract + Mock: reserve_notification_deliveries explicitly clears stale dispatch_attempt_id = NULL', async () => {
+    const reserveSql = extractSqlBlock(
+      b5eSql,
+      'CREATE OR REPLACE FUNCTION public.reserve_notification_deliveries(',
+      '-- 3. Hardened dispatch authorization:'
+    );
+    assert.match(
+      reserveSql,
+      /UPDATE\s+public\.notification_deliveries\s+d[\s\S]*?dispatch_attempt_id\s*=\s*NULL/is,
+      'B5E reserve_notification_deliveries UPDATE SET must explicitly clear dispatch_attempt_id = NULL'
+    );
+
+    // Mocked swept delivery still carrying stale dispatch_attempt_id before re-reservation
+    const sweptDelivery = {
+      id: 'del-swept-stale',
+      recipient_id: 'user-1',
+      token_id: 'tok-active',
+      delivery_status: 'pending',
+      dispatch_attempt_id: 'stale-attempt-before-sweep',
+      attempt_count: 1,
+      max_attempts: 3,
+    };
+
+    // Simulate B5E reserve_notification_deliveries UPDATE SET semantics
+    const reserveB5EAligned = (del, workerId) => {
+      del.delivery_status = 'leased';
+      del.lease_token = 'fresh-lease-1';
+      del.worker_id = workerId;
+      del.dispatch_attempt_id = null; // Must match B5E SQL explicit reset
+    };
+
+    reserveB5EAligned(sweptDelivery, 'worker-recover');
+    assert.equal(sweptDelivery.delivery_status, 'leased');
+    assert.equal(sweptDelivery.dispatch_attempt_id, null, 'Re-reserved delivery must have dispatch_attempt_id cleared to null');
+  });
+
+  await t.test('4. Worker Fencing: Campaign lookup DB error or exception aborts before authorizeDispatch and never calls FCM', async () => {
+    const scenarios = [
+      {
+        name: 'Supabase error object',
+        fromImpl: () => ({
+          select() {
+            return {
+              eq() {
+                return {
+                  async maybeSingle() {
+                    return { data: null, error: { message: 'Campaign table read timeout' } };
+                  },
+                };
+              },
+            };
+          },
+        }),
+      },
+      {
+        name: 'Thrown network exception',
+        fromImpl: () => ({
+          select() {
+            return {
+              eq() {
+                return {
+                  async maybeSingle() {
+                    throw new Error('ECONNRESET while fetching campaign');
+                  },
+                };
+              },
+            };
+          },
+        }),
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const rpcCalls = [];
+      const mockSupabase = {
+        from(table) {
+          assert.equal(table, 'notification_campaigns');
+          return scenario.fromImpl();
+        },
+        async rpc(fnName, params) {
+          rpcCalls.push({ fnName, params });
+          if (fnName === 'fail_or_retry_notification_delivery') {
+            return { data: 'pending', error: null };
+          }
+          throw new Error(`Unexpected RPC ${fnName} when campaign lookup fails (${scenario.name})`);
+        },
+      };
+      const mockMessaging = createMockMessaging();
+
+      const res = await processDelivery({
+        delivery_id: 'del-camp-fail-1',
+        campaign_id: 'camp-failing-1',
+        recipient_id: 'user-1',
+        token_id: 'tok-1',
+        reservation_token: 'lease-camp-fail',
+        raw_token: 'raw-tok-camp-fail',
+      }, {
+        supabase: mockSupabase,
+        messaging: mockMessaging,
+        workerId: 'worker-camp-fail',
+        campaignCache: new Map(),
+      });
+
+      assert.equal(res.status, 'pending');
+      assert.equal(res.reason, 'CAMPAIGN_LOOKUP_FAILED');
+      assert.equal(mockMessaging._sentMessages.length, 0, `FCM must not run on ${scenario.name}`);
+      assert.equal(
+        rpcCalls.some(c => c.fnName === 'authorize_notification_delivery_dispatch'),
+        false,
+        `authorize_notification_delivery_dispatch must NEVER be called when campaign lookup fails (${scenario.name})`
+      );
+      assert.equal(rpcCalls.length, 1);
+      assert.equal(rpcCalls[0].fnName, 'fail_or_retry_notification_delivery');
+      assert.equal(rpcCalls[0].params.p_error_code, 'CAMPAIGN_LOOKUP_FAILED');
+    }
+  });
+
+  await t.test('5 & 6. Call Ordering + Exact Attempt ID Confirmation: Fetches campaign BEFORE authorization, calls FCM, and confirms with exact dispatch_attempt_id', async () => {
+    const callOrder = [];
+    const exactAttemptId = 'attempt-exact-uuid-428';
+    let confirmedAttemptId = null;
+
+    const mockSupabase = {
+      from(table) {
+        assert.equal(table, 'notification_campaigns');
+        return {
+          select() {
+            return {
+              eq(col, val) {
+                assert.equal(col, 'id');
+                assert.equal(val, 'camp-order-1');
+                return {
+                  async maybeSingle() {
+                    callOrder.push('campaign_lookup');
+                    return {
+                      data: { id: 'camp-order-1', title: 'Premiere Alert', body: 'Watch now', category: 'release', url: '/movies/tt1234567' },
+                      error: null,
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+      async rpc(fnName, params) {
+        if (fnName === 'authorize_notification_delivery_dispatch') {
+          callOrder.push('authorize_dispatch');
+          return { data: { authorized: true, dispatch_attempt_id: exactAttemptId, provider_token: 'raw-tok-order-1' }, error: null };
+        }
+        if (fnName === 'confirm_notification_delivery_sent') {
+          callOrder.push('confirm_sent');
+          confirmedAttemptId = params.p_dispatch_attempt_id;
+          return { data: { success: true, status: 'SENT' }, error: null };
+        }
+        throw new Error(`Unexpected RPC ${fnName}`);
+      },
+    };
+
+    const mockMessaging = {
+      _sentMessages: [],
+      async send(msg) {
+        callOrder.push('fcm_send');
+        this._sentMessages.push(msg);
+        return 'projects/mv/messages/order-check-1';
+      },
+    };
+
+    const res = await processDelivery({
+      delivery_id: 'del-order-1',
+      campaign_id: 'camp-order-1',
+      recipient_id: 'user-1',
+      token_id: 'tok-order-1',
+      reservation_token: 'lease-order-1',
+      raw_token: 'raw-tok-order-1',
+    }, {
+      supabase: mockSupabase,
+      messaging: mockMessaging,
+      workerId: 'worker-order',
+      campaignCache: new Map(),
+    });
+
+    assert.equal(res.status, 'sent');
+    assert.deepEqual(callOrder, ['campaign_lookup', 'authorize_dispatch', 'fcm_send', 'confirm_sent']);
+    assert.equal(mockMessaging._sentMessages.length, 1);
+    assert.equal(mockMessaging._sentMessages[0].notification.title, 'Premiere Alert');
+    assert.equal(confirmedAttemptId, exactAttemptId, 'Confirmation must use the exact dispatch_attempt_id minted by authorization');
+  });
+
+  await t.test('7. Confirmation Fencing: Stale dispatch_attempt_id confirmation remains rejected', async () => {
+    const delivery = {
+      id: 'del-stale-confirm',
+      recipient_id: 'user-1',
+      token_id: 'tok-1',
+      delivery_status: 'dispatching',
+      current_dispatch_attempt_id: 'current-attempt-new',
+    };
+    const mockSupabase = createMockSupabaseWithRpc({
+      deliveries: [delivery],
+      tokens: [{ id: 'tok-1', user_id: 'user-1', token: 'tok', is_active: true }],
+    });
+
+    const res = await mockSupabase.rpc('confirm_notification_delivery_sent', {
+      p_delivery_id: 'del-stale-confirm',
+      p_dispatch_attempt_id: 'stale-attempt-old',
+      p_fcm_message_id: 'projects/mv/messages/late-confirm',
+    });
+
+    assert.equal(res.error, null);
+    assert.equal(res.data.success, false);
+    assert.equal(res.data.reason, 'CONFIRMATION_REJECTED_ALREADY_TERMINAL');
+    assert.equal(mockSupabase._deliveries.get('del-stale-confirm').delivery_status, 'dispatching');
+    assert.equal(mockSupabase._deliveries.get('del-stale-confirm').current_dispatch_attempt_id, 'current-attempt-new');
+  });
+
+  await t.test('8. Phase 5.9.5 Worker Contract: Rejects provider_token mismatch/missing, uses authorized provider_token & stringifies guest recipient_id', async () => {
+    // A. Guest recipient_id: null -> '' safe string in FCM data map
+    const guestPayload = buildFcmPayload({
+      delivery_id: 'del-guest-1',
+      campaign_id: null,
+      recipient_id: null,
+      raw_token: 'guest-tok-valid-123456',
+    }, { title: 'Guest Alert', body: 'Watch now', category: 'system', url: '/' });
+    assert.equal(guestPayload.data.recipient_id, '');
+    assert.equal(guestPayload.data.campaign_id, '');
+    assert.equal(typeof guestPayload.data.recipient_id, 'string');
+
+    // B. Mismatched authResult.provider_token rejects before calling FCM
+    const rpcCallsMismatch = [];
+    const mockMessagingMismatch = createMockMessaging();
+    const mismatchRes = await processDelivery({
+      delivery_id: 'del-tok-mismatch',
+      campaign_id: null,
+      recipient_id: 'user-1',
+      token_id: 'tok-1',
+      reservation_token: 'lease-m1',
+      raw_token: 'reserved-token-A',
+    }, {
+      workerId: 'w-tok-1',
+      campaignCache: new Map(),
+      messaging: mockMessagingMismatch,
+      supabase: {
+        async rpc(fnName, params) {
+          rpcCallsMismatch.push({ fnName, params });
+          if (fnName === 'authorize_notification_delivery_dispatch') {
+            return { data: { authorized: true, dispatch_attempt_id: 'att-m1', provider_token: 'authorized-token-B' }, error: null };
+          }
+          if (fnName === 'fail_or_retry_notification_delivery') {
+            return { data: 'failed', error: null };
+          }
+          throw new Error(`Unexpected RPC ${fnName}`);
+        },
+      },
+    });
+    assert.equal(mismatchRes.status, 'rejected');
+    assert.equal(mismatchRes.reason, 'PROVIDER_TOKEN_MISMATCH');
+    assert.equal(mockMessagingMismatch._sentMessages.length, 0);
+    assert.equal(rpcCallsMismatch.some((c) => c.fnName === 'fail_or_retry_notification_delivery' && c.params.p_error_code === 'PROVIDER_TOKEN_MISMATCH'), true);
+
+    // C. Missing authResult.provider_token rejects fail-closed before calling FCM
+    const mockMessagingMissing = createMockMessaging();
+    const missingRes = await processDelivery({
+      delivery_id: 'del-tok-missing',
+      campaign_id: null,
+      recipient_id: 'user-1',
+      token_id: 'tok-1',
+      reservation_token: 'lease-m2',
+      raw_token: 'reserved-token-A',
+    }, {
+      workerId: 'w-tok-2',
+      campaignCache: new Map(),
+      messaging: mockMessagingMissing,
+      supabase: {
+        async rpc(fnName) {
+          if (fnName === 'authorize_notification_delivery_dispatch') {
+            return { data: { authorized: true, dispatch_attempt_id: 'att-m2' }, error: null };
+          }
+          if (fnName === 'fail_or_retry_notification_delivery') {
+            return { data: 'failed', error: null };
+          }
+          throw new Error(`Unexpected RPC ${fnName}`);
+        },
+      },
+    });
+    assert.equal(missingRes.status, 'rejected');
+    assert.equal(missingRes.reason, 'PROVIDER_TOKEN_MISMATCH');
+    assert.equal(mockMessagingMissing._sentMessages.length, 0);
+
+    // D. Uninstalled promote_due_scheduled_campaigns (PGRST202) degrades to HTTP 200 in standalone B5D/B5E
+    const prevSecret = process.env.INTERNAL_WORKER_SECRET;
+    process.env.INTERNAL_WORKER_SECRET = 'test-secret-595';
+    try {
+      const res = {
+        statusCode: 200,
+        headers: {},
+        body: '',
+        setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
+        end(d) { this.body = d; },
+      };
+      await dispatchHandler(
+        { method: 'POST', headers: { 'x-worker-secret': 'test-secret-595' }, body: { batch_size: 10, sweep_expired: false } },
+        res,
+        {
+          supabase: {
+            async rpc(fnName) {
+              if (fnName === 'promote_due_scheduled_campaigns') {
+                return { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.promote_due_scheduled_campaigns(p_limit) in the schema cache' } };
+              }
+              if (fnName === 'reserve_notification_deliveries') {
+                return { data: [], error: null };
+              }
+              return { data: null, error: null };
+            },
+          },
+          messaging: createMockMessaging(),
+        }
+      );
+      const parsedBody = JSON.parse(res.body);
+      assert.equal(res.statusCode, 200);
+      assert.equal(parsedBody.success, true);
+      assert.equal(parsedBody.scheduled_promotion_skipped, true);
+    } finally {
+      if (prevSecret === undefined) delete process.env.INTERNAL_WORKER_SECRET;
+      else process.env.INTERNAL_WORKER_SECRET = prevSecret;
+    }
   });
 });
