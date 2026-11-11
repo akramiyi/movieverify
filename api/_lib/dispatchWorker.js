@@ -215,7 +215,7 @@ export async function recordDeliveryFailure(
 export function buildFcmPayload(delivery, campaign = null) {
   const title = campaign?.title || 'MovieVerify Update';
   const body = campaign?.body || 'You have a new notification from MovieVerify.';
-  const linkUrl = campaign?.url || '/';
+  const linkUrl = campaign?.action_url || campaign?.url || '/';
   const resolvedToken = delivery.provider_token || delivery.raw_token;
 
   const fcmMessage = {
@@ -270,7 +270,7 @@ export async function processDelivery(delivery, context) {
       try {
         const res = await supabase
           .from('notification_campaigns')
-          .select('id, title, body, category, url, image_url')
+          .select('id, title, body, category, action_url, image_url')
           .eq('id', delivery.campaign_id)
           .maybeSingle();
         campData = res?.data ?? null;

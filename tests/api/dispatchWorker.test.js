@@ -275,6 +275,93 @@ test('Dispatch Worker Core Unit & Reliability Suite', async (t) => {
     assert.equal(payload.data.delivery_id, 'del-uuid-1');
     assert.equal(payload.data.category, 'movie_release');
     assert.equal(payload.webpush.fcmOptions.link, '/?type=movie&id=27205');
+
+    const dbCampaignPayload = buildFcmPayload(delivery, {
+      title: 'Action URL Campaign',
+      body: 'Uses action_url DB column',
+      category: 'system',
+      action_url: '/?type=series&id=1399',
+    });
+    assert.equal(dbCampaignPayload.data.url, '/?type=series&id=1399');
+    assert.equal(dbCampaignPayload.webpush.fcmOptions.link, '/?type=series&id=1399');
+  });
+
+  await t.test('3b. Campaign Query Schema: Selects action_url instead of nonexistent url column', async () => {
+    let selectedCols = null;
+    const schemaMockSupabase = {
+      from(table) {
+        assert.equal(table, 'notification_campaigns');
+        return {
+          select(cols) {
+            selectedCols = cols;
+            return {
+              eq() {
+                return {
+                  async maybeSingle() {
+                    return {
+                      data: {
+                        id: 'camp-schema-1',
+                        title: 'Schema Test',
+                        body: 'Checks action_url select',
+                        category: 'movie_release',
+                        action_url: '/?type=movie&id=101',
+                        image_url: null,
+                      },
+                      error: null,
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+      async rpc(fnName) {
+        if (fnName === 'authorize_notification_delivery_dispatch') {
+          return {
+            data: {
+              authorized: true,
+              dispatch_attempt_id: 'attempt-schema-1',
+              provider_token: 'raw-fcm-device-token-12345',
+            },
+            error: null,
+          };
+        }
+        if (fnName === 'confirm_notification_delivery_sent') {
+          return { data: { success: true }, error: null };
+        }
+        throw new Error(`Unexpected RPC ${fnName}`);
+      },
+    };
+
+    const sent = [];
+    const res = await processDelivery(
+      {
+        delivery_id: 'del-schema-1',
+        recipient_id: 'user-schema-1',
+        campaign_id: 'camp-schema-1',
+        token_id: 'tok-schema-1',
+        raw_token: 'raw-fcm-device-token-12345',
+        reservation_token: 'res-schema-1',
+      },
+      {
+        supabase: schemaMockSupabase,
+        messaging: {
+          async send(msg) {
+            sent.push(msg);
+            return 'fcm-msg-schema-1';
+          },
+        },
+        workerId: 'worker-schema-1',
+        campaignCache: new Map(),
+      }
+    );
+
+    assert.equal(res.status, 'sent');
+    assert.ok(selectedCols && selectedCols.includes('action_url'));
+    assert.ok(!/\burl\b/.test(selectedCols));
+    assert.equal(sent[0].data.url, '/?type=movie&id=101');
+    assert.equal(sent[0].webpush.fcmOptions.link, '/?type=movie&id=101');
   });
 
   await t.test('4. Empty Queue: Worker handles zero available deliveries safely', async () => {
