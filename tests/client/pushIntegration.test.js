@@ -183,8 +183,31 @@ test('6 & 7. FCM Token Registration & Refresh Suite', async (t) => {
 
     const body = JSON.parse(capturedOptions.body);
     assert.equal(body.device_type, 'web');
+    assert.equal(body.browser, 'Chrome');
     assert.equal(body.device_info.browser, 'Chrome');
+    assert.equal(body.reauthorize, undefined);
     assert.equal(body.token, 'fK3b8x999999999999999999999999999999999999999999999999999999999991xL');
+
+    // Explicit reauthorization sends top-level metadata & reauthorize: true
+    await registerTokenWithBackend({
+      token: 'fK3b8x999999999999999999999999999999999999999999999999999999999991xL',
+      accessToken: 'valid-user-jwt-session',
+      deviceName: 'Desktop Chrome',
+      browser: 'Chrome 130',
+      os: 'Windows',
+      reauthorize: true,
+      customFetch: mockFetch,
+    });
+    const reauthBody = JSON.parse(capturedOptions.body);
+    assert.equal(reauthBody.reauthorize, true);
+    assert.equal(reauthBody.device_name, 'Desktop Chrome');
+    assert.equal(reauthBody.browser, 'Chrome 130');
+    assert.equal(reauthBody.os, 'Windows');
+
+    // Hook wiring check: subscribe passes reauthorize: true; passive SIGNED_IN passes reauthorize: false
+    const hookSrc = fs.readFileSync(path.resolve('src/hooks/usePushNotifications.js'), 'utf8');
+    assert.match(hookSrc, /subscribe[\s\S]*reauthorize:\s*true/);
+    assert.match(hookSrc, /SIGNED_IN[\s\S]*reauthorize:\s*false/);
   });
 
   await t.test('7. Token Refresh & Validation: Rejects invalid or missing parameters safely', async () => {

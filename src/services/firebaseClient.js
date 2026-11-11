@@ -205,7 +205,16 @@ export async function getDeviceFcmToken(options = {}) {
  * @param {function} [params.customFetch] Optional fetch override for testing
  * @returns {Promise<{ success: boolean, status: number, data?: object, error?: string }>}
  */
-export async function registerTokenWithBackend({ token, accessToken, deviceInfo = {}, customFetch = null }) {
+export async function registerTokenWithBackend({
+  token,
+  accessToken,
+  deviceInfo = {},
+  deviceName = null,
+  browser = null,
+  os = null,
+  reauthorize = false,
+  customFetch = null,
+}) {
   if (!token || typeof token !== 'string') {
     return { success: false, status: 400, error: 'Token is required' };
   }
@@ -215,12 +224,22 @@ export async function registerTokenWithBackend({ token, accessToken, deviceInfo 
 
   const fetchFn = customFetch || (typeof window !== 'undefined' ? window.fetch.bind(window) : fetch);
 
+  const navPlatform = typeof navigator !== 'undefined' ? navigator.platform : null;
+  const navUserAgent = typeof navigator !== 'undefined' ? navigator.userAgent : null;
+  const resolvedDeviceName = deviceName || deviceInfo.device_name || deviceInfo.deviceName || navPlatform || null;
+  const resolvedBrowser = browser || deviceInfo.browser || (navUserAgent ? navUserAgent.slice(0, 100) : null);
+  const resolvedOs = os || deviceInfo.os || deviceInfo.platform || navPlatform || null;
+
   const payload = {
     token,
     device_type: 'web',
+    ...(resolvedDeviceName ? { device_name: resolvedDeviceName } : {}),
+    ...(resolvedBrowser ? { browser: resolvedBrowser } : {}),
+    ...(resolvedOs ? { os: resolvedOs } : {}),
+    ...(reauthorize === true ? { reauthorize: true } : {}),
     device_info: {
-      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
-      platform: typeof navigator !== 'undefined' ? navigator.platform : 'Unknown',
+      userAgent: navUserAgent || 'Unknown',
+      platform: navPlatform || 'Unknown',
       language: typeof navigator !== 'undefined' ? navigator.language : 'en',
       ...deviceInfo,
     },
@@ -245,6 +264,8 @@ export async function registerTokenWithBackend({ token, accessToken, deviceInfo 
     return {
       success: false,
       status: res.status,
+      code: data?.code,
+      data: data?.data,
       error: data?.error || `Registration failed with status ${res.status}`,
     };
   } catch (err) {

@@ -64,7 +64,7 @@ export function validateRegistrationPayload(payload) {
     return { valid: false, error: 'Request body must be a JSON object.' };
   }
 
-  const { token, device_type, device_name, browser, os } = payload;
+  const { token, device_type, device_name, browser, os, reauthorize } = payload;
 
   if (!token || typeof token !== 'string') {
     return { valid: false, error: 'Device token is required and must be a string.' };
@@ -97,6 +97,7 @@ export function validateRegistrationPayload(payload) {
       deviceName: sanitizeString(device_name),
       browser: sanitizeString(browser, 100),
       os: sanitizeString(os, 100),
+      reauthorize: reauthorize === true,
     },
   };
 }
@@ -118,7 +119,7 @@ export async function registerDeviceToken(authenticatedUser, payload, customSupa
     return { success: false, error: validation.error, status: 400 };
   }
 
-  const { token, deviceType, deviceName, browser, os } = validation.sanitized;
+  const { token, deviceType, deviceName, browser, os, reauthorize } = validation.sanitized;
   const tokenHash = hashToken(token);
   const now = new Date().toISOString();
 
@@ -128,7 +129,7 @@ export async function registerDeviceToken(authenticatedUser, payload, customSupa
     // 1. Check for existing token record by unique token_hash
     const { data: existing, error: fetchErr } = await supabase
       .from('notification_tokens')
-      .select('id, user_id, is_active, device_name, browser, os')
+      .select('id, user_id, is_active, revoked_at, device_name, browser, os')
       .eq('token_hash', tokenHash)
       .maybeSingle();
 
@@ -150,6 +151,7 @@ export async function registerDeviceToken(authenticatedUser, payload, customSupa
           browser,
           os,
           is_active: true,
+          revoked_at: null,
           last_seen_at: now,
           created_at: now,
           updated_at: now,
@@ -176,8 +178,29 @@ export async function registerDeviceToken(authenticatedUser, payload, customSupa
       };
     }
 
-    // 3. Existing token: idempotent update or ownership transfer
+    // 3. Existing token: idempotent update, reauthorization or ownership transfer
     const isOwnershipTransfer = existing.user_id !== authenticatedUser.id;
+    const isRevoked = !existing.is_active || existing.revoked_at !== null;
+
+    // Security Guard: A revoked token MUST NOT be silently reactivated by a normal heartbeat.
+    // Explicit reauthorization (reauthorize: true) is required.
+    if (isRevoked && !isOwnershipTransfer && !reauthorize) {
+      return {
+        success: false,
+        status: 409,
+        error: 'Device token is revoked. Explicit reauthorization required.',
+        code: 'TOKEN_REVOKED',
+        data: {
+          token_id: existing.id,
+          token_hash: tokenHash,
+          device_type: existing.device_type || deviceType,
+          is_active: false,
+          revoked_at: existing.revoked_at,
+          requires_reauthorization: true,
+        },
+      };
+    }
+
     const updatePayload = {
       user_id: authenticatedUser.id,
       token, // Ensures sync trigger fires if token updated
@@ -186,20 +209,51 @@ export async function registerDeviceToken(authenticatedUser, payload, customSupa
       browser: browser || existing.browser,
       os: os || existing.os,
       is_active: true,
+      revoked_at: null, // Clear revocation timestamp upon valid activation or reauthorization
       last_seen_at: now,
       updated_at: now,
     };
 
-    const { data: updated, error: updateErr } = await supabase
+    let updateQuery = supabase
       .from('notification_tokens')
       .update(updatePayload)
-      .eq('id', existing.id)
+      .eq('id', existing.id);
+
+    // Optimistic Concurrency Guard:
+    // If the token was believed to be active, ensure it was not concurrently revoked.
+    if (!isRevoked) {
+      updateQuery = updateQuery.eq('is_active', true);
+    }
+
+    const { data: updated, error: updateErr } = await updateQuery
       .select('id, token_hash, device_type, is_active, updated_at')
       .single();
 
     if (updateErr) {
+      // Concurrency race: token was revoked concurrently between SELECT and UPDATE
+      if (!isRevoked && (updateErr.code === 'PGRST116' || updateErr.message?.includes('0 rows'))) {
+        return {
+          success: false,
+          status: 409,
+          error: 'Device token was revoked concurrently. Explicit reauthorization required.',
+          code: 'TOKEN_REVOKED_CONCURRENT',
+          data: {
+            token_id: existing.id,
+            token_hash: tokenHash,
+            is_active: false,
+            requires_reauthorization: true,
+          },
+        };
+      }
       console.error('[DeviceTokenService] Token update error for id:', existing.id, updateErr.message);
       return { success: false, error: 'Failed to update device token.', status: 500 };
+    }
+
+    let action = 'refreshed';
+    if (isOwnershipTransfer) {
+      action = 'transferred';
+    } else if (isRevoked && reauthorize) {
+      action = 'reauthorized';
     }
 
     return {
@@ -210,7 +264,7 @@ export async function registerDeviceToken(authenticatedUser, payload, customSupa
         token_hash: updated.token_hash,
         device_type: updated.device_type,
         is_active: updated.is_active,
-        action: isOwnershipTransfer ? 'transferred' : 'refreshed',
+        action,
         registered_at: updated.updated_at,
       },
     };
@@ -244,7 +298,7 @@ export async function revokeDeviceToken(authenticatedUser, payload, customSupaba
 
   try {
     const supabase = getSupabaseServerClient(customSupabase);
-    let query = supabase.from('notification_tokens').select('id, user_id, is_active, token_hash');
+    let query = supabase.from('notification_tokens').select('id, user_id, is_active, revoked_at, token_hash');
 
     if (token_id) {
       query = query.eq('id', token_id);
@@ -283,8 +337,8 @@ export async function revokeDeviceToken(authenticatedUser, payload, customSupaba
       };
     }
 
-    // If already inactive, return idempotent success
-    if (!record.is_active) {
+    // If already inactive and revoked_at is recorded, return idempotent success
+    if (!record.is_active && record.revoked_at !== null) {
       return {
         success: true,
         status: 200,
@@ -293,16 +347,18 @@ export async function revokeDeviceToken(authenticatedUser, payload, customSupaba
           token_hash: record.token_hash,
           is_active: false,
           action: 'already_inactive',
+          revoked_at: record.revoked_at,
         },
       };
     }
 
-    // Revoke token by setting is_active = false
+    // Revoke token by setting is_active = false and recording timestamp
     const now = new Date().toISOString();
     const { error: updateErr } = await supabase
       .from('notification_tokens')
       .update({
         is_active: false,
+        revoked_at: now,
         updated_at: now,
       })
       .eq('id', record.id);

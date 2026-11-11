@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Bell, User, Menu, X, Clock, Download, LogOut, ShieldCheck, Check, ChevronDown } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
+import { revokePushTokenBeforeSignOut } from '../hooks/usePushNotifications';
 import SearchSuggestions from './SearchSuggestions';
 import { searchTMDB } from '../hooks/useTMDB';
 import { motion } from 'framer-motion';
@@ -27,8 +28,9 @@ const LiveTime = () => {
   );
 };
 
-const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onProfileClick, onAdminClick, onHistoryClick, onNotificationClick }) => {
+const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onProfileClick, onAdminClick, onHistoryClick, onNotificationClick, unreadNotificationCount }) => {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const displayedUnreadCount = typeof unreadNotificationCount === 'number' ? unreadNotificationCount : unreadNotifications;
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -71,11 +73,14 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => {
-      const checkNotifications = async () => {
+  const checkNotifications = useCallback(async () => {
+    if (typeof unreadNotificationCount === 'number') return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        setUnreadNotifications(0);
+        return;
+      }
       const res = await fetch('/api/notifications/user', {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
@@ -84,9 +89,10 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
         setUnreadNotifications(json.unread_count || 0);
       }
     } catch {}
-  };
+  }, [unreadNotificationCount]);
 
-  const checkReports = async () => {
+  useEffect(() => {
+    const checkReports = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return; // only fetch if admin is logged in
@@ -105,7 +111,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
     };
     checkReports();
     checkNotifications();
-  }, []);
+  }, [checkNotifications]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -157,8 +163,10 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
       setCurrentUser(session?.user ?? null);
       if (session?.user?.id) {
         verifyAdmin(session.user.id);
+        checkNotifications();
       } else {
         setIsAdminUser(false);
+        setUnreadNotifications(0);
       }
     });
 
@@ -166,7 +174,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
       isMounted = false;
       subscription?.unsubscribe();
     };
-  }, []);
+  }, [checkNotifications]);
 
   // Close profile dropdown on outside click
   useEffect(() => {
@@ -183,9 +191,11 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
   const handleSignOut = async () => {
     setIsProfileMenuOpen(false);
     try {
+      await revokePushTokenBeforeSignOut();
       await supabase.auth.signOut();
       setCurrentUser(null);
       setIsAdminUser(false);
+      setUnreadNotifications(0);
     } catch (err) {
       console.warn('Sign out error:', err?.message);
     }
@@ -306,14 +316,21 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
             <Download className="w-5 h-5 md:w-6 md:h-6" />
           </button>
 
-          <button className="text-white hidden sm:block relative">
+          <button
+            type="button"
+            onClick={() => onNotificationClick && onNotificationClick()}
+            aria-label="Open notifications"
+            title="Notifications"
+            data-testid="navbar-notification-bell"
+            className="text-white hover:text-[#E50914] transition relative cursor-pointer"
+          >
             <Bell className="w-5 h-5 md:w-6 md:h-6" />
-            {pendingReports > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 
-                               bg-[#E50914] rounded-full text-[9px] 
-                               font-bold flex items-center justify-center 
-                               text-white">
-                {pendingReports > 9 ? '9+' : pendingReports}
+            {displayedUnreadCount > 0 && (
+              <span
+                data-testid="unread-notification-badge"
+                className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-[#E50914] rounded-full text-[9px] font-bold flex items-center justify-center text-white"
+              >
+                {displayedUnreadCount > 9 ? '9+' : displayedUnreadCount}
               </span>
             )}
           </button>
@@ -410,10 +427,17 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
                         setIsProfileMenuOpen(false);
                         if (onAdminClick) onAdminClick();
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg bg-red-950/40 hover:bg-red-900/50 text-red-200 hover:text-white transition cursor-pointer text-left"
+                      className="w-full flex items-center justify-between gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg bg-red-950/40 hover:bg-red-900/50 text-red-200 hover:text-white transition cursor-pointer text-left"
                     >
-                      <ShieldCheck className="w-4 h-4 text-red-400" />
-                      <span>Admin Control Panel</span>
+                      <span className="flex items-center gap-2.5">
+                        <ShieldCheck className="w-4 h-4 text-red-400" />
+                        <span>Admin Control Panel</span>
+                      </span>
+                      {pendingReports > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E50914] text-white">
+                          {pendingReports > 9 ? '9+' : pendingReports}
+                        </span>
+                      )}
                     </button>
                   ) : (
                     <button

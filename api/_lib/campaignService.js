@@ -26,7 +26,7 @@ export const VALID_CATEGORIES = [
   'promotional',
 ];
 
-export const VALID_TARGET_TYPES = ['all', 'movie', 'actor', 'genre', 'users'];
+export const VALID_TARGET_TYPES = ['all', 'movie', 'series', 'season', 'actor', 'genre', 'users'];
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -198,6 +198,27 @@ export function validateCampaignPayload(payload) {
       return { valid: false, error: 'movie_id is required for target type "movie".' };
     }
     sanitizedTarget.movie_id = movieId;
+  } else if (targetType === 'series') {
+    const seriesIdRaw = rawTarget.series_id ?? rawTarget.movie_id ?? rawTarget.tmdb_id;
+    const seriesId = seriesIdRaw !== undefined && seriesIdRaw !== null ? String(seriesIdRaw).trim() : '';
+    if (!seriesId) {
+      return { valid: false, error: 'series_id or movie_id is required for target type "series".' };
+    }
+    sanitizedTarget.series_id = seriesId;
+    sanitizedTarget.movie_id = seriesId;
+  } else if (targetType === 'season') {
+    const seriesIdRaw = rawTarget.series_id ?? rawTarget.movie_id ?? rawTarget.tmdb_id;
+    const seriesId = seriesIdRaw !== undefined && seriesIdRaw !== null ? String(seriesIdRaw).trim() : '';
+    if (!seriesId) {
+      return { valid: false, error: 'series_id or movie_id is required for target type "season".' };
+    }
+    const seasonNum = parseInt(rawTarget.season_number, 10);
+    if (!Number.isInteger(seasonNum) || seasonNum <= 0) {
+      return { valid: false, error: 'Positive integer season_number is required for target type "season".' };
+    }
+    sanitizedTarget.series_id = seriesId;
+    sanitizedTarget.movie_id = seriesId;
+    sanitizedTarget.season_number = seasonNum;
   } else if (targetType === 'actor') {
     const actorId = rawTarget.actor_id !== undefined && rawTarget.actor_id !== null ? String(rawTarget.actor_id).trim() : '';
     if (!actorId) {

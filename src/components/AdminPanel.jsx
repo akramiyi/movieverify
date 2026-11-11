@@ -5,6 +5,7 @@ import { searchTMDB, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import CampaignManager from './CampaignManager';
+import { buildContentUpdateIdempotencyKey } from '../utils/notificationLinks';
 
 const AdminLiveClock = () => {
   const [now, setNow] = useState(new Date());
@@ -357,6 +358,14 @@ const AdminPanel = ({ onClose }) => {
 
     setActionStatus({ type: '', message: '' });
 
+    const cleanId = String(selectedMovie.id);
+    const mediaType = selectedMovie.mediaType || selectedMovie.media_type || (seasonsData.length > 0 ? 'tv' : 'movie');
+    const isTv = mediaType === 'tv' || mediaType === 'series' || seasonsData.length > 0;
+    const previousRecord = activeDbList.find(
+      (item) => item.id === `${cleanId}-${mediaType}` || String(item.tmdb_id) === cleanId
+    );
+    const prevSeasons = Array.isArray(previousRecord?.seasons) ? previousRecord.seasons : [];
+
     try {
       const { error } = await supabase
         .from('download_links')
@@ -375,7 +384,116 @@ const AdminPanel = ({ onClose }) => {
 
       if (error) throw error;
 
-      setActionStatus({ type: 'success', message: `Links for "${selectedMovie.title}" successfully updated!` });
+      const successMessage = `Links for "${selectedMovie.title}" successfully updated!`;
+      setActionStatus({ type: 'success', message: successMessage });
+
+      // Non-blocking release automation: never fail or roll back successful catalog saves
+      const hasAnyLinks = Boolean(
+        link480.trim() || link720.trim() || link1080.trim() ||
+        seasonsData.some((s) => Array.isArray(s.parts) && s.parts.length > 0)
+      );
+
+      if (hasAnyLinks) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            let eventPayload = null;
+
+            if (isTv) {
+              const prevSeasonNums = new Set(prevSeasons.map((s) => Number(s.season)));
+              const addedSeasons = seasonsData
+                .map((s) => Number(s.season))
+                .filter((num) => Number.isFinite(num) && num > 0 && !prevSeasonNums.has(num));
+
+              if (!previousRecord) {
+                eventPayload = {
+                  event_type: 'series_release',
+                  tmdb_id: cleanId,
+                  media_type: 'tv',
+                  title: selectedMovie.title,
+                  url: `/?type=tv&id=${cleanId}`,
+                };
+              } else if (addedSeasons.length > 0) {
+                const highestSeason = Math.max(...addedSeasons);
+                eventPayload = {
+                  event_type: 'season_release',
+                  tmdb_id: cleanId,
+                  media_type: 'tv',
+                  season_number: highestSeason,
+                  title: selectedMovie.title,
+                  url: `/?type=tv&id=${cleanId}`,
+                };
+              } else {
+                eventPayload = {
+                  event_type: 'content_update',
+                  tmdb_id: cleanId,
+                  media_type: 'tv',
+                  title: selectedMovie.title,
+                  url: `/?type=tv&id=${cleanId}`,
+                  idempotency_key: buildContentUpdateIdempotencyKey({
+                    tmdbId: cleanId,
+                    mediaType: 'tv',
+                    link480,
+                    link720,
+                    link1080,
+                    description: descriptionVal,
+                    seasons: seasonsData,
+                  }),
+                };
+              }
+            } else {
+              const qualityLabel = link1080.trim() ? '1080p' : link720.trim() ? '720p' : '480p';
+              eventPayload = !previousRecord
+                ? {
+                    event_type: 'movie_release',
+                    tmdb_id: cleanId,
+                    media_type: 'movie',
+                    title: selectedMovie.title,
+                    release_quality: qualityLabel,
+                    url: `/?type=movie&id=${cleanId}`,
+                  }
+                : {
+                    event_type: 'content_update',
+                    tmdb_id: cleanId,
+                    media_type: 'movie',
+                    title: selectedMovie.title,
+                    release_quality: qualityLabel,
+                    url: `/?type=movie&id=${cleanId}`,
+                    idempotency_key: buildContentUpdateIdempotencyKey({
+                      tmdbId: cleanId,
+                      mediaType: 'movie',
+                      link480,
+                      link720,
+                      link1080,
+                      description: descriptionVal,
+                    }),
+                  };
+            }
+
+            if (eventPayload) {
+              const notifyRes = await fetch('/api/notifications/events', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify(eventPayload),
+              });
+
+              if (!notifyRes.ok) {
+                const notifyErr = await notifyRes.json().catch(() => ({}));
+                setActionStatus({
+                  type: 'success',
+                  message: `${successMessage} (Notification queueing skipped: ${notifyErr.error || notifyRes.status})`,
+                });
+              }
+            }
+          }
+        } catch (notifyErr) {
+          console.warn('[AdminPanel] Non-blocking notification trigger failed:', notifyErr.message);
+        }
+      }
+
       setSelectedMovie(null);
       setLink480('');
       setLink720('');

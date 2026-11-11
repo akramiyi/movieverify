@@ -73,6 +73,59 @@ function Apply-Phase2-Migrations($cName, $dbName) {
     Write-Host "All 8 Phase 2 release migrations applied to '$dbName'." -ForegroundColor Green
 }
 
+function Apply-Full-Notification-Migrations($cName, $dbName, [bool]$includePhase54 = $true) {
+    Apply-Phase2-Migrations $cName $dbName
+    $extra = @(
+        "/test_db/supabase_migrations_superseded/20261110150000_notification_dispatch_hardening_and_concurrency.sql",
+        "/test_db/supabase_migrations_superseded/20261111000000_endpoint_revocation_security_remediation.sql",
+        "/test_db/supabase_migrations/20261111120000_smart_notification_automation_engine.sql"
+    )
+    if ($includePhase54) {
+        $extra += "/test_db/supabase_migrations/20261111150000_smart_notification_critical_remediation.sql"
+    }
+    foreach ($m in $extra) {
+        Log-Step "  Post-Phase2 Migration on '$dbName': $m"
+        docker exec $cName psql -U postgres -d $dbName -v ON_ERROR_STOP=1 -f $m
+        if ($LASTEXITCODE -ne 0) {
+            throw "FATAL: Migration failed on '$dbName': $m (exit code $LASTEXITCODE)"
+        }
+        Write-Host "  [OK] Applied $(Split-Path $m -Leaf)" -ForegroundColor Green
+    }
+}
+
+function Apply-Combined-Production-Sequence($cName, $dbName) {
+    Apply-Phase2-Migrations $cName $dbName
+    # Phase 5.9.7 Intended Production Sequence (strictly excludes B5D 20261110150000 and B5E 20261111000000)
+    $combined = @(
+        "/test_db/supabase_migrations/20261111120000_smart_notification_automation_engine.sql",
+        "/test_db/supabase_migrations/20261111150000_smart_notification_critical_remediation.sql",
+        "/test_db/supabase_migrations/20261111180000_unified_notification_dispatch_and_revocation.sql"
+    )
+    foreach ($m in $combined) {
+        Log-Step "  Production Sequence Migration on '$dbName': $m"
+        docker exec $cName psql -U postgres -d $dbName -v ON_ERROR_STOP=1 -f $m
+        if ($LASTEXITCODE -ne 0) {
+            throw "FATAL: Combined production sequence migration failed on '$dbName': $m (exit code $LASTEXITCODE)"
+        }
+        Write-Host "  [OK] Applied $(Split-Path $m -Leaf)" -ForegroundColor Green
+    }
+}
+
+function Run-Parallel-Sql-Pair($cName, $dbName, $s1File, $s2File, $label) {
+    Log-Step "Launching parallel psql pair for $label ($s1File vs $s2File)..."
+    $j1 = Start-Job -ScriptBlock {
+        param($c, $db, $f)
+        $out = docker exec $c psql -U postgres -d $db -v ON_ERROR_STOP=1 -f $f 2>&1
+        [PSCustomObject]@{ Session = $f; ExitCode = $LASTEXITCODE; Output = ($out | Out-String) }
+    } -ArgumentList $cName, $dbName, $s1File
+    $j2 = Start-Job -ScriptBlock {
+        param($c, $db, $f)
+        $out = docker exec $c psql -U postgres -d $db -v ON_ERROR_STOP=1 -f $f 2>&1
+        [PSCustomObject]@{ Session = $f; ExitCode = $LASTEXITCODE; Output = ($out | Out-String) }
+    } -ArgumentList $cName, $dbName, $s2File
+    Wait-And-Validate-Jobs $j1 $j2 $label
+}
+
 function Wait-And-Validate-Jobs($job1, $job2, [string]$suiteName) {
     Log-Step "Awaiting background jobs for $suiteName (30s timeout)..."
     $finished = Wait-Job $job1, $job2 -Timeout 30
@@ -190,6 +243,8 @@ try {
 
     # Verify network isolation: no default gateway
     Log-Step "Verifying network isolation (--network none)..."
+    $netMode = docker inspect -f "NetworkMode={{.HostConfig.NetworkMode}} Networks={{json .NetworkSettings.Networks}}" $ContainerName
+    Write-Host "  $netMode" -ForegroundColor Gray
     $netInfo = docker exec $ContainerName ip route 2>&1
     if ($netInfo -match "default") {
         throw "SAFETY VIOLATION: Container has a default network gateway! --network none was not enforced."
@@ -210,7 +265,11 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "FATAL: docker cp of supabase/migrations failed."
     }
-    Log-Step "Copied test artifacts and migrations to ${ContainerName}:/test_db successfully."
+    docker cp supabase/migrations_superseded ${ContainerName}:/test_db/supabase_migrations_superseded
+    if ($LASTEXITCODE -ne 0) {
+        throw "FATAL: docker cp of supabase/migrations_superseded failed."
+    }
+    Log-Step "Copied test artifacts and migrations (active + superseded archive) to ${ContainerName}:/test_db successfully."
 
     # ----------------------------------------------------------------------------
     # STEP 3: Legacy Phase 1.5 Historical Upgrade Verification (mv_upgrade_test)
@@ -320,6 +379,166 @@ try {
     Log-Step "Executing rollback_notifications.sql on mv_rollback_test..."
     Exec-Psql $ContainerName "mv_rollback_test" "/test_db/rollback_notifications.sql"
     Write-Host "Phase 2 rollback verified: all notification objects removed without CASCADE." -ForegroundColor Green
+
+    # ----------------------------------------------------------------------------
+    # STEP 8: Phase 5.7 Stage 2 & 3 — Full 12-Migration Sequence + Schema/ACL Suite
+    # ----------------------------------------------------------------------------
+    Log-Header "STEP 8: Phase 5.7 Full 12-Migration Stack + Schema/ACL/Trigger Suite (mv_phase57_main)"
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase57_main;"
+    Exec-Psql $ContainerName "mv_phase57_main" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Full-Notification-Migrations $ContainerName "mv_phase57_main" $true
+    Log-Step "Executing Stage 3 pgTAP verification on 'mv_phase57_main'..."
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $p57SchemaOut = docker exec $ContainerName psql -U postgres -d mv_phase57_main -v ON_ERROR_STOP=1 -f /test_db/phase57_schema_acl_verify.sql 2>&1
+        $p57Exit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    $p57SchemaText = ($p57SchemaOut | Out-String)
+    Write-Host $p57SchemaText
+    if ($p57Exit -ne 0 -or $p57SchemaText -match "(?m)^\s*not ok ") {
+        throw "FATAL: Phase 5.7 Stage 3 pgTAP suite reported one or more failed assertions!"
+    }
+    Write-Host "Phase 5.7 Stage 2 & 3 Schema/ACL/Trigger pgTAP suite (36/36) passed." -ForegroundColor Green
+
+    # ----------------------------------------------------------------------------
+    # STEP 9: Phase 5.7 Stage 4 — Genuine Parallel Concurrency Verification
+    # ----------------------------------------------------------------------------
+    Log-Header "STEP 9: Phase 5.7 Genuine Parallel PG17 Concurrency Suite (mv_phase57_conc)"
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase57_conc;"
+    Exec-Psql $ContainerName "mv_phase57_conc" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Full-Notification-Migrations $ContainerName "mv_phase57_conc" $true
+    Exec-Psql $ContainerName "mv_phase57_conc" "/test_db/phase57_concurrency_harness.sql"
+
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase57_conc" "/test_db/phase57_s1_cap.sql" "/test_db/phase57_s2_cap.sql" "Lock 1001 max_daily_push"
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase57_conc" "/test_db/phase57_s1_idemp.sql" "/test_db/phase57_s2_idemp.sql" "Lock 1002 Campaign Idempotency"
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase57_conc" "/test_db/phase57_s1_lockorder.sql" "/test_db/phase57_s2_lockorder.sql" "H-4 Telemetry vs Cancel Lock Order"
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase57_conc" "/test_db/phase57_s1_b5e.sql" "/test_db/phase57_s2_b5e.sql" "B5E Reservation Concurrency"
+    Exec-Psql $ContainerName "mv_phase57_conc" "/test_db/phase57_concurrency_verify.sql"
+    Write-Host "Phase 5.7 Stage 4 Concurrency & Fencing Verification passed." -ForegroundColor Green
+
+    # ----------------------------------------------------------------------------
+    # STEP 10: Phase 5.7 Stage 5 — Telemetry Preservation (Cases 1, 2, 3A, 3B, 3C)
+    # ----------------------------------------------------------------------------
+    Log-Header "STEP 10: Phase 5.7 Telemetry Preservation Verification (5 Isolated Cases)"
+    # Case 1: No duplicate deliveries
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase57_t1;"
+    Exec-Psql $ContainerName "mv_phase57_t1" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Full-Notification-Migrations $ContainerName "mv_phase57_t1" $false
+    Exec-Psql $ContainerName "mv_phase57_t1" "/test_db/supabase_migrations/20261111150000_smart_notification_critical_remediation.sql"
+    Write-Host "[PASS] Stage 5 Case 1 (no duplicates) passed." -ForegroundColor Green
+
+    # Case 2: Duplicate deliveries without telemetry
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase57_t2;"
+    Exec-Psql $ContainerName "mv_phase57_t2" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Full-Notification-Migrations $ContainerName "mv_phase57_t2" $false
+    Exec-Psql $ContainerName "mv_phase57_t2" "/test_db/phase57_telemetry_c2_seed.sql"
+    Exec-Psql $ContainerName "mv_phase57_t2" "/test_db/supabase_migrations/20261111150000_smart_notification_critical_remediation.sql"
+    Exec-Psql $ContainerName "mv_phase57_t2" "/test_db/phase57_telemetry_c2_verify.sql"
+
+    # Case 3A: Duplicate deliveries with clean non-colliding telemetry
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase57_t3a;"
+    Exec-Psql $ContainerName "mv_phase57_t3a" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Full-Notification-Migrations $ContainerName "mv_phase57_t3a" $false
+    Exec-Psql $ContainerName "mv_phase57_t3a" "/test_db/phase57_telemetry_c3a_seed.sql"
+    Exec-Psql $ContainerName "mv_phase57_t3a" "/test_db/supabase_migrations/20261111150000_smart_notification_critical_remediation.sql"
+    Exec-Psql $ContainerName "mv_phase57_t3a" "/test_db/phase57_telemetry_c3a_verify.sql"
+
+    function Assert-Migration-Fails-Closed($ContainerName, $Database, $ExpectedRegex, $CaseLabel) {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            $out = docker exec $ContainerName psql -U postgres -d $Database -v ON_ERROR_STOP=1 -f /test_db/supabase_migrations/20261111150000_smart_notification_critical_remediation.sql 2>&1
+            $exitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $prevEap
+        }
+        $outStr = ($out | Out-String)
+        if ($exitCode -eq 0 -or $outStr -notmatch $ExpectedRegex) {
+            throw "FATAL: $CaseLabel should have failed closed with regex '$ExpectedRegex'! Exit=$exitCode Output: $outStr"
+        }
+        Exec-Psql $ContainerName $Database "/test_db/phase57_telemetry_rollback_verify.sql"
+    }
+
+    # Case 3B: Duplicate deliveries with telemetry nonce collision (MUST fail-closed, 0 rows deleted)
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase57_t3b;"
+    Exec-Psql $ContainerName "mv_phase57_t3b" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Full-Notification-Migrations $ContainerName "mv_phase57_t3b" $false
+    Exec-Psql $ContainerName "mv_phase57_t3b" "/test_db/phase57_telemetry_c3b_seed.sql"
+    Log-Step "Expecting MV409 fail-closed abort on Case 3B (telemetry nonce collision)..."
+    Assert-Migration-Fails-Closed $ContainerName "mv_phase57_t3b" "Telemetry .* collision detected" "Case 3B collision"
+    Write-Host "[PASS] Stage 5 Case 3B (telemetry collision) failed closed cleanly with 0 rows lost." -ForegroundColor Green
+
+    # Case 3C: Duplicate deliveries with ambiguous recipient mismatch (MUST fail-closed, 0 rows deleted)
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase57_t3c;"
+    Exec-Psql $ContainerName "mv_phase57_t3c" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Full-Notification-Migrations $ContainerName "mv_phase57_t3c" $false
+    Exec-Psql $ContainerName "mv_phase57_t3c" "/test_db/phase57_telemetry_c3c_seed.sql"
+    Log-Step "Expecting MV409 fail-closed abort on Case 3C (ambiguous recipient attribution)..."
+    Assert-Migration-Fails-Closed $ContainerName "mv_phase57_t3c" "Ambiguous recipient attribution" "Case 3C recipient mismatch"
+    Write-Host "[PASS] Stage 5 Case 3C (recipient mismatch) failed closed cleanly with 0 rows lost." -ForegroundColor Green
+
+    # ----------------------------------------------------------------------------
+    # STEP 11: Phase 5.9.7 Exact Combined Production Sequence Verification
+    #          8 Baselines -> Phase 5.2 (120000) -> Phase 5.4 (150000) -> Unified (180000)
+    #          (Excludes B5D 20261110150000 and B5E 20261111000000)
+    # ----------------------------------------------------------------------------
+    Log-Header "STEP 11A: Phase 5.9.7 Combined Production Sequence & Data Preservation (mv_phase597_combined)"
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase597_combined;"
+    Exec-Psql $ContainerName "mv_phase597_combined" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Phase2-Migrations $ContainerName "mv_phase597_combined"
+    Exec-Psql $ContainerName "mv_phase597_combined" "/test_db/phase597_pre_reconcile_seed.sql"
+
+    Log-Step "Verifying read-only preflight SQL runs cleanly on disposable 8-baseline schema (mv_phase597_combined)..."
+    Exec-Psql-Sql $ContainerName "mv_phase597_combined" "CREATE SCHEMA IF NOT EXISTS supabase_migrations; CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (version text PRIMARY KEY, name text); INSERT INTO supabase_migrations.schema_migrations(version, name) VALUES ('20261108000001','baseline'),('20261108000002','baseline'),('20261108000003','baseline'),('20261108000004','baseline'),('20261108000005','baseline'),('20261108000006','baseline'),('20261108000007','baseline'),('20261108195246','baseline') ON CONFLICT DO NOTHING;"
+    Exec-Psql $ContainerName "mv_phase597_combined" "/test_db/phase595_production_preflight_readonly.sql"
+
+    Exec-Psql $ContainerName "mv_phase597_combined" "/test_db/supabase_migrations/20261111120000_smart_notification_automation_engine.sql"
+    Exec-Psql $ContainerName "mv_phase597_combined" "/test_db/supabase_migrations/20261111150000_smart_notification_critical_remediation.sql"
+    Exec-Psql $ContainerName "mv_phase597_combined" "/test_db/supabase_migrations/20261111180000_unified_notification_dispatch_and_revocation.sql"
+
+    Log-Step "Executing 50-assertion combined PG17 pgTAP suite on 'mv_phase597_combined'..."
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $p597Out = docker exec $ContainerName psql -U postgres -d mv_phase597_combined -v ON_ERROR_STOP=1 -f /test_db/phase597_combined_verify.sql 2>&1
+        $p597Exit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    $p597Text = ($p597Out | Out-String)
+    Write-Host $p597Text
+    if ($p597Exit -ne 0 -or $p597Text -match "(?m)^\s*not ok ") {
+        throw "FATAL: Phase 5.9.7 combined pgTAP suite reported one or more failed assertions!"
+    }
+
+    Log-Step "Verifying read-only preflight SQL runs cleanly on combined schema (mv_phase597_combined)..."
+    Exec-Psql-Sql $ContainerName "mv_phase597_combined" "CREATE SCHEMA IF NOT EXISTS supabase_migrations; CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (version text PRIMARY KEY, name text); INSERT INTO supabase_migrations.schema_migrations(version, name) VALUES ('20261108000001','baseline'),('20261108000002','baseline'),('20261108000003','baseline'),('20261108000004','baseline'),('20261108000005','baseline'),('20261108000006','baseline'),('20261108000007','baseline'),('20261108195246','baseline') ON CONFLICT DO NOTHING;"
+    Exec-Psql $ContainerName "mv_phase597_combined" "/test_db/phase595_production_preflight_readonly.sql"
+
+    Log-Header "STEP 11B: Phase 5.9.7 Combined Genuine Two-Session Concurrency Suite (mv_phase597_conc)"
+    Exec-Psql-Sql $ContainerName "postgres" "CREATE DATABASE mv_phase597_conc;"
+    Exec-Psql $ContainerName "mv_phase597_conc" "/test_db/00_disposable_auth_fixtures.sql"
+    Apply-Combined-Production-Sequence $ContainerName "mv_phase597_conc"
+    Exec-Psql $ContainerName "mv_phase597_conc" "/test_db/phase57_concurrency_harness.sql"
+    Exec-Psql $ContainerName "mv_phase597_conc" "/test_db/phase595_concurrency_harness.sql"
+
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase597_conc" "/test_db/phase57_s1_cap.sql" "/test_db/phase57_s2_cap.sql" "597 Combined Lock 1001 max_daily_push"
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase597_conc" "/test_db/phase57_s1_idemp.sql" "/test_db/phase57_s2_idemp.sql" "597 Combined Lock 1002 Campaign Idempotency"
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase597_conc" "/test_db/phase57_s1_lockorder.sql" "/test_db/phase57_s2_lockorder.sql" "597 Combined H-4 Telemetry vs Cancel Lock Order"
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase597_conc" "/test_db/phase57_s1_b5e.sql" "/test_db/phase57_s2_b5e.sql" "597 Combined B5E Reservation & Dispatch Fencing"
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase597_conc" "/test_db/phase595_s1_auth_revoke.sql" "/test_db/phase595_s2_auth_revoke.sql" "597 Combined Revocation vs Authorize FOR SHARE"
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase597_conc" "/test_db/phase595_s1_cancel_sweep.sql" "/test_db/phase595_s2_cancel_sweep.sql" "597 Combined Cancel vs Deterministic Sweep"
+    Exec-Psql $ContainerName "mv_phase597_conc" "/test_db/phase57_concurrency_verify.sql"
+    Exec-Psql $ContainerName "mv_phase597_conc" "/test_db/phase595_conc_verify.sql"
+
+    Exec-Psql $ContainerName "mv_phase597_conc" "/test_db/phase5910_concurrency_harness.sql"
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase597_conc" "/test_db/phase5910_s1_a1.sql" "/test_db/phase5910_s2_a1.sql" "5910-A1 Cancel Holds Rows While Sweep Skips & Mutates"
+    Run-Parallel-Sql-Pair $ContainerName "mv_phase597_conc" "/test_db/phase5910_s1_a2.sql" "/test_db/phase5910_s2_a2.sql" "5910-A2 Reverse Delivery Lock Holder vs Cancel Waiter"
+    Exec-Psql $ContainerName "mv_phase597_conc" "/test_db/phase5910_conc_verify.sql"
+    Write-Host "[PASS] Phase 5.9.10 Combined Production Sequence (50 pgTAP + 8 parallel concurrency races incl. A1 & A2) PASSED." -ForegroundColor Green
 
     $SuitePassed = $true
 

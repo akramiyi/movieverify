@@ -20,6 +20,45 @@ import {
 const STORAGE_REGISTERED_KEY = 'movieverify_push_registered';
 const STORAGE_LAST_TOKEN_KEY = 'movieverify_push_last_token';
 
+/**
+ * Revoke any registered FCM push token on the backend BEFORE Supabase signOut clears the session JWT.
+ * Bounded so network errors never block user sign-out.
+ */
+export async function revokePushTokenBeforeSignOut() {
+  let token = null;
+  try {
+    token = localStorage.getItem(STORAGE_LAST_TOKEN_KEY);
+  } catch {}
+
+  if (!token) {
+    try {
+      localStorage.removeItem(STORAGE_REGISTERED_KEY);
+    } catch {}
+    return { success: true, skipped: true };
+  }
+
+  let revoked = false;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      const res = await revokeTokenWithBackend({
+        token,
+        accessToken: session.access_token,
+      });
+      revoked = !!res?.success;
+    }
+  } catch (err) {
+    console.warn('[usePushNotifications] Pre-signout revocation failed:', err?.message);
+  }
+
+  try {
+    localStorage.removeItem(STORAGE_REGISTERED_KEY);
+    localStorage.removeItem(STORAGE_LAST_TOKEN_KEY);
+  } catch {}
+
+  return { success: true, revoked };
+}
+
 export function usePushNotifications(options = {}) {
   const { onForegroundMessage = null, vapidKey = null } = options;
 
@@ -30,6 +69,11 @@ export function usePushNotifications(options = {}) {
   const [error, setError] = useState(null);
 
   const tokenRef = useRef(null);
+  const foregroundCallbackRef = useRef(onForegroundMessage);
+
+  useEffect(() => {
+    foregroundCallbackRef.current = onForegroundMessage;
+  }, [onForegroundMessage]);
 
   // 1. Initial Browser Capabilities & Permission Check
   useEffect(() => {
@@ -47,6 +91,7 @@ export function usePushNotifications(options = {}) {
 
       if (!supported) {
         setPermission('unsupported');
+        setIsSubscribed(false);
         setIsLoading(false);
         return;
       }
@@ -60,10 +105,7 @@ export function usePushNotifications(options = {}) {
         tokenRef.current = lastToken;
       }
 
-      if (currentPerm === 'granted' && hasRegistered) {
-        setIsSubscribed(true);
-      }
-
+      setIsSubscribed(currentPerm === 'granted' && hasRegistered);
       setIsLoading(false);
     };
 
@@ -79,13 +121,14 @@ export function usePushNotifications(options = {}) {
     if (!isSupported || permission !== 'granted') return;
 
     let unsubscribe = () => {};
+    let isCancelled = false;
 
     const setupListener = async () => {
       const messaging = await getMessagingInstance();
-      if (messaging) {
+      if (messaging && !isCancelled) {
         unsubscribe = setupForegroundMessageHandler(messaging, (payload) => {
-          if (typeof onForegroundMessage === 'function') {
-            onForegroundMessage(payload);
+          if (typeof foregroundCallbackRef.current === 'function') {
+            foregroundCallbackRef.current(payload);
           }
         });
       }
@@ -94,9 +137,10 @@ export function usePushNotifications(options = {}) {
     setupListener();
 
     return () => {
+      isCancelled = true;
       unsubscribe();
     };
-  }, [isSupported, permission, onForegroundMessage]);
+  }, [isSupported, permission]);
 
   // 3. Explicit Subscribe Action (Triggered on User Click)
   const subscribe = useCallback(async () => {
@@ -132,6 +176,7 @@ export function usePushNotifications(options = {}) {
         const regRes = await registerTokenWithBackend({
           token,
           accessToken: session.access_token,
+          reauthorize: true,
         });
 
         if (!regRes.success) {
@@ -195,22 +240,30 @@ export function usePushNotifications(options = {}) {
       const storedToken = tokenRef.current || localStorage.getItem(STORAGE_LAST_TOKEN_KEY);
 
       if (event === 'SIGNED_IN' && session?.access_token && storedToken) {
-        // Register token under new authenticated user account
+        // Passive auth-sync registration MUST NEVER silently reauthorize a revoked endpoint
         try {
-          await registerTokenWithBackend({
+          const syncRes = await registerTokenWithBackend({
             token: storedToken,
             accessToken: session.access_token,
+            reauthorize: false,
           });
-          localStorage.setItem(STORAGE_REGISTERED_KEY, 'true');
-          setIsSubscribed(true);
+          if (syncRes?.success) {
+            localStorage.setItem(STORAGE_REGISTERED_KEY, 'true');
+            setIsSubscribed(true);
+          } else if (syncRes?.status === 409) {
+            localStorage.removeItem(STORAGE_REGISTERED_KEY);
+            setIsSubscribed(false);
+          }
         } catch (err) {
           console.warn('[usePushNotifications] Auth sync register failed:', err?.message);
         }
       } else if (event === 'SIGNED_OUT') {
-        // Token revocation is handled in handleSignOut, but state is reset here
+        // Token revocation is handled before sign-out via revokePushTokenBeforeSignOut
+        tokenRef.current = null;
         setIsSubscribed(false);
         try {
           localStorage.removeItem(STORAGE_REGISTERED_KEY);
+          localStorage.removeItem(STORAGE_LAST_TOKEN_KEY);
         } catch {}
       }
     });

@@ -29,23 +29,147 @@ export default async function handler(req, res, customSupabase = null) {
   // 2. Handle GET: Retrieve inbox & unread counter
   if (method === 'GET') {
     try {
-      const { data: notifications, error } = await supabase
-        .from('user_notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const now = new Date();
+      const visibleNotifications = [];
+      const PAGE_SIZE = 50;
+      const MAX_SCAN = 250;
+      let offset = 0;
 
-      if (error) {
-        console.error('[UserNotifications API] Error fetching notifications:', error.message);
-        return sendJson(res, 500, { error: 'Failed to retrieve notifications.' });
+      while (visibleNotifications.length < PAGE_SIZE && offset < MAX_SCAN) {
+        let query = supabase
+          .from('user_notifications')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false });
+
+        if (typeof query.range === 'function') {
+          query = query.range(offset, offset + PAGE_SIZE - 1);
+        } else if (typeof query.limit === 'function') {
+          query = query.limit(PAGE_SIZE);
+        }
+
+        const { data: batch, error } = await query;
+
+        if (error) {
+          console.error('[UserNotifications API] Error fetching notifications:', error.message);
+          return sendJson(res, 500, { error: 'Failed to retrieve notifications.' });
+        }
+
+        if (!batch || batch.length === 0) {
+          break;
+        }
+
+        // Filter out deleted and expired items
+        const nonExpired = batch.filter((item) => {
+          if (item.is_deleted === true) return false;
+          if (item.expires_at && new Date(item.expires_at) <= now) return false;
+          return true;
+        });
+
+        // Collect campaign IDs needing status resolution
+        const campaignIds = [
+          ...new Set(
+            nonExpired
+              .map((item) => item.campaign_id)
+              .filter((id) => Boolean(id))
+          ),
+        ];
+
+        let campaignStatusMap = new Map();
+        let deliveredCampaignIds = new Set();
+
+        if (campaignIds.length > 0) {
+          try {
+            const { data: campaigns, error: campaignError } = await supabase
+              .from('notification_campaigns')
+              .select('id, status')
+              .in('id', campaignIds);
+
+            if (campaignError) {
+              console.warn('[UserNotifications API] Failed to fetch campaign statuses:', campaignError.message);
+            } else if (Array.isArray(campaigns)) {
+              for (const c of campaigns) {
+                if (c && c.id) {
+                  campaignStatusMap.set(c.id, c.status);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('[UserNotifications API] Unexpected error fetching campaigns:', err.message);
+          }
+
+          // Find which campaigns are cancelled
+          const cancelledCampaignIds = campaignIds.filter(
+            (id) => campaignStatusMap.get(id) === 'cancelled'
+          );
+
+          if (cancelledCampaignIds.length > 0) {
+            try {
+              const { data: deliveries, error: deliveryError } = await supabase
+                .from('notification_deliveries')
+                .select('campaign_id, delivery_status')
+                .eq('recipient_id', user.id)
+                .in('campaign_id', cancelledCampaignIds)
+                .in('delivery_status', ['sent', 'delivered']);
+
+              if (deliveryError) {
+                console.warn('[UserNotifications API] Failed to fetch deliveries for cancelled campaigns:', deliveryError.message);
+              } else if (Array.isArray(deliveries)) {
+                for (const d of deliveries) {
+                  if (d && d.campaign_id) {
+                    deliveredCampaignIds.add(d.campaign_id);
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn('[UserNotifications API] Unexpected error fetching deliveries:', err.message);
+            }
+          }
+        }
+
+        // Determine visibility for each item in the batch
+        for (const item of nonExpired) {
+          if (!item.campaign_id) {
+            // Standalone notification -> visible
+            visibleNotifications.push(item);
+          } else {
+            // Must have a known status in notification_campaigns
+            const status = campaignStatusMap.get(item.campaign_id);
+            if (!status) {
+              // Unknown campaign or lookup failed -> fail safe (hide)
+              continue;
+            }
+
+            if (status !== 'cancelled') {
+              // Active / non-cancelled campaign -> visible
+              visibleNotifications.push(item);
+            } else {
+              // Cancelled campaign: only visible if user has sent/delivered delivery
+              if (deliveredCampaignIds.has(item.campaign_id)) {
+                visibleNotifications.push(item);
+              }
+            }
+          }
+
+          if (visibleNotifications.length >= PAGE_SIZE) {
+            break;
+          }
+        }
+
+        if (batch.length < PAGE_SIZE) {
+          break;
+        }
+
+        offset += PAGE_SIZE;
       }
 
-      const unreadCount = (notifications || []).filter((n) => !n.is_read).length;
+      const finalNotifications = visibleNotifications.slice(0, PAGE_SIZE);
+      const unreadCount = finalNotifications.filter((n) => !n.is_read).length;
 
       return sendJson(res, 200, {
         unread_count: unreadCount,
-        notifications: notifications || [],
+        notifications: finalNotifications,
       });
     } catch (err) {
       console.error('[UserNotifications API] Unexpected error on GET:', err.message);

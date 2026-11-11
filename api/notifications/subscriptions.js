@@ -14,12 +14,16 @@ import { getSupabaseServerClient } from '../_lib/supabaseServer.js';
 
 const TABLE_MAP = {
   movie: 'movie_notify_requests',
+  series: 'movie_notify_requests',
+  season: 'movie_notify_requests',
   actor: 'actor_notify_requests',
   genre: 'genre_notify_requests',
 };
 
 const ID_COLUMN_MAP = {
   movie: 'movie_id',
+  series: 'movie_id',
+  season: 'movie_id',
   actor: 'actor_id',
   genre: 'genre_id',
 };
@@ -65,7 +69,7 @@ export default async function handler(req, res, customSupabase = null) {
     const { type, target_id, target_name } = body;
 
     if (!type || !TABLE_MAP[type]) {
-      return sendJson(res, 400, { error: 'Invalid or missing type. Allowed: movie, actor, genre.' });
+      return sendJson(res, 400, { error: 'Invalid or missing type. Allowed: movie, series, season, actor, genre.' });
     }
     if (!target_id) {
       return sendJson(res, 400, { error: 'target_id is required.' });
@@ -75,21 +79,42 @@ export default async function handler(req, res, customSupabase = null) {
     const idCol = ID_COLUMN_MAP[type];
 
     try {
+      const cleanTargetId = String(target_id).split('-')[0].trim();
       const rowData = {
         user_id: user.id,
-        [idCol]: String(target_id),
+        [idCol]: cleanTargetId,
       };
-      if (type === 'movie') {
+      if (type === 'movie' || type === 'series' || type === 'season') {
         rowData.movie_title = target_name || null;
+        rowData.media_type =
+          type === 'movie'
+            ? (body.media_type === 'tv' || body.media_type === 'series' ? 'tv' : 'movie')
+            : 'tv';
+        if (type === 'season') {
+          const parsedSeason = parseInt(body.season_number, 10);
+          if (!Number.isInteger(parsedSeason) || parsedSeason <= 0) {
+            return sendJson(res, 400, { error: 'Positive integer season_number is required for season subscriptions.' });
+          }
+          rowData.target_season = parsedSeason;
+          rowData.season_scope = parsedSeason;
+        } else {
+          rowData.target_season = null;
+          rowData.season_scope = 0;
+        }
       } else if (type === 'actor') {
         rowData.actor_name = target_name || null;
       } else if (type === 'genre') {
         rowData.genre_name = target_name || null;
       }
 
+      const conflictTarget =
+        type === 'movie' || type === 'series' || type === 'season'
+          ? `user_id,${idCol},season_scope`
+          : `user_id,${idCol}`;
+
       const { data, error } = await supabase
         .from(table)
-        .upsert(rowData, { onConflict: `user_id,${idCol}` })
+        .upsert(rowData, { onConflict: conflictTarget })
         .select()
         .single();
 
@@ -113,9 +138,10 @@ export default async function handler(req, res, customSupabase = null) {
 
     if (!type && req.query) type = req.query.type;
     if (!target_id && req.query) target_id = req.query.target_id;
+    const rawSeasonNumber = body.season_number ?? req.query?.season_number;
 
     if (!type || !TABLE_MAP[type]) {
-      return sendJson(res, 400, { error: 'Invalid or missing type. Allowed: movie, actor, genre.' });
+      return sendJson(res, 400, { error: 'Invalid or missing type. Allowed: movie, series, season, actor, genre.' });
     }
     if (!target_id) {
       return sendJson(res, 400, { error: 'target_id is required.' });
@@ -123,13 +149,32 @@ export default async function handler(req, res, customSupabase = null) {
 
     const table = TABLE_MAP[type];
     const idCol = ID_COLUMN_MAP[type];
+    const cleanTargetId = type === 'movie' || type === 'series' || type === 'season'
+      ? String(target_id).split('-')[0].trim()
+      : String(target_id);
 
     try {
-      const { error } = await supabase
+      let query = supabase
         .from(table)
         .delete()
         .eq('user_id', user.id)
-        .eq(idCol, String(target_id));
+        .eq(idCol, cleanTargetId);
+
+      if (type === 'season') {
+        if (rawSeasonNumber !== undefined && rawSeasonNumber !== null && String(rawSeasonNumber).trim() !== '') {
+          const parsedSeason = parseInt(rawSeasonNumber, 10);
+          if (!Number.isInteger(parsedSeason) || parsedSeason <= 0) {
+            return sendJson(res, 400, { error: 'Positive integer season_number is required when deleting a season subscription.' });
+          }
+          query = query.eq('season_scope', parsedSeason);
+        } else {
+          query = query.gt('season_scope', 0);
+        }
+      } else if (type === 'movie' || type === 'series') {
+        query = query.eq('season_scope', 0);
+      }
+
+      const { error } = await query;
 
       if (error) {
         console.error(`[Subscriptions API] Error removing ${type} subscription:`, error.message);

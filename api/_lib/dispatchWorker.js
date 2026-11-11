@@ -15,8 +15,8 @@
  * exactly-once delivery due to the distributed provider boundary:
  * 1. FCM HTTP v1 API does not participate in distributed two-phase commit (2PC) transactions.
  * 2. If FCM accepts a push payload but database confirmation fails (transient DB failure, worker timeout,
- *    or crash), the delivery row in PostgreSQL remains in 'dispatching' status.
- * 3. Once the 15-second dispatch lease ('dispatch_expires_at') elapses, 'sweep_expired_delivery_reservations()'
+ *    or crash), the delivery row in PostgreSQL remains in 'leased' status with an active dispatch_attempt_id.
+ * 3. Once the lease ('lease_expires_at') elapses, 'sweep_expired_delivery_reservations()'
  *    resets the delivery back to 'pending' (provided attempt_count < max_attempts).
  * 4. A subsequent worker will re-reserve and re-dispatch the payload, resulting in a DUPLICATE notification.
  * 
@@ -216,19 +216,20 @@ export function buildFcmPayload(delivery, campaign = null) {
   const title = campaign?.title || 'MovieVerify Update';
   const body = campaign?.body || 'You have a new notification from MovieVerify.';
   const linkUrl = campaign?.url || '/';
+  const resolvedToken = delivery.provider_token || delivery.raw_token;
 
   const fcmMessage = {
-    token: delivery.raw_token,
+    token: resolvedToken,
     notification: {
       title,
       body,
     },
     data: {
-      delivery_id: delivery.delivery_id,
-      recipient_id: delivery.recipient_id,
-      campaign_id: delivery.campaign_id || '',
-      category: campaign?.category || 'system',
-      url: linkUrl,
+      delivery_id: delivery.delivery_id != null ? String(delivery.delivery_id) : '',
+      recipient_id: delivery.recipient_id != null ? String(delivery.recipient_id) : '',
+      campaign_id: delivery.campaign_id != null ? String(delivery.campaign_id) : '',
+      category: String(campaign?.category || 'system'),
+      url: String(linkUrl),
     },
     webpush: {
       fcmOptions: {
@@ -257,7 +258,66 @@ export async function processDelivery(delivery, context) {
   const { supabase, messaging, workerId, campaignCache } = context;
   const deliveryId = delivery.delivery_id;
 
-  // 1. Authorize Dispatch (Provider Boundary Fence)
+  // 1. Fetch Campaign details before authorizing dispatch so lookup latency/failure
+  // never holds an authorized dispatch_attempt_id across a network round-trip.
+  let campaign = null;
+  if (delivery.campaign_id) {
+    if (campaignCache.has(delivery.campaign_id)) {
+      campaign = campaignCache.get(delivery.campaign_id);
+    } else {
+      let campData = null;
+      let campLookupError = null;
+      try {
+        const res = await supabase
+          .from('notification_campaigns')
+          .select('id, title, body, category, url, image_url')
+          .eq('id', delivery.campaign_id)
+          .maybeSingle();
+        campData = res?.data ?? null;
+        campLookupError = res?.error ?? null;
+      } catch (err) {
+        campLookupError = err;
+      }
+
+      if (campLookupError) {
+        const errorMessage = campLookupError.message || 'Unknown campaign lookup error';
+        console.error(
+          `[DispatchWorker] Campaign lookup failed for delivery ${deliveryId} (campaign ${delivery.campaign_id}):`,
+          errorMessage
+        );
+        try {
+          const failureStatus = await recordDeliveryFailure(
+            supabase,
+            delivery,
+            workerId,
+            'CAMPAIGN_LOOKUP_FAILED',
+            errorMessage
+          );
+          return {
+            status: failureStatus,
+            deliveryId,
+            permanent: failureStatus === 'failed',
+            reason: 'CAMPAIGN_LOOKUP_FAILED',
+            error: errorMessage,
+          };
+        } catch (recordErr) {
+          return {
+            status: 'error',
+            deliveryId,
+            reason: 'CAMPAIGN_LOOKUP_FAILED',
+            error: recordErr.message,
+          };
+        }
+      }
+
+      if (campData) {
+        campaign = campData;
+        campaignCache.set(delivery.campaign_id, campData);
+      }
+    }
+  }
+
+  // 2. Authorize Dispatch (Provider Boundary Fence)
   const authResult = await authorizeDispatch(supabase, delivery, workerId);
 
   if (!authResult || !authResult.authorized) {
@@ -272,28 +332,34 @@ export async function processDelivery(delivery, context) {
   }
 
   const dispatchAttemptId = authResult.dispatch_attempt_id;
+  const authorizedToken = typeof authResult.provider_token === 'string' ? authResult.provider_token.trim() : '';
 
-  // 2. Fetch Campaign details if associated
-  let campaign = null;
-  if (delivery.campaign_id) {
-    if (campaignCache.has(delivery.campaign_id)) {
-      campaign = campaignCache.get(delivery.campaign_id);
-    } else {
-      const { data: campData } = await supabase
-        .from('notification_campaigns')
-        .select('id, title, body, category, url, image_url')
-        .eq('id', delivery.campaign_id)
-        .maybeSingle();
-
-      if (campData) {
-        campaign = campData;
-        campaignCache.set(delivery.campaign_id, campData);
-      }
+  if (!authorizedToken || (delivery.raw_token && authorizedToken !== delivery.raw_token)) {
+    const mismatchMsg = !authorizedToken
+      ? 'Authorized provider_token missing from dispatch authorization response.'
+      : 'Authorized provider_token mismatched reserved delivery raw_token.';
+    console.error(`[DispatchWorker] Token fence rejection for delivery ${deliveryId}: ${mismatchMsg}`);
+    try {
+      await recordDeliveryFailure(
+        supabase,
+        delivery,
+        workerId,
+        'PROVIDER_TOKEN_MISMATCH',
+        mismatchMsg,
+        null
+      );
+    } catch (recordErr) {
+      console.error(`[DispatchWorker] Failed recording token mismatch for delivery ${deliveryId}:`, recordErr.message);
     }
+    return {
+      status: 'rejected',
+      deliveryId,
+      reason: 'PROVIDER_TOKEN_MISMATCH',
+    };
   }
 
-  // 3. Dispatch via Firebase Admin SDK
-  const fcmMessage = buildFcmPayload(delivery, campaign);
+  // 3. Dispatch via Firebase Admin SDK using the freshly authorized provider token
+  const fcmMessage = buildFcmPayload({ ...delivery, raw_token: authorizedToken }, campaign);
   let fcmMessageId = null;
 
   try {
@@ -301,7 +367,7 @@ export async function processDelivery(delivery, context) {
   } catch (err) {
     const { code, message, permanent } = mapFcmError(err);
     console.error(
-      `[DispatchWorker] Dispatch failed for delivery ${deliveryId} (Token: ${maskToken(delivery.raw_token)}): [${code}]`
+      `[DispatchWorker] Dispatch failed for delivery ${deliveryId} (Token: ${maskToken(authorizedToken)}): [${code}]`
     );
 
     const newStatus = await recordDeliveryFailure(
@@ -335,9 +401,9 @@ export async function processDelivery(delivery, context) {
     }
   } catch (confirmErr) {
     // Distributed boundary failure: FCM accepted the message, but PostgreSQL confirmation failed after retries.
-    // Delivery remains in 'dispatching' with duplicate send risk if lease expires and sweeper resets it.
+    // Delivery remains in 'leased' status with an active dispatch_attempt_id and duplicate send risk if lease expires and sweeper resets it.
     console.error(
-      `[DispatchWorker] CRITICAL POST-SEND DB FAILURE: FCM accepted message (ID: ${fcmMessageId}) for delivery ${deliveryId}, but confirmation RPC failed: ${confirmErr.message}. Delivery remains in 'dispatching' status with duplicate send risk upon lease expiry.`
+      `[DispatchWorker] CRITICAL POST-SEND DB FAILURE: FCM accepted message (ID: ${fcmMessageId}) for delivery ${deliveryId}, but confirmation RPC failed: ${confirmErr.message}. Delivery remains in 'leased' status (active dispatch_attempt_id) with duplicate send risk upon lease expiry.`
     );
     return {
       status: 'unconfirmed_sent',
@@ -356,11 +422,30 @@ export async function processDelivery(delivery, context) {
 }
 
 /**
+ * Runtime dispatch kill switch.
+ * Fails closed unless NOTIFICATION_DISPATCH_ENABLED is explicitly set to 'true'.
+ * @returns {boolean}
+ */
+export function isNotificationDispatchEnabled() {
+  return process.env.NOTIFICATION_DISPATCH_ENABLED === 'true';
+}
+
+function createDispatchDisabledError() {
+  const err = new Error('Notification dispatch is disabled. Set NOTIFICATION_DISPATCH_ENABLED=true to enable execution.');
+  err.code = 'DISPATCH_DISABLED';
+  return err;
+}
+
+/**
  * Execute a complete dispatch cycle for reserved deliveries
  * @param {object} options Worker options
  * @returns {Promise<{ workerId: string, processed: number, sent: number, failed: number, rejected: number, results: Array }>}
  */
 export async function runDispatchCycle(options = {}) {
+  if (!isNotificationDispatchEnabled()) {
+    throw createDispatchDisabledError();
+  }
+
   const workerId = options.workerId || generateWorkerId();
   const batchSize = options.batchSize || 25;
   const leaseSeconds = options.leaseSeconds || 60;
