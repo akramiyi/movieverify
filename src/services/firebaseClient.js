@@ -226,9 +226,9 @@ export async function registerTokenWithBackend({
 
   const navPlatform = typeof navigator !== 'undefined' ? navigator.platform : null;
   const navUserAgent = typeof navigator !== 'undefined' ? navigator.userAgent : null;
-  const resolvedDeviceName = deviceName || deviceInfo.device_name || deviceInfo.deviceName || navPlatform || null;
-  const resolvedBrowser = browser || deviceInfo.browser || (navUserAgent ? navUserAgent.slice(0, 100) : null);
-  const resolvedOs = os || deviceInfo.os || deviceInfo.platform || navPlatform || null;
+  const resolvedDeviceName = (deviceName || deviceInfo.device_name || deviceInfo.deviceName || navPlatform || null)?.slice(0, 128) || null;
+  const resolvedBrowser = (browser || deviceInfo.browser || navUserAgent || null)?.slice(0, 64) || null;
+  const resolvedOs = (os || deviceInfo.os || deviceInfo.platform || navPlatform || null)?.slice(0, 64) || null;
 
   const payload = {
     token,

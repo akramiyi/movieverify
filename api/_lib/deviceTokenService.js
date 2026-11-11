@@ -13,7 +13,9 @@ import crypto from 'node:crypto';
 import { getSupabaseServerClient } from './supabaseServer.js';
 
 const ALLOWED_DEVICE_TYPES = ['web', 'android', 'ios'];
-const MAX_STRING_LENGTH = 255;
+const MAX_DEVICE_NAME_LENGTH = 128;
+const MAX_BROWSER_LENGTH = 64;
+const MAX_OS_LENGTH = 64;
 const MIN_TOKEN_LENGTH = 16;
 const MAX_TOKEN_LENGTH = 4096;
 
@@ -47,7 +49,7 @@ export function maskToken(token) {
  * @param {number} maxLen 
  * @returns {string|null}
  */
-function sanitizeString(val, maxLen = MAX_STRING_LENGTH) {
+function sanitizeString(val, maxLen = MAX_DEVICE_NAME_LENGTH) {
   if (!val || typeof val !== 'string') return null;
   const clean = val.trim();
   if (!clean) return null;
@@ -94,9 +96,9 @@ export function validateRegistrationPayload(payload) {
     sanitized: {
       token: cleanToken,
       deviceType: cleanDeviceType,
-      deviceName: sanitizeString(device_name),
-      browser: sanitizeString(browser, 100),
-      os: sanitizeString(os, 100),
+      deviceName: sanitizeString(device_name, MAX_DEVICE_NAME_LENGTH),
+      browser: sanitizeString(browser, MAX_BROWSER_LENGTH),
+      os: sanitizeString(os, MAX_OS_LENGTH),
       reauthorize: reauthorize === true,
     },
   };

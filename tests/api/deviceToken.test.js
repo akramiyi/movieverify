@@ -195,6 +195,20 @@ test('Device Token Security & Registration Suite', async (t) => {
     assert.equal(valid.valid, true);
     assert.equal(valid.sanitized.deviceType, 'web');
     assert.equal(valid.sanitized.deviceName, 'Chrome Windows');
+
+    // Enforces database column limits (device_name<=128, browser<=64, os<=64)
+    const longUa = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
+    const clamped = validateRegistrationPayload({
+      token: rawFcmToken,
+      device_type: 'web',
+      device_name: 'D'.repeat(200),
+      browser: longUa,
+      os: 'O'.repeat(120),
+    });
+    assert.equal(clamped.valid, true);
+    assert.equal(clamped.sanitized.deviceName.length, 128);
+    assert.equal(clamped.sanitized.browser.length, 64);
+    assert.equal(clamped.sanitized.os.length, 64);
   });
 
   await t.test('4. Registration: Creates new token for authenticated user (201 Created)', async () => {
