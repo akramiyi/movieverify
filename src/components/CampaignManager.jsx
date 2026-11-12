@@ -117,9 +117,30 @@ export default function CampaignManager() {
         throw new Error(resData.message || resData.error || 'Failed to create campaign');
       }
 
+      const pushCount = resData.push_deliveries ?? resData.total_deliveries ?? 0;
+      const inAppCount = resData.in_app_deliveries ?? 0;
+      const suppressedCount = resData.suppressed_daily_cap ?? 0;
+      const immediateSent = resData.immediate_dispatch?.sent;
+
+      let msg = `Campaign created! (ID: ${resData.campaign_id?.substring(0, 8)}...)`;
+      if (pushCount > 0) {
+        msg += ` • ${pushCount} push alert(s) queued${immediateSent !== undefined ? ` (${immediateSent} sent instantly)` : ''}.`;
+      } else {
+        msg += ` • 0 push alerts queued.`;
+      }
+      if (inAppCount > 0) {
+        msg += ` • ${inAppCount} inbox alert(s).`;
+      }
+      if (suppressedCount > 0) {
+        msg += ` ⚠️ ${suppressedCount} device(s) reached daily limit (5/day). Increase limit in Preferences to receive more.`;
+      }
+      if (pushCount === 0 && suppressedCount === 0 && resData.status !== 'draft') {
+        msg += ` ⚠️ No active push devices found for this target. Verify push is enabled in browser.`;
+      }
+
       setActionStatus({
         type: 'success',
-        message: `Campaign created successfully! (ID: ${resData.campaign_id})`,
+        message: msg,
       });
 
       // Reset Form
