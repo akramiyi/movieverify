@@ -1014,18 +1014,6 @@ function App() {
       <SupportSection />
       <Footer onAdminClick={handleOpenAdmin} />
 
-      <MovieDetailsModal
-        movie={selectedMovie}
-        isOpen={!!selectedMovie || deepLinkLoading}
-        isLoading={deepLinkLoading}
-        onClose={handleCloseMovieModal}
-        onSelectMovie={handleMovieSelect}
-        myList={myList}
-        onToggleMyList={toggleMyList}
-        onDownloadTracked={addToHistory}
-        onRequireAuth={handleOpenAuthModal}
-      />
-
       <Suspense fallback={null}>
         <DownloadHistoryModal
           isOpen={isHistoryModalOpen}
@@ -1044,16 +1032,6 @@ function App() {
           }}
           onUnreadCountChange={setUnreadNotifications}
           refreshTrigger={inboxRefreshTrigger}
-        />
-
-        <ActorModal
-          actor={selectedActor}
-          isOpen={isActorModalOpen}
-          onClose={() => setIsActorModalOpen(false)}
-          onMovieClick={(movie) => {
-            setIsActorModalOpen(false);
-            handleMovieSelect(movie);
-          }}
         />
       </Suspense>
 
@@ -1075,6 +1053,36 @@ function App() {
           }
         />
       </Routes>
+
+      {/* Global Movie Details Modal (accessible across Home, Genre, and Actor pages) */}
+      {location.pathname !== '/admin' && (
+        <MovieDetailsModal
+          movie={selectedMovie}
+          isOpen={!!selectedMovie || deepLinkLoading}
+          isLoading={deepLinkLoading}
+          onClose={handleCloseMovieModal}
+          onSelectMovie={handleMovieSelect}
+          myList={myList}
+          onToggleMyList={toggleMyList}
+          onDownloadTracked={addToHistory}
+          onRequireAuth={handleOpenAuthModal}
+        />
+      )}
+
+      {/* Global Actor Modal */}
+      {location.pathname !== '/admin' && (
+        <Suspense fallback={null}>
+          <ActorModal
+            actor={selectedActor}
+            isOpen={isActorModalOpen}
+            onClose={() => setIsActorModalOpen(false)}
+            onMovieClick={(movie) => {
+              setIsActorModalOpen(false);
+              handleMovieSelect(movie);
+            }}
+          />
+        </Suspense>
+      )}
 
       <AuthModal
         isOpen={showAuthModal && !showAdmin && location.pathname !== '/admin'}
