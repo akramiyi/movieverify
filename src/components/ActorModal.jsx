@@ -4,6 +4,9 @@ import { X, Download, Bell, BellRing } from 'lucide-react';
 import { useSubscriptions } from '../hooks/useSubscriptions';
 import { formatMovie } from '../hooks/useTMDB';
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
+const BASE_URL = `${API_URL}/api/tmdb`;
+
 const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
   const [movies, setMovies] = useState([]);
   const { isActorNotifying, toggleActorNotify } = useSubscriptions();
@@ -16,10 +19,11 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
     setLoading(true);
     
     fetch(
-      `https://api.themoviedb.org/3/person/${actor.tmdb_id}/movie_credits`,
+      `${BASE_URL}/person/${actor.tmdb_id}/movie_credits`,
       {
         headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_TMDB_TOKEN}`
+          'Content-Type': 'application/json',
+          ...(import.meta.env.VITE_TMDB_TOKEN ? { Authorization: `Bearer ${import.meta.env.VITE_TMDB_TOKEN}` } : {})
         }
       }
     )

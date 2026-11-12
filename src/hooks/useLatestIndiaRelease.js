@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { formatMovie } from './useTMDB';
 
-const TOKEN = import.meta.env.VITE_TMDB_TOKEN;
+const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
+const BASE_URL = `${API_URL}/api/tmdb`;
 const ROTATION_DAYS = 7;
 
 export const useLatestIndiaRelease = () => {
@@ -23,11 +24,11 @@ export const useLatestIndiaRelease = () => {
         
         const requests = languages.map((lang) =>
           fetch(
-            `https://api.themoviedb.org/3/discover/movie?with_original_language=${lang}&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`,
+            `${BASE_URL}/discover/movie?with_original_language=${lang}&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`,
             {
               headers: {
-                Authorization: `Bearer ${TOKEN}`,
                 'Content-Type': 'application/json',
+                ...(import.meta.env.VITE_TMDB_TOKEN ? { Authorization: `Bearer ${import.meta.env.VITE_TMDB_TOKEN}` } : {}),
               },
             }
           ).then((r) => r.json())

@@ -5,7 +5,10 @@ import { movies as localMovies } from '../data/movies';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
 const BASE_URL = `${API_URL}/api/tmdb`;
-const IMG_BASE = 'https://image.tmdb.org/t/p';
+// Support optional Backend/Cloudflare Image Proxy or direct TMDB CDN
+const IMG_BASE = import.meta.env.VITE_USE_IMAGE_PROXY === 'true'
+  ? `${API_URL}/api/image`
+  : 'https://image.tmdb.org/t/p';
 
 const GENRE_MAP = {
   28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
@@ -17,8 +20,8 @@ const GENRE_MAP = {
 };
 
 const headers = {
-  Authorization: `Bearer ${import.meta.env.VITE_TMDB_TOKEN}`,
-  'Content-Type': 'application/json'
+  'Content-Type': 'application/json',
+  ...(import.meta.env.VITE_TMDB_TOKEN ? { Authorization: `Bearer ${import.meta.env.VITE_TMDB_TOKEN}` } : {})
 };
 
 

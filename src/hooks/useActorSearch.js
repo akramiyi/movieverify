@@ -1,4 +1,5 @@
-const TOKEN = import.meta.env.VITE_TMDB_TOKEN;
+const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
+const BASE_URL = `${API_URL}/api/tmdb`;
 const cache = new Map();
 const pending = new Map();
 
@@ -14,11 +15,11 @@ const processQueue = async () => {
     await Promise.all(batch.map(async ({ name, resolve }) => {
       try {
         const res = await fetch(
-          `https://api.themoviedb.org/3/search/person?query=${encodeURIComponent(name)}&language=en-US&page=1&include_adult=false`,
+          `${BASE_URL}/search/person?query=${encodeURIComponent(name)}&language=en-US&page=1&include_adult=false`,
           {
             headers: {
-              Authorization: `Bearer ${TOKEN}`,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              ...(import.meta.env.VITE_TMDB_TOKEN ? { Authorization: `Bearer ${import.meta.env.VITE_TMDB_TOKEN}` } : {})
             }
           }
         );

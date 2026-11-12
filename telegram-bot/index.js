@@ -39,11 +39,15 @@ process.on('SIGTERM', () => {
 console.log('✅ MovieVerify Telegram Bot is running!');
 console.log('📡 Listening for messages...');
 
-// Express Server for Render Health Check and Razorpay Payments
+// Express Server for Render Health Check, Payments, and TMDB Proxy
 const express = require('express');
 const cors = require('cors');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const NodeCache = require('node-cache');
+
+// In-Memory Cache for TMDB data (Reduces TMDB rate limits and speeds up responses to ~15ms)
+const tmdbCache = new NodeCache({ stdTTL: 21600, checkperiod: 1800, maxKeys: 3000 });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -149,36 +153,107 @@ app.post('/api/razorpay/verify-payment', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    cache_keys: tmdbCache.keys().length
+  });
 });
 
-// TMDB Proxy to bypass ISP blocking in India
+// Helper to determine cache TTL in seconds based on TMDB endpoint
+function getCacheTTL(endpoint) {
+  const ep = endpoint.toLowerCase();
+  // Static content: cast, credits, details, videos (24 hours)
+  if (ep.includes('/credits') || ep.includes('/person') || ep.includes('/videos') || (ep.includes('/movie/') && !ep.includes('popular')) || (ep.includes('/tv/') && !ep.includes('popular'))) {
+    return 86400; // 24h
+  }
+  // Search queries (1 hour)
+  if (ep.includes('/search/')) {
+    return 3600; // 1h
+  }
+  // Discover, trending, genres, popular (6 hours)
+  return 21600; // 6h
+}
+
+// TMDB Proxy to bypass ISP blocking in India with in-memory & edge caching
 app.get('/api/tmdb/*path', async (req, res) => {
   try {
-    const pathParam = req.params.path;
+    const pathParam = req.params.path || req.params[0];
     const tmdbPath = Array.isArray(pathParam) ? pathParam.join('/') : pathParam;
     const query = req.url.split('?')[1] ? `?${req.url.split('?')[1]}` : '';
     const tmdbUrl = `https://api.themoviedb.org/3/${tmdbPath}${query}`;
-    
+    const cacheKey = `tmdb:${tmdbPath}${query}`;
+
+    const ttl = getCacheTTL(tmdbPath);
+
+    // 1. Check in-memory cache
+    const cachedData = tmdbCache.get(cacheKey);
+    if (cachedData) {
+      res.setHeader('X-Cache', 'HIT');
+      res.setHeader('Cache-Control', `public, max-age=${Math.min(ttl, 3600)}, s-maxage=${ttl}, stale-while-revalidate=1800`);
+      return res.json(cachedData);
+    }
+
+    // 2. Cache miss: Fetch from TMDB
     const headers = {
       'Accept': 'application/json'
     };
     
-    // Pass along Authorization header if the client sent it
-    if (req.headers.authorization) {
+    // Inject server bearer token (from TMDB_TOKEN or fallback to client auth header if present)
+    const serverToken = process.env.TMDB_TOKEN || process.env.VITE_TMDB_TOKEN;
+    if (serverToken) {
+      headers['Authorization'] = `Bearer ${serverToken}`;
+    } else if (req.headers.authorization) {
       headers['Authorization'] = req.headers.authorization;
-    } else if (process.env.TMDB_TOKEN) {
-      // Or use server's token if available
-      headers['Authorization'] = `Bearer ${process.env.TMDB_TOKEN}`;
     }
 
     const response = await fetch(tmdbUrl, { headers });
     const data = await response.json();
-    
+
+    // Cache successful responses
+    if (response.ok && data) {
+      tmdbCache.set(cacheKey, data, ttl);
+    }
+
+    res.setHeader('X-Cache', 'MISS');
+    res.setHeader('Cache-Control', `public, max-age=${Math.min(ttl, 3600)}, s-maxage=${ttl}, stale-while-revalidate=1800`);
     res.status(response.status).json(data);
   } catch (error) {
     console.error('TMDB Proxy Error:', error);
     res.status(500).json({ error: 'Failed to fetch from TMDB' });
+  }
+});
+
+// Image Streaming Proxy to bypass Indian ISP throttling on image.tmdb.org
+app.get('/api/image/:size/*path', async (req, res) => {
+  try {
+    const { size } = req.params;
+    const pathParam = req.params.path || req.params[0];
+    const imagePath = Array.isArray(pathParam) ? pathParam.join('/') : pathParam;
+
+    if (!imagePath) {
+      return res.status(400).json({ error: 'Image path is required' });
+    }
+
+    const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+    const tmdbImageUrl = `https://image.tmdb.org/t/p/${size}${cleanPath}`;
+
+    const response = await fetch(tmdbImageUrl);
+    if (!response.ok) {
+      return res.status(response.status).send('Image fetch failed');
+    }
+
+    // Edge & Browser Caching: 7 days browser, 30 days CDN
+    res.setHeader('Cache-Control', 'public, max-age=604800, s-maxage=2592000, immutable');
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
+
+    const buffer = await response.arrayBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    console.error('Image Proxy Error:', error);
+    res.status(500).send('Image proxy error');
   }
 });
 

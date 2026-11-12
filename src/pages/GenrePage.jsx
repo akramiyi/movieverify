@@ -37,7 +37,8 @@ const GENRE_LABELS = {
   mystery: 'Mystery',
 };
 
-const TOKEN = import.meta.env.VITE_TMDB_TOKEN;
+const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
+const BASE_URL = `${API_URL}/api/tmdb`;
 
 const GenrePage = ({ onMovieClick, myList, onToggleMyList }) => {
   const { genreSlug } = useParams();
@@ -59,11 +60,11 @@ const GenrePage = ({ onMovieClick, myList, onToggleMyList }) => {
 
     try {
       const res = await fetch(
-        `https://api.themoviedb.org/3/discover/movie?with_genres=${genreId}&sort_by=popularity.desc&page=${pageNum}`,
+        `${BASE_URL}/discover/movie?with_genres=${genreId}&sort_by=popularity.desc&page=${pageNum}`,
         {
           headers: {
-            Authorization: `Bearer ${TOKEN}`,
             'Content-Type': 'application/json',
+            ...(import.meta.env.VITE_TMDB_TOKEN ? { Authorization: `Bearer ${import.meta.env.VITE_TMDB_TOKEN}` } : {})
           },
         }
       );
