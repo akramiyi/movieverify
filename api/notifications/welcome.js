@@ -15,6 +15,7 @@
 import { authenticateRequest } from '../_lib/authMiddleware.js';
 import { getSupabaseServerClient } from '../_lib/supabaseServer.js';
 import { parseJsonBody, sendJson } from '../_lib/requestUtils.js';
+import { runDispatchCycle } from '../_lib/dispatchWorker.js';
 
 const DEFAULT_MAX_NEW_ACCOUNT_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -100,6 +101,15 @@ export default async function handler(req, res, customDependencies = {}) {
         error: 'Failed to process welcome notification.',
         details: error.message,
       });
+    }
+
+    if (data?.push_queued > 0) {
+      const dispatchFn = customDependencies.runDispatchCycle || runDispatchCycle;
+      try {
+        await dispatchFn({ batchSize: 5, leaseSeconds: 60, customSupabase });
+      } catch (dispatchErr) {
+        console.warn('[Welcome] Immediate dispatch non-fatal failure:', dispatchErr.message);
+      }
     }
 
     return sendJson(res, 200, {

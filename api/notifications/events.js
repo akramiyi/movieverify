@@ -14,6 +14,7 @@ import {
   isServerSideAdmin,
   ingestCampaign,
 } from '../_lib/campaignService.js';
+import { runDispatchCycle } from '../_lib/dispatchWorker.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 const VALID_EVENT_TYPES = [
@@ -197,6 +198,46 @@ export default async function handler(req, res, customDependencies = {}) {
 
   try {
     const result = await ingestCampaign(built.campaignPayload, context, customSupabase);
+
+    // Instant Inline Dispatch for catalog events (movie release, series release, etc.):
+    // Triggers FCM dispatch immediately in-process so subscribers get notified in 1-2 seconds
+    // without waiting for the background GitHub Actions cron schedule.
+    const hasPushDeliveries =
+      (result.body?.push_deliveries > 0) ||
+      (result.body?.total_deliveries > 0) ||
+      result.body?.status === 'queued' ||
+      result.body?.status === 'processing';
+
+    if (result.status === 201 && hasPushDeliveries) {
+      const dispatchFn = customDependencies.runDispatchCycle || runDispatchCycle;
+      try {
+        const dispatchSummary = await dispatchFn({
+          batchSize: 50,
+          leaseSeconds: 60,
+          customSupabase,
+          customMessaging: customDependencies.messaging || null,
+        });
+
+        if (result.body && typeof result.body === 'object') {
+          result.body.immediate_dispatch = {
+            dispatched: true,
+            sent: dispatchSummary?.sent ?? 0,
+            failed: dispatchSummary?.failed ?? 0,
+          };
+        }
+        console.log(
+          `[Events] Immediate dispatch executed: event=${body.event_type}, campaign=${result.body?.campaign_id}, sent=${dispatchSummary?.sent ?? 0}`
+        );
+      } catch (dispatchErr) {
+        console.warn('[Events] Immediate dispatch non-fatal failure:', dispatchErr.message);
+        if (result.body && typeof result.body === 'object') {
+          result.body.immediate_dispatch = {
+            dispatched: false,
+            error: dispatchErr.message,
+          };
+        }
+      }
+    }
 
     return sendJson(res, result.status, {
       success: result.status >= 200 && result.status < 400,
