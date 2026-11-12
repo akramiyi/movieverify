@@ -39,6 +39,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
   const notifying = movie ? isMovieNotifying(movie) : false;
   const [notifyFeedback, setNotifyFeedback] = useState(null);
   const [downloadingState, setDownloadingState] = useState(null);
+  const [isLiked, setIsLiked] = useState(false);
   const downloadTimerRef = useRef([]);
   const [details, setDetails] = useState({
     cast: 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
@@ -69,6 +70,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
 
   useEffect(() => {
     setNotifyFeedback(null);
+    setIsLiked(false);
   }, [movie?.id, isAuthenticated]);
 
   const liveLinks = movie ? getDownloadLinks(movie.id, movie.title) : {};
@@ -155,6 +157,13 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
   if (!movie) return null;
 
   const isAddedToList = myList.some((m) => m.id === movie.id);
+  const cleanTitle = (details.title || movie.title || '')
+    .replace(/^(🎬|📺|🔥|✨)\s*/, '')
+    .replace(/\s+is Now Available!.*$/i, '')
+    .replace(/\s+Links Updated.*$/i, '')
+    .replace(/\s+Series Added!.*$/i, '')
+    .replace(/\s+—\s+Season\s+\d+\s+Out Now!.*$/i, '')
+    .trim() || movie.title;
 
   // Get similar movies based on genre intersection (excluding current movie itself)
   const similarMovies = movies
@@ -254,66 +263,141 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
             {/* Scrollable Content Wrapper */}
             <div className="overflow-y-auto flex-1 hide-scrollbar">
               {/* Top Banner Area */}
-              <div className="relative w-full h-[300px] md:h-[450px] flex-none">
-              <ImageWithFallback
-                src={movie.backdrop || details.backdrop}
-                backdropSrc={movie.poster || details.poster}
-                alt={details.title || movie.title}
-                className={`w-full h-full object-cover ${movie.title?.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#181818]/80 to-transparent w-3/4" />
+              <div className="relative w-full aspect-video sm:h-[300px] md:h-[440px] flex-none overflow-hidden">
+                <ImageWithFallback
+                  src={movie.backdrop || details.backdrop}
+                  backdropSrc={movie.poster || details.poster}
+                  alt={cleanTitle}
+                  className={`w-full h-full object-cover ${movie.title?.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
+                />
+                {/* Bottom and side gradients for seamless blend */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-[#181818]/40 to-transparent pointer-events-none" />
+                <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-[#181818]/80 via-[#181818]/30 to-transparent w-2/3 pointer-events-none" />
 
-              <div className="absolute bottom-10 left-10">
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 drop-shadow-lg">
-                  {(details.title || movie.title || '')
-                    .replace(/^(🎬|📺|🔥|✨)\s*/, '')
-                    .replace(/\s+is Now Available!.*$/i, '')
-                    .replace(/\s+Links Updated.*$/i, '')
-                    .replace(/\s+Series Added!.*$/i, '')
-                    .replace(/\s+—\s+Season\s+\d+\s+Out Now!.*$/i, '')
-                    .trim() || movie.title}
-                </h2>
-                <div className="flex flex-wrap items-center gap-4">
+                {/* Desktop Hero Overlay (Only on md+ screens where space permits) */}
+                <div className="hidden md:block absolute bottom-8 left-8 right-8 z-10">
+                  <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-white mb-4 drop-shadow-md max-w-2xl leading-tight">
+                    {cleanTitle}
+                  </h2>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        document.getElementById('download-options')?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="flex items-center gap-2 bg-white hover:bg-white/90 active:scale-95 text-black px-6 py-2.5 rounded-lg text-base font-bold transition shadow-lg cursor-pointer"
+                    >
+                      <Download className="w-5 h-5 stroke-[2.5]" />
+                      <span>Download</span>
+                    </button>
+                    {details.trailerUrl && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(details.trailerUrl, '_blank')}
+                        className="flex items-center gap-2 bg-white/20 hover:bg-white/30 active:scale-95 text-white px-5 py-2.5 rounded-lg text-base font-semibold backdrop-blur-md transition border border-white/10 cursor-pointer"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                        <span>Watch Trailer</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onToggleMyList(movie)}
+                      className="w-10 h-10 border border-white/20 bg-black/40 hover:bg-white/20 hover:border-white rounded-full flex items-center justify-center text-white backdrop-blur-md transition cursor-pointer"
+                      title={isAddedToList ? 'Remove from My List' : 'Add to My List'}
+                    >
+                      {isAddedToList ? <Check className="w-5 h-5 text-green-400" /> : <Plus className="w-5 h-5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsLiked(!isLiked)}
+                      className="w-10 h-10 border border-white/20 bg-black/40 hover:bg-white/20 hover:border-white rounded-full flex items-center justify-center text-white backdrop-blur-md transition cursor-pointer"
+                      title="I like this"
+                    >
+                      <ThumbsUp className={`w-4 h-4 ${isLiked ? 'text-red-500 fill-current' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile Movie Header & Action Bar (Cleanly displayed below the backdrop so the photo is 100% visible) */}
+              <div className="block md:hidden px-4 sm:px-6 pt-3 pb-2 space-y-3">
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight">
+                    {cleanTitle}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold mt-1.5 text-gray-300">
+                    <span className="text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">
+                      {getMatchPercent(movie.rating)} Match
+                    </span>
+                    <span className="text-gray-300">{movie.year}</span>
+                    <span className="border border-white/20 text-gray-300 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase">
+                      {movie.quality}
+                    </span>
+                    {details.runtime && (
+                      <span className="text-gray-400">{details.runtime}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Mobile Action Buttons */}
+                <div className="flex flex-col gap-2 pt-1">
                   <button
+                    type="button"
                     onClick={() => {
                       document.getElementById('download-options')?.scrollIntoView({ behavior: 'smooth' });
                     }}
-                    className="flex items-center gap-2 bg-white hover:bg-white/80 text-black px-6 py-2 md:px-8 md:py-3 rounded md:text-lg font-bold transition"
+                    className="w-full flex items-center justify-center gap-2 bg-white hover:bg-white/90 active:scale-[0.99] text-black py-2.5 px-4 rounded-lg font-bold text-sm shadow-md transition cursor-pointer"
                   >
-                    <Download className="w-6 h-6 stroke-[3]" /> Download
+                    <Download className="w-4 h-4 stroke-[2.5]" />
+                    <span>Download</span>
                   </button>
-                  {details.trailerUrl && (
+
+                  <div className="flex items-center gap-2">
+                    {details.trailerUrl && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(details.trailerUrl, '_blank')}
+                        className="flex-1 flex items-center justify-center gap-2 bg-white/15 hover:bg-white/25 active:scale-[0.99] text-white py-2 px-3 rounded-lg font-semibold text-xs border border-white/10 transition cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Watch Trailer</span>
+                      </button>
+                    )}
+
                     <button
-                      onClick={() => window.open(details.trailerUrl, '_blank')}
-                      className="flex items-center gap-2 bg-[#6d6d6eb3] hover:bg-[#6d6d6e66] text-white px-6 py-2 md:px-8 md:py-3 rounded md:text-lg font-bold transition"
+                      type="button"
+                      onClick={() => onToggleMyList(movie)}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-xs font-medium border border-white/10 transition cursor-pointer"
+                      title={isAddedToList ? 'Remove from My List' : 'Add to My List'}
                     >
-                      <Play className="w-5 h-5 fill-current" /> Watch Trailer
+                      {isAddedToList ? <Check className="w-4 h-4 text-green-400" /> : <Plus className="w-4 h-4" />}
+                      <span>{isAddedToList ? 'Listed' : 'My List'}</span>
                     </button>
-                  )}
-                  <button
-                    onClick={() => onToggleMyList(movie)}
-                    className="w-10 h-10 md:w-12 md:h-12 border-2 border-gray-400 bg-[#2a2a2a]/50 hover:border-white rounded-full flex items-center justify-center text-white transition"
-                  >
-                    {isAddedToList ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-                  </button>
-                  <button className="w-10 h-10 md:w-12 md:h-12 border-2 border-gray-400 bg-[#2a2a2a]/50 hover:border-white rounded-full flex items-center justify-center text-white transition">
-                    <ThumbsUp className="w-5 h-5" />
-                  </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsLiked(!isLiked)}
+                      className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white border border-white/10 transition cursor-pointer"
+                      title="I like this"
+                    >
+                      <ThumbsUp className={`w-4 h-4 ${isLiked ? 'text-red-500 fill-current' : ''}`} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Details Section */}
-            <div className="p-10 grid grid-cols-1 md:grid-cols-3 gap-8 text-white">
-              <div className="md:col-span-2">
-                <div className="flex items-center gap-3 text-sm font-semibold mb-4">
-                  <span className="text-green-500">{getMatchPercent(movie.rating)} Match</span>
-                  <span className="text-gray-300">{movie.year}</span>
-                  <span className="border border-gray-500 text-gray-300 px-1 rounded text-xs">{movie.quality}</span>
-                </div>
-                <p className="text-gray-200 leading-relaxed text-base md:text-lg mb-8">
-                  {movie.description}
+              {/* Details Section */}
+              <div className="p-4 sm:p-6 md:p-8 lg:p-10 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 text-white">
+                <div className="md:col-span-2">
+                  <div className="hidden md:flex items-center gap-3 text-sm font-semibold mb-4">
+                    <span className="text-green-500">{getMatchPercent(movie.rating)} Match</span>
+                    <span className="text-gray-300">{movie.year}</span>
+                    <span className="border border-gray-500 text-gray-300 px-1 rounded text-xs">{movie.quality}</span>
+                    {details.runtime && <span className="text-gray-400">{details.runtime}</span>}
+                  </div>
+                  <p className="text-gray-200 leading-relaxed text-sm md:text-base lg:text-lg mb-6 md:mb-8">
+                    {movie.description}
                 </p>
 
                 {/* Download Options */}
@@ -728,7 +812,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
             </div>
 
             {/* Similar Movies Section */}
-            <div className="px-10 pb-10">
+            <div className="px-4 sm:px-6 md:px-8 lg:px-10 pb-10">
               <h3 className="text-2xl font-bold text-white mb-6">More Like This</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {similarMovies.map((simMovie) => (
