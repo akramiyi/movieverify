@@ -25,6 +25,7 @@ import {
   ingestCampaign,
   cancelCampaign,
 } from '../_lib/campaignService.js';
+import { runDispatchCycle } from '../_lib/dispatchWorker.js';
 
 const MAX_BODY_BYTES = 64 * 1024; // 64 KB
 
@@ -132,5 +133,46 @@ export default async function handler(req, res, customDependencies = {}) {
 
   // Otherwise POST is Campaign Creation
   const ingestResult = await ingestCampaign(body, context, customSupabase);
+
+  // Instant Inline Dispatch:
+  // If this is a newly created, non-draft, non-scheduled campaign (or has pending deliveries),
+  // immediately trigger a dispatch cycle in-process so push notifications reach user devices
+  // in 1-2 seconds instead of waiting for the background GitHub Actions cron schedule.
+  if (
+    ingestResult.status === 201 &&
+    !body.is_draft &&
+    !body.scheduled_for &&
+    (ingestResult.body?.total_deliveries > 0 || ingestResult.body?.status === 'processing')
+  ) {
+    const dispatchFn = customDependencies.runDispatchCycle || runDispatchCycle;
+    try {
+      const dispatchSummary = await dispatchFn({
+        batchSize: 50,
+        leaseSeconds: 60,
+        customSupabase,
+        customMessaging: customDependencies.messaging || null,
+      });
+
+      if (ingestResult.body && typeof ingestResult.body === 'object') {
+        ingestResult.body.immediate_dispatch = {
+          dispatched: true,
+          sent: dispatchSummary?.sent ?? 0,
+          failed: dispatchSummary?.failed ?? 0,
+        };
+      }
+      console.log(
+        `[Campaigns] Immediate dispatch executed: campaign=${ingestResult.body?.campaign_id}, sent=${dispatchSummary?.sent ?? 0}`
+      );
+    } catch (dispatchErr) {
+      console.warn('[Campaigns] Immediate dispatch non-fatal failure:', dispatchErr.message);
+      if (ingestResult.body && typeof ingestResult.body === 'object') {
+        ingestResult.body.immediate_dispatch = {
+          dispatched: false,
+          error: dispatchErr.message,
+        };
+      }
+    }
+  }
+
   return sendJson(res, ingestResult.status, ingestResult.body);
 }

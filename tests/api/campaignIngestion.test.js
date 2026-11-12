@@ -721,6 +721,42 @@ test('HTTP Handler Endpoints Suite (POST & DELETE /api/notifications/campaigns)'
     assert.equal(responseBody.includes('token_hash'), false);
     assert.equal(responseBody.includes('private_key'), false);
   });
+
+  await t.test('13. Immediate Dispatch: Automatically triggers inline dispatch on immediate campaign creation', async () => {
+    let dispatchCalled = false;
+    let dispatchOptions = null;
+
+    const mockRunDispatch = async (opts) => {
+      dispatchCalled = true;
+      dispatchOptions = opts;
+      return { sent: 5, failed: 0, processed: 5, results: [] };
+    };
+
+    const mockSupabase = createMockSupabaseForCampaigns();
+    const { req, res } = createMockHttp({
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer admin-jwt-valid',
+      },
+      body: {
+        title: 'Instant Push Alert',
+        body: 'Movie is available now!',
+        category: 'movie_release',
+        target_criteria: { type: 'all' },
+      },
+    });
+
+    await campaignsHandler(req, res, {
+      supabase: mockSupabase,
+      runDispatchCycle: mockRunDispatch,
+    });
+
+    assert.equal(res.statusCode, 201);
+    assert.equal(dispatchCalled, true);
+    assert.equal(dispatchOptions.batchSize, 50);
+    assert.equal(res.json().immediate_dispatch.dispatched, true);
+    assert.equal(res.json().immediate_dispatch.sent, 5);
+  });
 });
 
 test('Phase 6A: Request-Scoped Admin Supabase Client & RPC Authorization Suite', async (t) => {
