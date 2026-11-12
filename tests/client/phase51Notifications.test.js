@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-test('Notification icon assets (/logo192.png and /favicon.ico) exist with valid headers', () => {
+test('Notification icon assets (/logo192.png, /badge.png, and /favicon.ico) exist with valid headers', () => {
   const pngPath = path.resolve('public/logo192.png');
+  const badgePath = path.resolve('public/badge.png');
   const icoPath = path.resolve('public/favicon.ico');
 
   assert.equal(fs.existsSync(pngPath), true, 'public/logo192.png must exist');
+  assert.equal(fs.existsSync(badgePath), true, 'public/badge.png must exist');
   assert.equal(fs.existsSync(icoPath), true, 'public/favicon.ico must exist');
 
   const pngBytes = fs.readFileSync(pngPath);

@@ -240,16 +240,25 @@ export function buildFcmPayload(delivery, campaign = null) {
       },
       notification: {
         icon: '/logo192.png',
-        badge: '/favicon.ico',
+        badge: '/badge.png',
         vibrate: [200, 100, 200, 100, 200],
         silent: false,
         renotify: true,
+        data: {
+          url: linkUrl,
+          delivery_id: delivery.delivery_id != null ? String(delivery.delivery_id) : '',
+        },
+        actions: [
+          { action: 'open', title: '🎬 Watch Now' },
+        ],
       },
     },
   };
 
   if (campaign?.image_url) {
     fcmMessage.notification.imageUrl = campaign.image_url;
+    fcmMessage.webpush.notification.image = campaign.image_url;
+    fcmMessage.data.image = String(campaign.image_url);
   }
 
   return fcmMessage;

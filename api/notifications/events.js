@@ -86,8 +86,8 @@ function buildEventCampaignPayload(body) {
 
   if (eventType === 'movie_release') {
     category = 'movie_release';
-    title = `${rawTitle} is Now Available!`;
-    notificationBody = `${rawTitle} has been added with verified download links. Watch or download now on MovieVerify.`;
+    title = `🎬 ${rawTitle} is Now Available!`;
+    notificationBody = `Verified download links are live. Watch or download ${rawTitle} now on MovieVerify.`;
     targetCriteria.type = isBroadcast ? 'all' : 'movie';
     targetCriteria.movie_id = tmdbId;
     defaultIdempotencyKey = isBroadcast
@@ -95,8 +95,8 @@ function buildEventCampaignPayload(body) {
       : `catalog:movie_release:${tmdbId}`;
   } else if (eventType === 'series_release') {
     category = 'movie_release';
-    title = `${rawTitle} Series Added!`;
-    notificationBody = `${rawTitle} episodes are now available on MovieVerify. Open series page to explore seasons.`;
+    title = `📺 ${rawTitle} Series Added!`;
+    notificationBody = `${rawTitle} episodes with verified download mirrors are live on MovieVerify.`;
     targetCriteria.type = isBroadcast ? 'all' : 'series';
     targetCriteria.series_id = tmdbId;
     targetCriteria.movie_id = tmdbId;
@@ -105,8 +105,8 @@ function buildEventCampaignPayload(body) {
       : `catalog:series_release:${tmdbId}`;
   } else if (eventType === 'season_release') {
     category = 'movie_release';
-    title = `${rawTitle} — Season ${seasonNumber} Out Now!`;
-    notificationBody = `Season ${seasonNumber} links for ${rawTitle} are live now on MovieVerify.`;
+    title = `🔥 ${rawTitle} — Season ${seasonNumber} Out Now!`;
+    notificationBody = `Season ${seasonNumber} verified links for ${rawTitle} are live now on MovieVerify.`;
     targetCriteria.type = isBroadcast ? 'all' : 'season';
     targetCriteria.series_id = tmdbId;
     targetCriteria.movie_id = tmdbId;
@@ -119,7 +119,7 @@ function buildEventCampaignPayload(body) {
     const qualityTag = typeof body.release_quality === 'string' && body.release_quality.trim()
       ? body.release_quality.trim()
       : 'updated';
-    title = `${rawTitle} Links Updated`;
+    title = `✨ ${rawTitle} Links Updated`;
     notificationBody = isTv
       ? `Updated episodes and download mirrors are now available for ${rawTitle}.`
       : `Updated ${qualityTag !== 'updated' ? `${qualityTag} ` : ''}download links are now available for ${rawTitle}.`;

@@ -306,7 +306,7 @@ test('10, 11, 12, 13. Service Worker Background Push, Deduplication & Offline Ca
     assert.match(swCode, /self\.addEventListener\(['"]push['"]/);
     assert.match(swCode, /showNotification\(/);
     assert.match(swCode, /tag:\s*deliveryId/);
-    assert.match(swCode, /badge:\s*['"]\/favicon\.ico['"]/);
+    assert.match(swCode, /badge:\s*['"]\/(badge\.png|favicon\.ico)['"]/);
   });
 
   await t.test('11. Client Deduplication: Service worker implements atomic IndexedDB deduplication', () => {

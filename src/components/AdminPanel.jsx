@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
-import { searchTMDB, activeLinks } from '../hooks/useTMDB';
+import { searchTMDB, fetchMovieOrTVById, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import CampaignManager from './CampaignManager';
@@ -311,21 +311,37 @@ const AdminPanel = ({ onClose }) => {
   }, [searchQuery]);
 
   // Load item into form for editing
-  const handleEditItem = (item) => {
+  const handleEditItem = async (item) => {
     const movieObj = {
       id: item.tmdb_id || item.id,
       title: item.title,
       mediaType: item.media_type,
-      poster: null 
+      poster: null,
+      backdrop: null,
     };
     handleSelectMovie(movieObj);
+    try {
+      const details = await fetchMovieOrTVById(movieObj.id, movieObj.mediaType);
+      if (details) {
+        setSelectedMovie((prev) => (prev && String(prev.id) === String(movieObj.id) ? { ...prev, ...details } : prev));
+      }
+    } catch {}
   };
 
   // Handle movie selection from dropdown
-  const handleSelectMovie = (movie) => {
+  const handleSelectMovie = async (movie) => {
     setSelectedMovie(movie);
     setSearchQuery('');
     setSearchResults([]);
+
+    if (!movie.poster && !movie.backdrop) {
+      try {
+        const details = await fetchMovieOrTVById(movie.id, movie.mediaType || movie.media_type);
+        if (details) {
+          setSelectedMovie((prev) => (prev && String(prev.id) === String(movie.id) ? { ...prev, ...details } : prev));
+        }
+      } catch {}
+    }
 
     // Check if it already exists in Supabase to pre-fill links
     const existing = activeDbList.find(item => String(item.id) === String(movie.id) || String(item.tmdb_id) === String(movie.id));
@@ -398,6 +414,22 @@ const AdminPanel = ({ onClose }) => {
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.access_token) {
+            let movieImage =
+              selectedMovie?.backdrop ||
+              selectedMovie?.poster ||
+              (selectedMovie?.backdrop_path ? `https://image.tmdb.org/t/p/w780${selectedMovie.backdrop_path}` : null) ||
+              (selectedMovie?.poster_path ? `https://image.tmdb.org/t/p/w780${selectedMovie.poster_path}` : null) ||
+              null;
+
+            if (!movieImage) {
+              try {
+                const details = await fetchMovieOrTVById(cleanId, mediaType);
+                if (details) {
+                  movieImage = details.backdrop || details.poster || null;
+                }
+              } catch {}
+            }
+
             let eventPayload = null;
 
             if (isTv) {
@@ -412,6 +444,7 @@ const AdminPanel = ({ onClose }) => {
                   tmdb_id: cleanId,
                   media_type: 'tv',
                   title: selectedMovie.title,
+                  image_url: movieImage,
                   url: `/?type=tv&id=${cleanId}`,
                 };
               } else if (addedSeasons.length > 0) {
@@ -422,6 +455,7 @@ const AdminPanel = ({ onClose }) => {
                   media_type: 'tv',
                   season_number: highestSeason,
                   title: selectedMovie.title,
+                  image_url: movieImage,
                   url: `/?type=tv&id=${cleanId}`,
                 };
               } else {
@@ -430,16 +464,8 @@ const AdminPanel = ({ onClose }) => {
                   tmdb_id: cleanId,
                   media_type: 'tv',
                   title: selectedMovie.title,
+                  image_url: movieImage,
                   url: `/?type=tv&id=${cleanId}`,
-                  idempotency_key: buildContentUpdateIdempotencyKey({
-                    tmdbId: cleanId,
-                    mediaType: 'tv',
-                    link480,
-                    link720,
-                    link1080,
-                    description: descriptionVal,
-                    seasons: seasonsData,
-                  }),
                 };
               }
             } else {
@@ -451,6 +477,7 @@ const AdminPanel = ({ onClose }) => {
                     media_type: 'movie',
                     title: selectedMovie.title,
                     release_quality: qualityLabel,
+                    image_url: movieImage,
                     url: `/?type=movie&id=${cleanId}`,
                   }
                 : {
@@ -459,15 +486,8 @@ const AdminPanel = ({ onClose }) => {
                     media_type: 'movie',
                     title: selectedMovie.title,
                     release_quality: qualityLabel,
+                    image_url: movieImage,
                     url: `/?type=movie&id=${cleanId}`,
-                    idempotency_key: buildContentUpdateIdempotencyKey({
-                      tmdbId: cleanId,
-                      mediaType: 'movie',
-                      link480,
-                      link720,
-                      link1080,
-                      description: descriptionVal,
-                    }),
                   };
             }
 

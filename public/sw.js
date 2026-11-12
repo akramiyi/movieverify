@@ -165,7 +165,7 @@ self.addEventListener('push', (e) => {
       const options = {
         body,
         icon: '/logo192.png',
-        badge: '/favicon.ico',
+        badge: '/badge.png',
         vibrate: [200, 100, 200, 100, 200],
         silent: false,
         renotify: true,
@@ -173,6 +173,9 @@ self.addEventListener('push', (e) => {
           delivery_id: deliveryId,
           url: targetUrl,
         },
+        actions: [
+          { action: 'open', title: '🎬 Watch Now' },
+        ],
         tag: deliveryId || undefined, // Native OS deduplication tag
       };
 
@@ -189,6 +192,10 @@ self.addEventListener('push', (e) => {
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
+
+  if (e.action === 'close') {
+    return;
+  }
 
   let targetPath = e.notification.data?.url || '/';
   
@@ -210,7 +217,9 @@ self.addEventListener('notificationclick', (e) => {
       // 2. If any client window is open, navigate and focus it
       for (const client of clientList) {
         if ('focus' in client && 'navigate' in client) {
-          return client.navigate(fullTargetUrl).then((c) => c.focus());
+          return client.navigate(fullTargetUrl)
+            .then((c) => (c && 'focus' in c ? c.focus() : (self.clients.openWindow ? self.clients.openWindow(fullTargetUrl) : null)))
+            .catch(() => (self.clients.openWindow ? self.clients.openWindow(fullTargetUrl) : null));
         }
       }
       // 3. If no window is open, open a new window
