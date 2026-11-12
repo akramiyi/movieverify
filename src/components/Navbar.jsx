@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Bell, User, Menu, X, Clock, Download, LogOut, ShieldCheck, Check, ChevronDown } from 'lucide-react';
+import { Search, Bell, User, Menu, X, Clock, Download, LogOut, ShieldCheck, Check, ChevronDown, ArrowLeftRight } from 'lucide-react';
 import { supabase, getCachedAuthUser } from '../data/supabaseClient';
 import { revokePushTokenBeforeSignOut } from '../hooks/usePushNotifications';
 import SearchSuggestions from './SearchSuggestions';
@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 
 const LiveTime = () => {
   const [time, setTime] = useState(new Date());
+  const [showEpoch, setShowEpoch] = useState(false);
   
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 10);
@@ -21,9 +22,19 @@ const LiveTime = () => {
   const formattedTime = `${String(h12).padStart(2,'0')}:${String(time.getMinutes()).padStart(2,'0')}:${String(time.getSeconds()).padStart(2,'0')}.${String(time.getMilliseconds()).padStart(3,'0')} ${ampm}`;
 
   return (
-    <div className="hidden sm:flex items-center gap-1.5 text-gray-200 font-mono text-xs tracking-wider mr-2 w-48 font-bold">
-      <Clock className="w-4 h-4 text-[#E50914]" />
-      {formattedTime}
+    <div className="hidden sm:flex items-center gap-1.5 text-gray-200 font-mono text-xs tracking-wider mr-2 font-bold">
+      <Clock className="w-4 h-4 text-[#E50914] shrink-0" />
+      <span className={showEpoch ? 'text-amber-400 min-w-[105px]' : 'text-gray-200'}>
+        {showEpoch ? time.getTime() : formattedTime}
+      </span>
+      <button
+        type="button"
+        onClick={() => setShowEpoch((prev) => !prev)}
+        className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition cursor-pointer"
+        title={showEpoch ? 'Switch to Standard Time' : 'Switch to Epoch Time'}
+      >
+        <ArrowLeftRight className="w-3 h-3 text-gray-400 hover:text-[#E50914]" />
+      </button>
     </div>
   );
 };

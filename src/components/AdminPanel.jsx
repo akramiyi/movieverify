@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, fetchMovieOrTVById, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
@@ -14,6 +14,7 @@ const STORAGE_KEY_ADMIN_BLOCKED_UNTIL = 'movieverify_admin_blocked_until';
 
 const AdminLiveClock = () => {
   const [now, setNow] = useState(new Date());
+  const [showEpoch, setShowEpoch] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 10);
@@ -25,14 +26,45 @@ const AdminLiveClock = () => {
   const h12 = h % 12 || 12;
   const time = `${String(h12).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}.${String(now.getMilliseconds()).padStart(3,'0')} ${ampm}`;
   const date = now.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const epochMs = now.getTime();
+  const epochSec = Math.floor(epochMs / 1000);
 
   return (
-    <div className="flex items-center gap-2 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2">
-      <Clock className="w-4 h-4 text-[#E50914]" />
-      <div className="flex flex-col">
-        <span className="font-mono text-xs font-bold text-white tracking-wider">{time}</span>
-        <span className="text-[9px] text-gray-400">{date}</span>
+    <div className="flex items-center gap-2 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 shadow-sm">
+      <div className="w-7 h-7 rounded-full bg-[#E50914]/15 border border-[#E50914]/30 flex items-center justify-center shrink-0">
+        <Clock className="w-3.5 h-3.5 text-[#E50914]" />
       </div>
+      <div className="flex flex-col min-w-[135px]">
+        {showEpoch ? (
+          <>
+            <span className="font-mono text-xs font-bold text-amber-400 tracking-wider">
+              {epochMs}
+            </span>
+            <span className="text-[9px] text-gray-400 font-mono">
+              Epoch ({epochSec}s)
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="font-mono text-xs font-bold text-white tracking-wider">
+              {time}
+            </span>
+            <span className="text-[9px] text-gray-400">
+              {date}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Exchange / Switch Button */}
+      <button
+        type="button"
+        onClick={() => setShowEpoch((prev) => !prev)}
+        className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition border border-white/5 active:scale-95 cursor-pointer ml-1"
+        title={showEpoch ? 'Switch to Standard Time' : 'Switch to Epoch Time'}
+      >
+        <ArrowLeftRight className="w-3.5 h-3.5 text-gray-300 hover:text-[#E50914]" />
+      </button>
     </div>
   );
 };
