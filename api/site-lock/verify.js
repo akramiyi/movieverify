@@ -144,8 +144,12 @@ export default async function handler(req, res, customSupabase = null) {
       return sendJson(res, 200, { success: true, site_locked: false });
     }
 
-    const actualPassword = String(data.lock_password || '');
-    const isMatch = timingSafeCompare(password.trim(), actualPassword.trim());
+    const actualPassword = String(data.lock_password || '').trim();
+    const inputClean = String(password || '').trim();
+    const inputSha256 = crypto.createHash('sha256').update(inputClean).digest('hex');
+    const isDirectMatch = timingSafeCompare(inputClean, actualPassword);
+    const isHashMatch = timingSafeCompare(inputSha256, actualPassword);
+    const isMatch = isDirectMatch || isHashMatch;
 
     if (!isMatch) {
       const failStatus = recordFailedAttempt(clientIp);

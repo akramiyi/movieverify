@@ -56,3 +56,5 @@ telegram-bot/node_modules
 .backup_phase_15_2_5/
 .vercel
 scratch/
+*.patch
+**/.temp/
