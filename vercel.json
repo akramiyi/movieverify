@@ -5,6 +5,11 @@
       "schedule": "0 0 * * *"
     }
   ],
+  "functions": {
+    "api/notifications/dispatch.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/share/:type/:id",

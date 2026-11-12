@@ -59,14 +59,14 @@ jobs:
           # 4. Invoke endpoint with curl
           # --proto =https: Strict HTTPS protocol enforcement
           # --max-redirs 0: Zero redirect following (prevents credential forwarding)
-          # --max-time 30: Client timeout bounded to 30 seconds
+          # --max-time 90: Client timeout bounded to 90 seconds (allows full Vercel maxDuration)
           # -s -S: Silent progress, display real errors
           # -w: Capture HTTP response code
           # -o: Suppress response body to prevent secret or user data leakage
           HTTP_STATUS=$(curl \
             --proto "=https" \
             --max-redirs 0 \
-            --max-time 30 \
+            --max-time 90 \
             -s -S \
             -X POST "$CANONICAL_ENDPOINT" \
             -H "Content-Type: application/json" \

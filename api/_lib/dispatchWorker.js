@@ -484,19 +484,33 @@ export async function runDispatchCycle(options = {}) {
   let failedCount = 0;
   let rejectedCount = 0;
 
-  // Process sequentially or in bounded concurrency to respect DB & FCM rate limits
-  for (const delivery of deliveries) {
-    try {
-      const res = await processDelivery(delivery, context);
+  // Process in bounded concurrency chunks (5 parallel) to optimize speed without exceeding DB/FCM pools
+  const CONCURRENCY_LIMIT = 5;
+  for (let i = 0; i < deliveries.length; i += CONCURRENCY_LIMIT) {
+    const chunk = deliveries.slice(i, i + CONCURRENCY_LIMIT);
+    const chunkOutcomes = await Promise.allSettled(
+      chunk.map(async (delivery) => {
+        try {
+          return await processDelivery(delivery, context);
+        } catch (err) {
+          console.error('[DispatchWorker] Unexpected error processing delivery:', delivery.delivery_id, err.message);
+          return { status: 'error', deliveryId: delivery.delivery_id, error: err.message };
+        }
+      })
+    );
+
+    for (const outcome of chunkOutcomes) {
+      const res = outcome.status === 'fulfilled'
+        ? outcome.value
+        : { status: 'error', error: outcome.reason?.message || 'Unknown chunk failure' };
       results.push(res);
-      if (res.status === 'sent') sentCount++;
-      else if (res.status === 'unconfirmed_sent') sentCount++; // FCM accepted; tracked under sent
-      else if (res.status === 'rejected' || res.status === 'confirmation_rejected') rejectedCount++;
-      else failedCount++;
-    } catch (err) {
-      console.error('[DispatchWorker] Unexpected error processing delivery:', delivery.delivery_id, err.message);
-      results.push({ status: 'error', deliveryId: delivery.delivery_id, error: err.message });
-      failedCount++;
+      if (res.status === 'sent' || res.status === 'unconfirmed_sent') {
+        sentCount++;
+      } else if (res.status === 'rejected' || res.status === 'confirmation_rejected') {
+        rejectedCount++;
+      } else {
+        failedCount++;
+      }
     }
   }
 
