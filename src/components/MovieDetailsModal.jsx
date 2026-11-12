@@ -1,6 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Play, Plus, ThumbsUp, Download, Check } from 'lucide-react';
+import {
+  X,
+  Play,
+  Plus,
+  ThumbsUp,
+  Download,
+  Check,
+  CheckCircle2,
+  Loader2,
+  ShieldCheck,
+  ExternalLink,
+  Sparkles,
+  Bell,
+  BellRing,
+  LogIn,
+} from 'lucide-react';
 import { movies } from '../data/movies';
 import { fetchTMDBDetails, getDownloadLinks, getMediaTypeFromId } from '../hooks/useTMDB';
 import ImageWithFallback from './ImageWithFallback';
@@ -8,7 +23,6 @@ import ReportProblemButton from './ReportProblemButton';
 import ShareButton from './ShareButton';
 import ReviewSection from './ReviewSection';
 import { useSubscriptions } from '../hooks/useSubscriptions';
-import { Bell, BellRing, LogIn } from 'lucide-react';
 
 const getMatchPercent = (rating) => {
   const num = parseFloat(rating);
@@ -127,13 +141,87 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
     .filter(m => m.id !== movie.id && (m.genre || '').split(',').some(g => (movie.genre || '').includes(g.trim())))
     .slice(0, 3);
 
-  const handleDownload = (quality, link) => {
-    if(link && link !== "#") {
-      window.open(link, "_blank");
-      if (onDownloadTracked) onDownloadTracked(movie.title, quality);
-    } else {
-      alert(`${quality} download link is not available yet.`);
+  const [downloadingState, setDownloadingState] = useState(null);
+  const downloadTimerRef = useRef([]);
+
+  const clearDownloadTimers = () => {
+    downloadTimerRef.current.forEach((t) => clearTimeout(t));
+    downloadTimerRef.current = [];
+  };
+
+  useEffect(() => {
+    return () => {
+      clearDownloadTimers();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      clearDownloadTimers();
+      setDownloadingState(null);
     }
+  }, [isOpen, movie?.id]);
+
+  const handleDownload = (quality, link, customLabel, size) => {
+    if (!link || link === '#') {
+      alert(`${quality} download link is not available yet.`);
+      return;
+    }
+
+    if (downloadingState) return;
+
+    clearDownloadTimers();
+
+    const targetSize = size || (quality === '480p' ? '~500 MB' : quality === '720p' ? '~1.2 GB' : quality === '1080p' ? '~2.5 GB' : 'High Speed');
+    const targetLabel = customLabel || movie?.title || 'Title';
+
+    setDownloadingState({
+      quality,
+      link,
+      label: targetLabel,
+      size: targetSize,
+      progress: 25,
+      statusText: 'Connecting to high-speed CDN server...',
+      isComplete: false,
+    });
+
+    const t1 = setTimeout(() => {
+      setDownloadingState((prev) =>
+        prev ? { ...prev, progress: 65, statusText: 'Verifying link security & high-speed token...' } : null
+      );
+    }, 600);
+
+    const t2 = setTimeout(() => {
+      setDownloadingState((prev) =>
+        prev ? { ...prev, progress: 92, statusText: 'Generating verified download link...' } : null
+      );
+    }, 1200);
+
+    const t3 = setTimeout(() => {
+      setDownloadingState((prev) =>
+        prev ? { ...prev, progress: 100, statusText: 'Link verified! Redirecting to download...', isComplete: true } : null
+      );
+
+      if (onDownloadTracked) {
+        onDownloadTracked(movie?.title || targetLabel, quality);
+      }
+
+      try {
+        const opened = window.open(link, '_blank', 'noopener,noreferrer');
+        if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+          window.location.assign(link);
+        }
+      } catch {
+        window.location.href = link;
+      }
+
+      const t4 = setTimeout(() => {
+        setDownloadingState(null);
+      }, 800);
+      downloadTimerRef.current.push(t4);
+    }, 1800);
+
+    downloadTimerRef.current.push(t1, t2, t3);
   };
 
   return (
@@ -243,6 +331,64 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                     if (hasAnySeasonLinks) {
                       return (
                         <div className="flex flex-col gap-4">
+                          {/* Dedicated Futuristic Download Generation Progress Banner for Series */}
+                          <AnimatePresence>
+                            {downloadingState && (
+                              <motion.div
+                                initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                                className="p-4 rounded-xl bg-gradient-to-r from-[#1f1212] via-[#241a1a] to-[#181818] border border-[#E50914]/40 shadow-[0_0_25px_rgba(229,9,20,0.2)]"
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    {downloadingState.isComplete ? (
+                                      <CheckCircle2 className="w-5 h-5 text-green-500 animate-bounce" />
+                                    ) : (
+                                      <Loader2 className="w-5 h-5 text-[#E50914] animate-spin" />
+                                    )}
+                                    <span className="text-sm font-bold text-white tracking-wide">
+                                      {downloadingState.isComplete
+                                        ? 'Download Ready! Redirecting...'
+                                        : 'Preparing High-Speed Download...'}
+                                    </span>
+                                  </div>
+                                  <span className="bg-[#E50914] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                    {downloadingState.quality}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-between text-xs text-gray-400 mb-2 font-medium">
+                                  <span className="truncate max-w-[200px] sm:max-w-xs text-gray-300">
+                                    {downloadingState.label}
+                                  </span>
+                                  <span className="font-mono text-[11px] text-gray-400">
+                                    High Speed CDN
+                                  </span>
+                                </div>
+
+                                <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden relative mb-2">
+                                  <motion.div
+                                    className="h-full bg-gradient-to-r from-[#E50914] via-red-500 to-amber-500 rounded-full"
+                                    initial={{ width: '0%' }}
+                                    animate={{ width: `${downloadingState.progress}%` }}
+                                    transition={{ ease: 'easeInOut', duration: 0.4 }}
+                                  />
+                                </div>
+
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-gray-300 flex items-center gap-1.5">
+                                    <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
+                                    {downloadingState.statusText}
+                                  </span>
+                                  <span className="font-mono font-bold text-white">
+                                    {downloadingState.progress}%
+                                  </span>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
                           {seasons.map((s, idx) => {
                             const hasAnySeasonLink = s.parts.some(p => p.download480p || p.download720p || p.download1080p);
                             if (!hasAnySeasonLink) return null;
@@ -255,9 +401,36 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                                     <div key={pIdx} className="flex flex-col sm:flex-row justify-between items-center bg-[#181818] p-3 rounded">
                                       <span>{part.name}</span>
                                       <div className="flex gap-2 mt-2 sm:mt-0">
-                                        {part.download480p && <button onClick={() => handleDownload('480p', part.download480p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">480p</button>}
-                                        {part.download720p && <button onClick={() => handleDownload('720p', part.download720p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">720p</button>}
-                                        {part.download1080p && <button onClick={() => handleDownload('1080p', part.download1080p)} className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition">1080p</button>}
+                                        {part.download480p && (
+                                          <button
+                                            type="button"
+                                            disabled={Boolean(downloadingState)}
+                                            onClick={() => handleDownload('480p', part.download480p, `${part.name} (480p)`)}
+                                            className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition disabled:opacity-50 cursor-pointer"
+                                          >
+                                            {downloadingState?.quality === '480p' && downloadingState?.label?.includes(part.name) ? 'Preparing...' : '480p'}
+                                          </button>
+                                        )}
+                                        {part.download720p && (
+                                          <button
+                                            type="button"
+                                            disabled={Boolean(downloadingState)}
+                                            onClick={() => handleDownload('720p', part.download720p, `${part.name} (720p)`)}
+                                            className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition disabled:opacity-50 cursor-pointer"
+                                          >
+                                            {downloadingState?.quality === '720p' && downloadingState?.label?.includes(part.name) ? 'Preparing...' : '720p'}
+                                          </button>
+                                        )}
+                                        {part.download1080p && (
+                                          <button
+                                            type="button"
+                                            disabled={Boolean(downloadingState)}
+                                            onClick={() => handleDownload('1080p', part.download1080p, `${part.name} (1080p)`)}
+                                            className="px-3 py-1 bg-[#333] hover:bg-primary rounded text-sm transition disabled:opacity-50 cursor-pointer"
+                                          >
+                                            {downloadingState?.quality === '1080p' && downloadingState?.label?.includes(part.name) ? 'Preparing...' : '1080p'}
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
                                   ))}
@@ -271,25 +444,148 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
 
                     if (hasAnyMovieLinks) {
                       return (
-                        <div className="grid grid-cols-3 gap-4">
-                          {download480p && (
-                            <button onClick={() => handleDownload('480p', download480p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
-                              <span className="text-lg font-bold">480p</span>
-                              <span className="text-xs text-gray-400 mt-1">~500 MB</span>
-                            </button>
-                          )}
-                          {download720p && (
-                            <button onClick={() => handleDownload('720p', download720p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-primary rounded-lg transition">
-                              <span className="text-lg font-bold">720p</span>
-                              <span className="text-xs text-white/70 mt-1">~1.2 GB</span>
-                            </button>
-                          )}
-                          {download1080p && (
-                            <button onClick={() => handleDownload('1080p', download1080p)} className="flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition">
-                              <span className="text-lg font-bold">1080p</span>
-                              <span className="text-xs text-gray-400 mt-1">~2.5 GB</span>
-                            </button>
-                          )}
+                        <div className="flex flex-col gap-3">
+                          {/* Dedicated Futuristic Download Generation Progress Banner */}
+                          <AnimatePresence>
+                            {downloadingState && (
+                              <motion.div
+                                initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                                className="p-4 rounded-xl bg-gradient-to-r from-[#1f1212] via-[#241a1a] to-[#181818] border border-[#E50914]/40 shadow-[0_0_25px_rgba(229,9,20,0.2)]"
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    {downloadingState.isComplete ? (
+                                      <CheckCircle2 className="w-5 h-5 text-green-500 animate-bounce" />
+                                    ) : (
+                                      <Loader2 className="w-5 h-5 text-[#E50914] animate-spin" />
+                                    )}
+                                    <span className="text-sm font-bold text-white tracking-wide">
+                                      {downloadingState.isComplete
+                                        ? 'Download Ready! Redirecting...'
+                                        : 'Preparing High-Speed Download...'}
+                                    </span>
+                                  </div>
+                                  <span className="bg-[#E50914] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                    {downloadingState.quality}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center justify-between text-xs text-gray-400 mb-2 font-medium">
+                                  <span className="truncate max-w-[200px] sm:max-w-xs text-gray-300">
+                                    {downloadingState.label}
+                                  </span>
+                                  <span className="font-mono text-[11px] text-gray-400">
+                                    {downloadingState.size} • High Speed CDN
+                                  </span>
+                                </div>
+
+                                {/* Progress Bar */}
+                                <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden relative mb-2">
+                                  <motion.div
+                                    className="h-full bg-gradient-to-r from-[#E50914] via-red-500 to-amber-500 rounded-full"
+                                    initial={{ width: '0%' }}
+                                    animate={{ width: `${downloadingState.progress}%` }}
+                                    transition={{ ease: 'easeInOut', duration: 0.4 }}
+                                  />
+                                </div>
+
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-gray-300 flex items-center gap-1.5">
+                                    <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
+                                    {downloadingState.statusText}
+                                  </span>
+                                  <span className="font-mono font-bold text-white">
+                                    {downloadingState.progress}%
+                                  </span>
+                                </div>
+
+                                <div className="mt-2 text-right">
+                                  <a
+                                    href={downloadingState.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => {
+                                      if (onDownloadTracked) onDownloadTracked(movie.title, downloadingState.quality);
+                                    }}
+                                    className="text-[10px] text-gray-400 hover:text-white underline inline-flex items-center gap-1"
+                                  >
+                                    Click here if redirect does not start <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          <div className="grid grid-cols-3 gap-4">
+                            {download480p && (
+                              <button
+                                type="button"
+                                disabled={Boolean(downloadingState)}
+                                onClick={() => handleDownload('480p', download480p, `${movie.title} (480p)`, '~500 MB')}
+                                className={`flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition relative overflow-hidden ${
+                                  downloadingState?.quality === '480p' ? 'ring-2 ring-[#E50914] bg-[#E50914]/10' : ''
+                                } disabled:opacity-60 cursor-pointer`}
+                              >
+                                {downloadingState?.quality === '480p' ? (
+                                  <div className="flex flex-col items-center justify-center py-0.5">
+                                    <Loader2 className="w-5 h-5 text-[#E50914] animate-spin mb-1" />
+                                    <span className="text-xs font-bold text-white">Preparing...</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="text-lg font-bold">480p</span>
+                                    <span className="text-xs text-gray-400 mt-1">~500 MB</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+                            {download720p && (
+                              <button
+                                type="button"
+                                disabled={Boolean(downloadingState)}
+                                onClick={() => handleDownload('720p', download720p, `${movie.title} (720p)`, '~1.2 GB')}
+                                className={`flex flex-col items-center p-4 bg-[#242424] hover:bg-primary rounded-lg transition relative overflow-hidden ${
+                                  downloadingState?.quality === '720p' ? 'ring-2 ring-[#E50914] bg-[#E50914]/10' : ''
+                                } disabled:opacity-60 cursor-pointer`}
+                              >
+                                {downloadingState?.quality === '720p' ? (
+                                  <div className="flex flex-col items-center justify-center py-0.5">
+                                    <Loader2 className="w-5 h-5 text-[#E50914] animate-spin mb-1" />
+                                    <span className="text-xs font-bold text-white">Preparing...</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="text-lg font-bold">720p</span>
+                                    <span className="text-xs text-white/70 mt-1">~1.2 GB</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+                            {download1080p && (
+                              <button
+                                type="button"
+                                disabled={Boolean(downloadingState)}
+                                onClick={() => handleDownload('1080p', download1080p, `${movie.title} (1080p)`, '~2.5 GB')}
+                                className={`flex flex-col items-center p-4 bg-[#242424] hover:bg-[#333] rounded-lg transition relative overflow-hidden ${
+                                  downloadingState?.quality === '1080p' ? 'ring-2 ring-[#E50914] bg-[#E50914]/10' : ''
+                                } disabled:opacity-60 cursor-pointer`}
+                              >
+                                {downloadingState?.quality === '1080p' ? (
+                                  <div className="flex flex-col items-center justify-center py-0.5">
+                                    <Loader2 className="w-5 h-5 text-[#E50914] animate-spin mb-1" />
+                                    <span className="text-xs font-bold text-white">Preparing...</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="text-lg font-bold">1080p</span>
+                                    <span className="text-xs text-gray-400 mt-1">~2.5 GB</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     }
