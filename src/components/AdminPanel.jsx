@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw } from 'lucide-react';
+import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, fetchMovieOrTVById, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import CampaignManager from './CampaignManager';
 import { buildContentUpdateIdempotencyKey } from '../utils/notificationLinks';
+
+const MAX_ADMIN_ATTEMPTS = 5;
+const DEFAULT_ADMIN_LOCKOUT_SECONDS = 15 * 60; // 15 minutes
+const STORAGE_KEY_ADMIN_ATTEMPTS = 'movieverify_admin_attempts';
+const STORAGE_KEY_ADMIN_BLOCKED_UNTIL = 'movieverify_admin_blocked_until';
 
 const AdminLiveClock = () => {
   const [now, setNow] = useState(new Date());
@@ -41,6 +46,11 @@ const AdminPanel = ({ onClose }) => {
   const [passVal, setPassVal] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  // Admin Rate Limiting / Lockout State
+  const [adminAttemptsRemaining, setAdminAttemptsRemaining] = useState(MAX_ADMIN_ATTEMPTS);
+  const [adminBlockedUntil, setAdminBlockedUntil] = useState(0);
+  const [adminCountdownSeconds, setAdminCountdownSeconds] = useState(0);
 
   // Movie Search/Form State
   const [searchQuery, setSearchQuery] = useState('');
@@ -141,6 +151,75 @@ const AdminPanel = ({ onClose }) => {
     setLockToggling(false);
   };
 
+  // Initialize lockout state from localStorage on mount
+  useEffect(() => {
+    try {
+      const storedBlockedUntil = parseInt(localStorage.getItem(STORAGE_KEY_ADMIN_BLOCKED_UNTIL) || '0', 10);
+      const now = Date.now();
+      if (storedBlockedUntil && storedBlockedUntil > now) {
+        setAdminBlockedUntil(storedBlockedUntil);
+        setAdminCountdownSeconds(Math.ceil((storedBlockedUntil - now) / 1000));
+        setAdminAttemptsRemaining(0);
+      } else {
+        const storedAttempts = parseInt(localStorage.getItem(STORAGE_KEY_ADMIN_ATTEMPTS) || '0', 10);
+        setAdminAttemptsRemaining(Math.max(0, MAX_ADMIN_ATTEMPTS - storedAttempts));
+      }
+    } catch {}
+  }, []);
+
+  // Countdown timer effect for lockout
+  useEffect(() => {
+    if (!adminBlockedUntil) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const diff = Math.ceil((adminBlockedUntil - now) / 1000);
+
+      if (diff <= 0) {
+        setAdminBlockedUntil(0);
+        setAdminCountdownSeconds(0);
+        setAdminAttemptsRemaining(MAX_ADMIN_ATTEMPTS);
+        setLoginError('');
+        try {
+          localStorage.removeItem(STORAGE_KEY_ADMIN_BLOCKED_UNTIL);
+          localStorage.removeItem(STORAGE_KEY_ADMIN_ATTEMPTS);
+        } catch {}
+      } else {
+        setAdminCountdownSeconds(diff);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [adminBlockedUntil]);
+
+  const formatAdminCountdown = (totalSeconds) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  // Google OAuth sign in for Admin
+  const handleGoogleAdminLogin = async () => {
+    if (adminBlockedUntil > Date.now()) return;
+    setIsAuthenticating(true);
+    setLoginError('');
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/admin`
+        }
+      });
+      if (error) {
+        setLoginError(error.message);
+        setIsAuthenticating(false);
+      }
+    } catch (e) {
+      setLoginError('Failed to initiate Google sign-in.');
+      setIsAuthenticating(false);
+    }
+  };
+
   // Clear stale auth tokens from localStorage
   const handleClearSession = () => {
     try {
@@ -200,6 +279,7 @@ const AdminPanel = ({ onClose }) => {
   // Authenticate Admin Credentials using Supabase Auth
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (adminBlockedUntil > Date.now()) return;
     setLoginError('');
     setIsAuthenticating(true);
 
@@ -222,7 +302,25 @@ const AdminPanel = ({ onClose }) => {
         if (isNetworkErr) {
           setLoginError('database_unreachable');
         } else {
-          setLoginError(msg || 'Invalid login credentials');
+          const nextRemaining = Math.max(0, adminAttemptsRemaining - 1);
+          setAdminAttemptsRemaining(nextRemaining);
+
+          try {
+            const currentFailed = MAX_ADMIN_ATTEMPTS - nextRemaining;
+            localStorage.setItem(STORAGE_KEY_ADMIN_ATTEMPTS, String(currentFailed));
+
+            if (nextRemaining <= 0) {
+              const lockUntilTimestamp = Date.now() + DEFAULT_ADMIN_LOCKOUT_SECONDS * 1000;
+              setAdminBlockedUntil(lockUntilTimestamp);
+              setAdminCountdownSeconds(DEFAULT_ADMIN_LOCKOUT_SECONDS);
+              localStorage.setItem(STORAGE_KEY_ADMIN_BLOCKED_UNTIL, String(lockUntilTimestamp));
+              setLoginError('Reached maximum attempt limit! Admin access temporarily blocked for 15 minutes.');
+              setIsAuthenticating(false);
+              return;
+            }
+          } catch {}
+
+          setLoginError(`Invalid login credentials. ${nextRemaining} attempt${nextRemaining === 1 ? '' : 's'} remaining.`);
         }
         setIsAuthenticating(false);
         return;
@@ -257,6 +355,14 @@ const AdminPanel = ({ onClose }) => {
           setIsAuthenticating(false);
           return;
         }
+
+        // Clear any previous failed attempt locks upon success
+        try {
+          localStorage.removeItem(STORAGE_KEY_ADMIN_BLOCKED_UNTIL);
+          localStorage.removeItem(STORAGE_KEY_ADMIN_ATTEMPTS);
+        } catch {}
+        setAdminAttemptsRemaining(MAX_ADMIN_ATTEMPTS);
+        setAdminBlockedUntil(0);
 
         setIsLoggedIn(true);
         fetchCurrentLinks();
@@ -612,11 +718,20 @@ const AdminPanel = ({ onClose }) => {
     );
   }
 
+  const isBlocked = adminBlockedUntil > Date.now();
+
   if (!isLoggedIn) {
     return (
       <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md">
-        <div className="w-full max-w-sm bg-[#181818] border border-white/10 rounded-lg p-6 shadow-2xl relative">
+        <div className="w-full max-w-sm bg-[#181818] border border-white/10 rounded-lg p-6 shadow-2xl relative overflow-hidden">
           
+          {/* Top glowing bar */}
+          <div
+            className={`absolute top-0 left-0 right-0 h-1 ${
+              isBlocked ? 'bg-amber-500 animate-pulse' : 'bg-[#E50914]'
+            }`}
+          />
+
           <button 
             type="button"
             onClick={onClose}
@@ -625,13 +740,41 @@ const AdminPanel = ({ onClose }) => {
             <ArrowLeft className="w-4 h-4" /> Back to Site
           </button>
 
-          <div className="flex flex-col items-center mt-6 mb-8 text-center">
-            <div className="w-12 h-12 bg-[#E50914]/20 border border-[#E50914] text-[#E50914] flex items-center justify-center rounded-full mb-4">
-              <Key className="w-6 h-6" />
+          <div className="flex flex-col items-center mt-6 mb-6 text-center">
+            <div
+              className={`w-12 h-12 border flex items-center justify-center rounded-full mb-3 transition-colors ${
+                isBlocked
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
+                  : 'bg-[#E50914]/20 border-[#E50914] text-[#E50914]'
+              }`}
+            >
+              {isBlocked ? (
+                <ShieldAlert className="w-6 h-6 animate-pulse" />
+              ) : (
+                <Key className="w-6 h-6" />
+              )}
             </div>
-            <h2 className="text-2xl font-black text-white leading-tight">{greeting}</h2>
-            <p className="text-gray-400 text-xs mt-2">Sign in to MovieVerify Admin</p>
+            <h2 className="text-2xl font-black text-white leading-tight">
+              {isBlocked ? 'Limit Reached' : greeting}
+            </h2>
+            <p className="text-gray-400 text-xs mt-1.5">
+              {isBlocked ? (
+                <span className="text-amber-400 font-medium">
+                  Too many failed attempts. Admin access is locked for 15 minutes.
+                </span>
+              ) : (
+                'Sign in to MovieVerify Admin'
+              )}
+            </p>
           </div>
+
+          {/* Active Lockout Timer Card */}
+          {isBlocked && (
+            <div className="mb-4 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 flex items-center justify-center gap-2.5 text-amber-400 text-sm font-semibold">
+              <Clock className="w-4 h-4 animate-spin" />
+              <span>Try again in {formatAdminCountdown(adminCountdownSeconds)}</span>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -639,9 +782,15 @@ const AdminPanel = ({ onClose }) => {
               <input 
                 type="email" 
                 required
+                disabled={isBlocked || isAuthenticating}
                 value={emailVal}
                 onChange={e => setEmailVal(e.target.value)}
-                className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm"
+                placeholder="admin@movieverify.com"
+                className={`w-full bg-black/50 border rounded p-3 text-white outline-none transition text-sm ${
+                  isBlocked
+                    ? 'border-amber-500/30 opacity-50 cursor-not-allowed text-gray-500'
+                    : 'border-white/10 focus:border-[#E50914]'
+                }`}
               />
             </div>
             <div>
@@ -649,9 +798,15 @@ const AdminPanel = ({ onClose }) => {
               <input 
                 type="password" 
                 required
+                disabled={isBlocked || isAuthenticating}
                 value={passVal}
                 onChange={e => setPassVal(e.target.value)}
-                className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm"
+                placeholder="••••••••••••"
+                className={`w-full bg-black/50 border rounded p-3 text-white outline-none transition text-sm ${
+                  isBlocked
+                    ? 'border-amber-500/30 opacity-50 cursor-not-allowed text-gray-500'
+                    : 'border-white/10 focus:border-[#E50914]'
+                }`}
               />
             </div>
 
@@ -694,20 +849,58 @@ const AdminPanel = ({ onClose }) => {
                 </button>
               </div>
             ) : loginError && (
-              <div className="flex items-center gap-2 text-red-500 text-xs bg-red-950/30 border border-red-900/50 p-3 rounded">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{loginError}</span>
+              <div className="space-y-1.5 text-center">
+                <div className="flex items-center gap-2 text-red-500 text-xs bg-red-950/30 border border-red-900/50 p-3 rounded text-left">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{loginError}</span>
+                </div>
+                {!isBlocked && adminAttemptsRemaining < MAX_ADMIN_ATTEMPTS && (
+                  <div className="inline-block px-2.5 py-0.5 rounded-full bg-red-950/40 border border-red-500/30 text-[11px] font-semibold text-red-300">
+                    {adminAttemptsRemaining} of {MAX_ADMIN_ATTEMPTS} attempts left
+                  </div>
+                )}
               </div>
             )}
 
             <button 
               type="submit"
-              disabled={isAuthenticating}
-              className="w-full py-3 bg-[#E50914] hover:bg-[#b80710] disabled:bg-red-800 disabled:opacity-50 text-white rounded font-bold transition text-sm shadow-lg mt-4 focus:outline-none"
+              disabled={isBlocked || isAuthenticating}
+              className={`w-full py-3 rounded font-bold transition text-sm shadow-lg mt-2 focus:outline-none ${
+                isBlocked
+                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
+                  : 'bg-[#E50914] hover:bg-[#b80710] disabled:bg-red-800 disabled:opacity-50 text-white'
+              }`}
             >
-              {isAuthenticating ? 'Signing In...' : 'Sign In'}
+              {isBlocked
+                ? `Blocked (${formatAdminCountdown(adminCountdownSeconds)})`
+                : isAuthenticating
+                ? 'Signing In...'
+                : 'Sign In'}
             </button>
           </form>
+
+          {/* Divider */}
+          <div className="relative my-4 flex items-center justify-center">
+            <div className="border-t border-white/10 w-full" />
+            <span className="bg-[#181818] px-3 text-[10px] text-gray-400 font-semibold uppercase tracking-wider">or</span>
+            <div className="border-t border-white/10 w-full" />
+          </div>
+
+          {/* Google OAuth Login for Admin */}
+          <button
+            type="button"
+            onClick={handleGoogleAdminLogin}
+            disabled={isBlocked || isAuthenticating}
+            className="w-full py-2.5 bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white rounded font-medium text-xs transition flex items-center justify-center gap-2 border border-white/5 cursor-pointer"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/>
+              <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
+              <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15.2c0 2.8.7 5.5 1.9 7.9l3.7-2.9z"/>
+              <path fill="#34A853" d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.9C3.7 20.6 7.5 23.5 12 23.5z"/>
+            </svg>
+            Continue with Google (Admin)
+          </button>
         </div>
       </div>
     );

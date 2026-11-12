@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ShieldCheck, AlertCircle, Loader2, Lock, User, Mail, Eye, EyeOff } from 'lucide-react';
+import { X, ShieldCheck, AlertCircle, Loader2, Lock, User, Mail, Eye, EyeOff, ShieldAlert, Clock } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
+
+const MAX_ADMIN_ATTEMPTS = 5;
+const DEFAULT_ADMIN_LOCKOUT_SECONDS = 15 * 60; // 15 minutes
+const STORAGE_KEY_ADMIN_ATTEMPTS = 'movieverify_admin_attempts';
+const STORAGE_KEY_ADMIN_BLOCKED_UNTIL = 'movieverify_admin_blocked_until';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" aria-hidden="true">
@@ -516,6 +521,52 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
+  // Admin Rate Limiting / Lockout State
+  const [adminAttemptsRemaining, setAdminAttemptsRemaining] = useState(MAX_ADMIN_ATTEMPTS);
+  const [adminBlockedUntil, setAdminBlockedUntil] = useState(0);
+  const [adminCountdownSeconds, setAdminCountdownSeconds] = useState(0);
+
+  useEffect(() => {
+    try {
+      const storedBlockedUntil = parseInt(localStorage.getItem(STORAGE_KEY_ADMIN_BLOCKED_UNTIL) || '0', 10);
+      const now = Date.now();
+      if (storedBlockedUntil && storedBlockedUntil > now) {
+        setAdminBlockedUntil(storedBlockedUntil);
+        setAdminCountdownSeconds(Math.ceil((storedBlockedUntil - now) / 1000));
+        setAdminAttemptsRemaining(0);
+      } else {
+        const storedAttempts = parseInt(localStorage.getItem(STORAGE_KEY_ADMIN_ATTEMPTS) || '0', 10);
+        setAdminAttemptsRemaining(Math.max(0, MAX_ADMIN_ATTEMPTS - storedAttempts));
+      }
+    } catch {}
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!adminBlockedUntil) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const diff = Math.ceil((adminBlockedUntil - now) / 1000);
+      if (diff <= 0) {
+        setAdminBlockedUntil(0);
+        setAdminCountdownSeconds(0);
+        setAdminAttemptsRemaining(MAX_ADMIN_ATTEMPTS);
+        try {
+          localStorage.removeItem(STORAGE_KEY_ADMIN_BLOCKED_UNTIL);
+          localStorage.removeItem(STORAGE_KEY_ADMIN_ATTEMPTS);
+        } catch {}
+      } else {
+        setAdminCountdownSeconds(diff);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [adminBlockedUntil]);
+
+  const formatAdminCountdown = (totalSeconds) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
   // Refs for touch-scroll containment
   const overlayRef = useRef(null);
   const cardRef = useRef(null);
@@ -654,6 +705,7 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
   // Direct Admin login within the modal
   const handleAdminLogin = async (e) => {
     e.preventDefault();
+    if (adminBlockedUntil > Date.now()) return;
     if (!emailVal.trim() || !passVal.trim()) {
       setErrorMessage('Please enter both admin email and password.');
       return;
@@ -670,7 +722,29 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
       });
 
       if (authErr) {
-        setErrorMessage(authErr.message || 'Invalid administrator credentials.');
+        const nextRemaining = Math.max(0, adminAttemptsRemaining - 1);
+        setAdminAttemptsRemaining(nextRemaining);
+
+        try {
+          const currentFailed = MAX_ADMIN_ATTEMPTS - nextRemaining;
+          localStorage.setItem(STORAGE_KEY_ADMIN_ATTEMPTS, String(currentFailed));
+
+          if (nextRemaining <= 0) {
+            const lockUntilTimestamp = Date.now() + DEFAULT_ADMIN_LOCKOUT_SECONDS * 1000;
+            setAdminBlockedUntil(lockUntilTimestamp);
+            setAdminCountdownSeconds(DEFAULT_ADMIN_LOCKOUT_SECONDS);
+            localStorage.setItem(STORAGE_KEY_ADMIN_BLOCKED_UNTIL, String(lockUntilTimestamp));
+            setErrorMessage('Reached maximum attempt limit! Admin access temporarily blocked for 15 minutes.');
+            setLoading(false);
+            return;
+          }
+        } catch {}
+
+        setErrorMessage(
+          authErr.message
+            ? `${authErr.message} (${nextRemaining} attempt${nextRemaining === 1 ? '' : 's'} remaining)`
+            : `Invalid administrator credentials. ${nextRemaining} attempt${nextRemaining === 1 ? '' : 's'} remaining.`
+        );
         setLoading(false);
         return;
       }
@@ -689,6 +763,13 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
           setLoading(false);
           return;
         }
+
+        try {
+          localStorage.removeItem(STORAGE_KEY_ADMIN_BLOCKED_UNTIL);
+          localStorage.removeItem(STORAGE_KEY_ADMIN_ATTEMPTS);
+        } catch {}
+        setAdminAttemptsRemaining(MAX_ADMIN_ATTEMPTS);
+        setAdminBlockedUntil(0);
 
         // Successfully authenticated as an authorized administrator
         setLoading(false);
@@ -860,7 +941,22 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
             {errorMessage && (
               <div className="mb-4 p-3 bg-red-950/40 border border-red-800/60 rounded-xl flex items-start gap-2.5 text-red-200 text-xs leading-relaxed animate-in fade-in">
                 <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">{errorMessage}</div>
+                <div className="flex-1">
+                  <div>{errorMessage}</div>
+                  {activeTab === 'admin' && adminBlockedUntil <= Date.now() && adminAttemptsRemaining < MAX_ADMIN_ATTEMPTS && (
+                    <div className="mt-1.5 inline-block px-2 py-0.5 rounded-full bg-red-950/60 border border-red-500/30 text-[10px] font-semibold text-red-300">
+                      {adminAttemptsRemaining} of {MAX_ADMIN_ATTEMPTS} attempts left
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Active Admin Lockout Timer Card */}
+            {activeTab === 'admin' && adminBlockedUntil > Date.now() && (
+              <div className="mb-4 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center justify-center gap-2.5 text-amber-400 text-xs sm:text-sm font-semibold">
+                <Clock className="w-4 h-4 animate-spin flex-shrink-0" />
+                <span>Limit reached! Try again in {formatAdminCountdown(adminCountdownSeconds)}</span>
               </div>
             )}
 
@@ -915,10 +1011,15 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
                   <input
                     type="text"
                     required
+                    disabled={adminBlockedUntil > Date.now() || loading}
                     value={emailVal}
                     onChange={(e) => setEmailVal(e.target.value)}
                     placeholder="Email address or mobile number"
-                    className="w-full bg-[#161616] border border-white/10 rounded-xl py-3 lg:py-3.5 pl-10 pr-3 text-xs sm:text-sm lg:text-base text-white placeholder-gray-500 focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914] outline-none transition"
+                    className={`w-full bg-[#161616] border rounded-xl py-3 lg:py-3.5 pl-10 pr-3 text-xs sm:text-sm lg:text-base text-white placeholder-gray-500 outline-none transition ${
+                      adminBlockedUntil > Date.now()
+                        ? 'border-amber-500/30 opacity-50 cursor-not-allowed text-gray-500'
+                        : 'border-white/10 focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]'
+                    }`}
                   />
                 </div>
 
@@ -928,10 +1029,15 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
+                    disabled={adminBlockedUntil > Date.now() || loading}
                     value={passVal}
                     onChange={(e) => setPassVal(e.target.value)}
                     placeholder="Password"
-                    className="w-full bg-[#161616] border border-white/10 rounded-xl py-3 lg:py-3.5 pl-10 pr-10 text-xs sm:text-sm lg:text-base text-white placeholder-gray-500 focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914] outline-none transition"
+                    className={`w-full bg-[#161616] border rounded-xl py-3 lg:py-3.5 pl-10 pr-10 text-xs sm:text-sm lg:text-base text-white placeholder-gray-500 outline-none transition ${
+                      adminBlockedUntil > Date.now()
+                        ? 'border-amber-500/30 opacity-50 cursor-not-allowed text-gray-500'
+                        : 'border-white/10 focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]'
+                    }`}
                   />
                   <button
                     type="button"
@@ -966,10 +1072,16 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
                 {/* Submit Sign In button */}
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full py-3 lg:py-3.5 bg-[#E50914] hover:bg-[#b80710] active:bg-[#90050c] disabled:opacity-50 text-white font-bold rounded-xl text-sm lg:text-base transition shadow-lg shadow-red-900/30 flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-600/50"
+                  disabled={loading || adminBlockedUntil > Date.now()}
+                  className={`w-full py-3 lg:py-3.5 font-bold rounded-xl text-sm lg:text-base transition shadow-lg flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-2 ${
+                    adminBlockedUntil > Date.now()
+                      ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-60 shadow-none'
+                      : 'bg-[#E50914] hover:bg-[#b80710] active:bg-[#90050c] disabled:opacity-50 text-white shadow-red-900/30 focus:ring-red-600/50'
+                  }`}
                 >
-                  {loading ? (
+                  {adminBlockedUntil > Date.now() ? (
+                    <span>Blocked ({formatAdminCountdown(adminCountdownSeconds)})</span>
+                  ) : loading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin text-white" />
                       <span>Verifying credentials...</span>
