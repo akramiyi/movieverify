@@ -140,10 +140,12 @@ function initGlobalAuthListener() {
   globalAuthListenerInitialized = true;
 
   supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_OUT' || !session?.user) {
+    if (event === 'SIGNED_OUT') {
       clearCachedSubs();
     } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-      syncSubscriptionsWithSupabase(false);
+      if (session?.user) {
+        syncSubscriptionsWithSupabase(false);
+      }
     }
   });
 }

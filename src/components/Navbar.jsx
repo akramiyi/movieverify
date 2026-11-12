@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Bell, User, Menu, X, Clock, Download, LogOut, ShieldCheck, Check, ChevronDown } from 'lucide-react';
-import { supabase } from '../data/supabaseClient';
+import { supabase, getCachedAuthUser } from '../data/supabaseClient';
 import { revokePushTokenBeforeSignOut } from '../hooks/usePushNotifications';
 import SearchSuggestions from './SearchSuggestions';
 import { searchTMDB } from '../hooks/useTMDB';
@@ -63,7 +63,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pendingReports, setPendingReports] = useState(0);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => getCachedAuthUser());
   const [isAdminUser, setIsAdminUser] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
@@ -182,17 +182,18 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
     });
 
     // Listen to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMounted) return;
-      setCurrentUser(session?.user ?? null);
-      if (session?.user?.id) {
+      if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setIsAdminUser(false);
+        setUnreadNotifications(0);
+      } else if (session?.user) {
+        setCurrentUser(session.user);
         checkAdmin(session.user.id);
         if (typeof unreadNotificationCount !== 'number') {
           checkNotifications();
         }
-      } else {
-        setIsAdminUser(false);
-        setUnreadNotifications(0);
       }
     });
 
@@ -222,6 +223,10 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
       setCurrentUser(null);
       setIsAdminUser(false);
       setUnreadNotifications(0);
+      try {
+        localStorage.removeItem('movieverify_auth_popup_dismissed');
+        sessionStorage.removeItem('movieverify_auth_popup_dismissed');
+      } catch {}
     } catch (err) {
       console.warn('Sign out error:', err?.message);
     }

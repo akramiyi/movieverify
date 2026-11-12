@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Bell, X, Download } from 'lucide-react';
 import SiteLockScreen from './components/SiteLockScreen';
-import { supabase } from './data/supabaseClient';
+import { supabase, getCachedAuthUser } from './data/supabaseClient';
 
 import Navbar from './components/Navbar';
 import FeaturedCarousel from './components/FeaturedCarousel';
@@ -278,13 +278,26 @@ function App() {
     setIsActorModalOpen(true);
   };
 
-  const [authPopupDismissed, setAuthPopupDismissed] = useState(false);
+  const [authPopupDismissed, setAuthPopupDismissed] = useState(() => {
+    try {
+      if (typeof window === 'undefined') return false;
+      const cached = getCachedAuthUser();
+      if (cached) return true;
+      return (
+        sessionStorage.getItem('movieverify_auth_popup_dismissed') === 'true' ||
+        localStorage.getItem('movieverify_auth_popup_dismissed') === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
 
   const handleOpenAdmin = () => {
     setShowAuthModal(false);
     setShowAdmin(true);
     try {
       sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
+      localStorage.setItem('movieverify_auth_popup_dismissed', 'true');
     } catch {}
   };
 
@@ -298,6 +311,7 @@ function App() {
     setAuthPopupDismissed(true);
     try {
       sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
+      localStorage.setItem('movieverify_auth_popup_dismissed', 'true');
     } catch {}
   };
 
@@ -312,12 +326,27 @@ function App() {
   useEffect(() => {
     if (showIntro || siteLocked || showAdmin || location.pathname === '/admin') return;
 
-    // Do not show if dismissed during this active browsing session
+    // Do not show if dismissed during this active browsing session or already authenticated
     if (authPopupDismissed) return;
 
-    // If visitor opened a shared deep link, prioritize title viewing without immediate popup
+    // Fast synchronous check: If user is cached in local storage, do not popup
+    if (getCachedAuthUser()) {
+      setAuthPopupDismissed(true);
+      return;
+    }
+
+    // If visitor opened a shared deep link, OAuth callback, or hash token, prioritize title viewing without popup
     const initialParams = new URLSearchParams(location.search);
-    if (initialParams.has('id') || initialParams.has('movie') || initialParams.has('tv')) return;
+    if (
+      initialParams.has('id') ||
+      initialParams.has('movie') ||
+      initialParams.has('tv') ||
+      initialParams.has('code') ||
+      initialParams.has('error') ||
+      (typeof window !== 'undefined' && window.location.hash.includes('access_token'))
+    ) {
+      return;
+    }
 
     let isMounted = true;
 
@@ -328,29 +357,35 @@ function App() {
 
         // Authenticated users must never see the automatic login popup
         if (!isMounted || session?.user || showAdmin || location.pathname === '/admin') {
+          if (session?.user) {
+            setAuthPopupDismissed(true);
+            try {
+              sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
+              localStorage.setItem('movieverify_auth_popup_dismissed', 'true');
+            } catch {}
+          }
           return;
         }
 
-        // Open signup modal immediately on website open from any link
+        // Open signup modal immediately on website open for unauthenticated visitor
         setShowAuthModal(true);
       } catch (err) {
         console.warn('Auth check error for immediate signup popup:', err?.message);
-        if (isMounted && !showAdmin && location.pathname !== '/admin') {
-          setShowAuthModal(true);
-        }
+        // Do not force showAuthModal on transient check or network errors
       }
     };
 
     initAuth();
 
-    // Listen for auth state changes: automatically dismiss modal on OAuth sign-in
+    // Listen for auth state changes: automatically dismiss modal on sign-in
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        // Dismiss welcome auth popup automatically only for OAuth sign-ins (e.g. Google),
-        // leaving AuthModal's admin password check to manage its own lifecycle.
-        if (event === 'SIGNED_IN' && session.user.app_metadata?.provider !== 'email') {
-          setShowAuthModal(false);
-        }
+        setShowAuthModal(false);
+        setAuthPopupDismissed(true);
+        try {
+          sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
+          localStorage.setItem('movieverify_auth_popup_dismissed', 'true');
+        } catch {}
       }
     });
 
