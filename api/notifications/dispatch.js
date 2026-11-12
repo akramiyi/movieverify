@@ -52,9 +52,13 @@ export function timingSafeCompare(a, b) {
 export function isAuthorizedWorker(headers) {
   const configuredSecret = process.env.INTERNAL_WORKER_SECRET || process.env.CRON_SECRET;
   const cronSecret = process.env.CRON_SECRET || process.env.INTERNAL_WORKER_SECRET;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
-  // Fail closed if worker secret is not configured
-  if (!configuredSecret || typeof configuredSecret !== 'string' || configuredSecret.trim() === '') {
+  // Fail closed if neither worker secret nor service role key is configured
+  if (
+    (!configuredSecret || typeof configuredSecret !== 'string' || configuredSecret.trim() === '') &&
+    (!serviceRoleKey || typeof serviceRoleKey !== 'string' || serviceRoleKey.trim() === '')
+  ) {
     return false;
   }
 
@@ -68,8 +72,9 @@ export function isAuthorizedWorker(headers) {
     const providedWorkerSecret = headers[workerSecretKey];
     if (typeof providedWorkerSecret === 'string' && providedWorkerSecret.trim() !== '') {
       if (
-        timingSafeCompare(providedWorkerSecret.trim(), configuredSecret.trim()) ||
-        (cronSecret && timingSafeCompare(providedWorkerSecret.trim(), cronSecret.trim()))
+        (configuredSecret && timingSafeCompare(providedWorkerSecret.trim(), configuredSecret.trim())) ||
+        (cronSecret && timingSafeCompare(providedWorkerSecret.trim(), cronSecret.trim())) ||
+        (serviceRoleKey && timingSafeCompare(providedWorkerSecret.trim(), serviceRoleKey.trim()))
       ) {
         return true;
       }
@@ -85,8 +90,9 @@ export function isAuthorizedWorker(headers) {
       if (match && match[1]) {
         const bearerToken = match[1].trim();
         if (
-          timingSafeCompare(bearerToken, configuredSecret.trim()) ||
-          (cronSecret && timingSafeCompare(bearerToken, cronSecret.trim()))
+          (configuredSecret && timingSafeCompare(bearerToken, configuredSecret.trim())) ||
+          (cronSecret && timingSafeCompare(bearerToken, cronSecret.trim())) ||
+          (serviceRoleKey && timingSafeCompare(bearerToken, serviceRoleKey.trim()))
         ) {
           return true;
         }

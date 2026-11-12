@@ -224,7 +224,7 @@ const broadcastNotification = async ({ title, body, tmdbId, mediaType, imageUrl 
     const totalDeliveries = data?.push_deliveries || data?.total_deliveries || 0;
 
     // 2. Trigger instant dispatch cycle on Vercel
-    const workerSecret = process.env.INTERNAL_WORKER_SECRET || process.env.CRON_SECRET;
+    const workerSecret = process.env.INTERNAL_WORKER_SECRET || process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
     let dispatchSuccess = false;
 
     if (workerSecret) {
@@ -237,6 +237,8 @@ const broadcastNotification = async ({ title, body, tmdbId, mediaType, imageUrl 
           },
           body: JSON.stringify({ batch_size: 500 })
         });
+        const resData = await dispatchRes.json().catch(() => ({}));
+        console.log('[Broadcast] Dispatch response status:', dispatchRes.status, resData);
         dispatchSuccess = dispatchRes.ok;
       } catch (dispErr) {
         console.warn('[Broadcast] Dispatch trigger warning:', dispErr.message);
