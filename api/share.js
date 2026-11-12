@@ -42,6 +42,112 @@ export function isCrawler(userAgent) {
 const serverTitleCache = new Map();
 const MAX_SERVER_CACHE = 200;
 
+// In-memory cache for bundled home feed
+const homeFeedCache = { data: null, timestamp: 0 };
+const HOME_FEED_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+async function handleHomeFeed(req, res) {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=21600, stale-while-revalidate=1800');
+
+  if (homeFeedCache.data && (Date.now() - homeFeedCache.timestamp < HOME_FEED_TTL)) {
+    res.setHeader('X-Cache', 'HIT');
+    return res.end(JSON.stringify(homeFeedCache.data));
+  }
+
+  const serverToken = process.env.TMDB_READ_TOKEN || process.env.TMDB_TOKEN || process.env.TMDB_API_KEY;
+  const isBearer = serverToken && serverToken.length > 50;
+  const headers = {
+    'Accept': 'application/json',
+    ...(isBearer ? { 'Authorization': `Bearer ${serverToken}` } : {})
+  };
+
+  const fetchJson = async (endpoint) => {
+    try {
+      const sep = endpoint.includes('?') ? '&' : '?';
+      const url = isBearer
+        ? `https://api.themoviedb.org/3${endpoint}`
+        : (serverToken
+          ? `https://api.themoviedb.org/3${endpoint}${sep}api_key=${encodeURIComponent(serverToken)}`
+          : `https://movieverify-backend.onrender.com/api/tmdb${endpoint}`);
+      const r = await fetch(url, { headers });
+      if (!r.ok) return { results: [] };
+      return await r.json();
+    } catch {
+      return { results: [] };
+    }
+  };
+
+  try {
+    const today = new Date();
+    const sixtyDaysAgo = new Date(today);
+    sixtyDaysAgo.setDate(today.getDate() - 60);
+    const fromDate = sixtyDaysAgo.toISOString().split('T')[0];
+    const toDate = today.toISOString().split('T')[0];
+
+    const [
+      trending,
+      popular,
+      bollywood,
+      telugu,
+      tamil,
+      kannada,
+      malayalam,
+      webSeries,
+      indiaHi,
+      indiaTe,
+      indiaTa,
+      indiaKn,
+      indiaMl
+    ] = await Promise.all([
+      fetchJson('/trending/all/week'),
+      fetchJson('/movie/popular?language=en-US&page=1'),
+      fetchJson('/discover/movie?with_original_language=hi&sort_by=popularity.desc&page=1'),
+      fetchJson('/discover/movie?with_original_language=te&sort_by=popularity.desc&page=1'),
+      fetchJson('/discover/movie?with_original_language=ta&sort_by=popularity.desc&page=1'),
+      fetchJson('/discover/movie?with_original_language=kn&sort_by=popularity.desc&page=1'),
+      fetchJson('/discover/movie?with_original_language=ml&sort_by=popularity.desc&page=1'),
+      fetchJson('/tv/popular?language=en-US&page=1'),
+      fetchJson(`/discover/movie?with_original_language=hi&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`),
+      fetchJson(`/discover/movie?with_original_language=te&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`),
+      fetchJson(`/discover/movie?with_original_language=ta&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`),
+      fetchJson(`/discover/movie?with_original_language=kn&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`),
+      fetchJson(`/discover/movie?with_original_language=ml&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`)
+    ]);
+
+    const processIndiaList = (r) => (r.results || [])
+      .filter((m) => m.backdrop_path && m.overview)
+      .sort((a, b) => new Date(b.release_date) - new Date(a.release_date))
+      .slice(0, 4);
+
+    const feedData = {
+      trending: trending.results || [],
+      popular: popular.results || [],
+      bollywood: bollywood.results || [],
+      telugu: telugu.results || [],
+      tamil: tamil.results || [],
+      kannada: kannada.results || [],
+      malayalam: malayalam.results || [],
+      webSeries: webSeries.results || [],
+      indiaLatest: [
+        ...processIndiaList(indiaHi),
+        ...processIndiaList(indiaTe),
+        ...processIndiaList(indiaTa),
+        ...processIndiaList(indiaKn),
+        ...processIndiaList(indiaMl)
+      ]
+    };
+
+    homeFeedCache.data = feedData;
+    homeFeedCache.timestamp = Date.now();
+    res.setHeader('X-Cache', 'MISS');
+    return res.end(JSON.stringify(feedData));
+  } catch (err) {
+    res.statusCode = 500;
+    return res.end(JSON.stringify({ error: 'Failed to build home feed' }));
+  }
+}
+
 // Fetch TMDB data using server token or backend proxy fallback
 async function fetchTitleDetails(mediaType, id) {
   const cacheKey = `${mediaType}:${id}`;
@@ -240,6 +346,20 @@ function renderHtml({
 }
 
 export default async function handler(req, res) {
+  // Check if this is a bundled home feed request
+  const query = req.query || {};
+  let isFeedRequest = query.feed === 'home';
+  if (!isFeedRequest && req.url) {
+    try {
+      const parsedUrl = new URL(req.url, 'http://localhost');
+      isFeedRequest = parsedUrl.searchParams.get('feed') === 'home' || parsedUrl.pathname === '/api/home-feed';
+    } catch {}
+  }
+
+  if (isFeedRequest) {
+    return handleHomeFeed(req, res);
+  }
+
   // Parse parameters from query or URL
   let type = '';
   let id = '';

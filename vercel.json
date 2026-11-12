@@ -12,6 +12,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/home-feed",
+      "destination": "/api/share?feed=home"
+    },
+    {
       "source": "/share/:type/:id",
       "destination": "/api/share?type=:type&id=:id"
     },
