@@ -103,12 +103,11 @@ const AdminPanel = ({ onClose }) => {
     try {
       const { data } = await supabase
         .from('site_settings')
-        .select('is_locked, lock_password')
+        .select('is_locked')
         .eq('id', 1)
         .single();
       if (data) {
         setSiteLockStatus(data.is_locked);
-        setLockKeyInput(data.lock_password || '');
       }
     } catch (e) {
       console.warn('Failed to fetch site lock status:', e.message);
@@ -120,13 +119,17 @@ const AdminPanel = ({ onClose }) => {
     const newStatus = !siteLockStatus;
     
     try {
+      const updatePayload = {
+        is_locked: newStatus,
+        updated_at: new Date().toISOString()
+      };
+      if (lockKeyInput.trim()) {
+        updatePayload.lock_password = lockKeyInput.trim();
+      }
+
       const { error } = await supabase
         .from('site_settings')
-        .update({ 
-          is_locked: newStatus, 
-          lock_password: lockKeyInput.trim(),
-          updated_at: new Date().toISOString() 
-        })
+        .update(updatePayload)
         .eq('id', 1);
 
       if (!error) {

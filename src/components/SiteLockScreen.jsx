@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
-import { supabase } from '../data/supabaseClient';
 
 const SiteLockScreen = ({ onUnlock }) => {
   const [keyInput, setKeyInput] = useState('');
@@ -9,30 +8,30 @@ const SiteLockScreen = ({ onUnlock }) => {
 
   const handleUnlock = async (e) => {
     e.preventDefault();
+    if (!keyInput.trim()) return;
+
     setChecking(true);
     setError('');
 
     try {
-      const { data, error: fetchErr } = await supabase
-        .from('site_settings')
-        .select('lock_password')
-        .eq('id', 1)
-        .single();
+      const res = await fetch('/api/site-lock/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ password: keyInput.trim() })
+      });
 
-      if (fetchErr) {
-        setError('Unable to verify key. Try again.');
-        setChecking(false);
-        return;
-      }
+      const data = await res.json().catch(() => ({}));
 
-      if (keyInput.trim() === data.lock_password) {
+      if (res.ok && data.success) {
         sessionStorage.setItem('movieverify_unlocked', 'true');
         onUnlock();
       } else {
-        setError('Incorrect key. Please try again.');
+        setError(data.error || 'Incorrect key. Please try again.');
       }
-    } catch (err) {
-      setError('Something went wrong.');
+    } catch {
+      setError('Connection failed. Please check your network and try again.');
     } finally {
       setChecking(false);
     }
