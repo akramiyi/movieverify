@@ -244,6 +244,9 @@ export function buildFcmPayload(delivery, campaign = null) {
         vibrate: [200, 100, 200, 100, 200],
         silent: false,
         renotify: true,
+        tag: (delivery.delivery_id != null && String(delivery.delivery_id).trim() !== '')
+          ? String(delivery.delivery_id)
+          : (campaign?.id ? String(campaign.id) : 'movieverify-campaign'),
         data: {
           url: linkUrl,
           delivery_id: delivery.delivery_id != null ? String(delivery.delivery_id) : '',

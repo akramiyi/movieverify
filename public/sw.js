@@ -161,6 +161,7 @@ self.addEventListener('push', (e) => {
       }
 
       // 2. Display Notification
+      const resolvedTag = String(deliveryId || data.tag || payload.notification?.tag || ('mv_alert_' + (data.movie_id || Date.now())));
       const options = {
         body,
         icon: '/logo192.png',
@@ -175,7 +176,7 @@ self.addEventListener('push', (e) => {
         actions: [
           { action: 'download', title: '⬇️ Download Now' },
         ],
-        tag: deliveryId || undefined, // Native OS deduplication tag
+        tag: deliveryId || resolvedTag, // Native OS deduplication tag (guaranteed non-empty string for renotify)
       };
 
       if (imageUrl) {
