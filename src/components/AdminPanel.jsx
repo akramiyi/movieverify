@@ -17,7 +17,7 @@ const AdminLiveClock = () => {
   const [showEpoch, setShowEpoch] = useState(false);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 10);
+    const timer = setInterval(() => setNow(new Date()), 100);
     return () => clearInterval(timer);
   }, []);
 

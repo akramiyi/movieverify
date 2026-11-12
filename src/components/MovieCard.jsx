@@ -69,10 +69,11 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100 })
           src={movie.poster}
           backdropSrc={movie.backdrop}
           alt={movie.title}
-          lazy={false}
+          lazy={index >= 4}
+          priority={index < 4}
           shouldLoad={shouldLoad}
           onLoad={() => setImageLoaded(true)}
-          className={`w-full h-full object-cover object-top rounded-md transition-opacity duration-500 z-10 relative ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+          className={`w-full h-full object-cover object-top rounded-md transition-opacity duration-300 z-10 relative ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         />
         {hasDownloadLink && (
           <div className="absolute top-1.5 right-1.5 bg-green-600/90 text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md uppercase tracking-wider backdrop-blur-sm z-10 flex items-center gap-0.5">
@@ -177,4 +178,15 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100 })
   );
 };
 
-export default MovieCard;
+export default React.memo(MovieCard, (prevProps, nextProps) => {
+  return (
+    prevProps.movie.id === nextProps.movie.id &&
+    prevProps.movie.title === nextProps.movie.title &&
+    prevProps.movie.poster === nextProps.movie.poster &&
+    prevProps.movie.download480p === nextProps.movie.download480p &&
+    prevProps.movie.download720p === nextProps.movie.download720p &&
+    prevProps.movie.download1080p === nextProps.movie.download1080p &&
+    prevProps.myList.some(m => m.id === prevProps.movie.id) === nextProps.myList.some(m => m.id === nextProps.movie.id) &&
+    prevProps.index === nextProps.index
+  );
+});

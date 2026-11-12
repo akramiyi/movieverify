@@ -11,7 +11,7 @@ const LiveTime = () => {
   const [showEpoch, setShowEpoch] = useState(false);
   
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 10);
+    const timer = setInterval(() => setTime(new Date()), 100);
     return () => clearInterval(timer);
   }, []);
 
@@ -158,15 +158,16 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
   }, [checkNotifications, unreadNotificationCount]);
 
   useEffect(() => {
+    let lastScrolled = false;
     const handleScroll = () => {
-      if (window.scrollY > 0) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
+      const scrolled = window.scrollY > 10;
+      if (scrolled !== lastScrolled) {
+        lastScrolled = scrolled;
+        setIsScrolled(scrolled);
       }
     };
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 

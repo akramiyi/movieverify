@@ -27,7 +27,7 @@ const ActorsRow = ({ title, actors, onActorSelect, onSeeAll }) => {
   const scrollDuration = `${actors.length * 6.5}s`;
 
   return (
-    <div className="space-y-2 md:space-y-4 mb-8 overflow-visible">
+    <div className="movie-row-container space-y-2 md:space-y-4 mb-8 overflow-visible">
       <div className="flex items-center justify-between px-4 md:px-12">
         <h2 className="whitespace-nowrap cursor-pointer text-sm font-semibold text-[#e5e5e5] transition duration-200 hover:text-white md:text-2xl">
           {title}
@@ -67,4 +67,4 @@ const ActorsRow = ({ title, actors, onActorSelect, onSeeAll }) => {
   );
 };
 
-export default ActorsRow;
+export default React.memo(ActorsRow);

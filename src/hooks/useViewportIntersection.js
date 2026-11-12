@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 // Using a wide rootMargin to proactively load images before they come into the visible viewport
-export const useViewportIntersection = (ref, rootMargin = '0px 1000px 0px 1000px') => {
+export const useViewportIntersection = (ref, rootMargin = '150px 200px 150px 200px') => {
   const [isNearViewport, setIsNearViewport] = useState(false);
 
   useEffect(() => {

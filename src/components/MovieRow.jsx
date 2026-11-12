@@ -35,7 +35,7 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
   const scrollDuration = movies && movies.length > 0 ? `${movies.length * 6.5}s` : '50s';
 
   return (
-    <div className="space-y-2 md:space-y-4 mb-8 overflow-visible">
+    <div className="movie-row-container space-y-2 md:space-y-4 mb-8 overflow-visible">
       <div className="flex items-center justify-between px-4 md:px-12">
         <h2 className="whitespace-nowrap cursor-pointer text-sm font-semibold text-[#e5e5e5] transition duration-200 hover:text-white md:text-2xl">
           {title}
@@ -87,4 +87,4 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
   );
 };
 
-export default MovieRow;
+export default React.memo(MovieRow);
