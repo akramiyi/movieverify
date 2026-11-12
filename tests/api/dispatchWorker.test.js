@@ -943,11 +943,52 @@ test('HTTP Dispatch Endpoint Suite (POST /api/notifications/dispatch)', async (t
     return { req, res };
   }
 
-  await t.test('1. Rejects non-POST methods with 405 Method Not Allowed', async () => {
-    const { req, res } = createMockHttp({ method: 'GET' });
+  await t.test('1. Rejects unsupported HTTP methods with 405 and Allow header', async () => {
+    const { req, res } = createMockHttp({ method: 'DELETE' });
     await dispatchHandler(req, res);
     assert.equal(res.statusCode, 405);
-    assert.equal(res.headers['allow'], 'POST');
+    assert.equal(res.headers['allow'], 'GET, POST');
+
+    const { req: reqPut, res: resPut } = createMockHttp({ method: 'PUT' });
+    await dispatchHandler(reqPut, resPut);
+    assert.equal(resPut.statusCode, 405);
+    assert.equal(resPut.headers['allow'], 'GET, POST');
+  });
+
+  await t.test('1b. Vercel Cron: Executes dispatch cycle via GET with Bearer token (200 OK)', async () => {
+    const mockSupabase = createMockSupabaseWithRpc({ deliveries: [], tokens: [] });
+    const mockMessaging = createMockMessaging();
+
+    const { req, res } = createMockHttp({
+      method: 'GET',
+      headers: { 'authorization': 'Bearer secret-test-key-xyz' },
+    });
+
+    await dispatchHandler(req, res, { supabase: mockSupabase, messaging: mockMessaging });
+
+    assert.equal(res.statusCode, 200);
+    const json = res.json();
+    assert.equal(json.success, true);
+    assert.equal(json.processed, 0);
+    assert.equal(typeof json.worker_id, 'string');
+  });
+
+  await t.test('1c. Vercel Cron: Accepts query parameters on GET (batch_size, lease_seconds, sweep_expired)', async () => {
+    const mockSupabase = createMockSupabaseWithRpc({ deliveries: [], tokens: [] });
+    const mockMessaging = createMockMessaging();
+
+    const { req, res } = createMockHttp({
+      method: 'GET',
+      headers: { 'authorization': 'Bearer secret-test-key-xyz' },
+    });
+    req.url = '/api/notifications/dispatch?batch_size=15&lease_seconds=45&sweep_expired=false';
+    req.query = { batch_size: '15', lease_seconds: '45', sweep_expired: 'false' };
+
+    await dispatchHandler(req, res, { supabase: mockSupabase, messaging: mockMessaging });
+
+    assert.equal(res.statusCode, 200);
+    const json = res.json();
+    assert.equal(json.success, true);
   });
 
   await t.test('2. Rejects unauthorized requests when secret is configured (401)', async () => {
@@ -993,19 +1034,42 @@ test('HTTP Dispatch Endpoint Suite (POST /api/notifications/dispatch)', async (t
     assert.match(res.json().error, /Valid x-worker-secret header required/);
   });
 
-  await t.test('5. Rejects alternate headers (Authorization: Bearer and x-cron-secret)', async () => {
-    // Attempt via Authorization: Bearer
-    const { req: reqAuth, res: resAuth } = createMockHttp({
+  await t.test('5. Validates Authorization: Bearer support and rejects invalid schemes or headers', async () => {
+    const mockSupabase = createMockSupabaseWithRpc({ deliveries: [], tokens: [] });
+    const mockMessaging = createMockMessaging();
+
+    // Valid Bearer token succeeds
+    const { req: reqAuthValid, res: resAuthValid } = createMockHttp({
       method: 'POST',
       headers: { 'authorization': 'Bearer secret-test-key-xyz' },
+      body: { batch_size: 10 },
     });
-    await dispatchHandler(reqAuth, resAuth);
-    assert.equal(resAuth.statusCode, 401);
+    await dispatchHandler(reqAuthValid, resAuthValid, { supabase: mockSupabase, messaging: mockMessaging });
+    assert.equal(resAuthValid.statusCode, 200);
 
-    // Attempt via x-cron-secret
+    // Invalid Bearer token rejected (401)
+    const { req: reqAuthInvalid, res: resAuthInvalid } = createMockHttp({
+      method: 'POST',
+      headers: { 'authorization': 'Bearer invalid-token-xyz' },
+      body: { batch_size: 10 },
+    });
+    await dispatchHandler(reqAuthInvalid, resAuthInvalid, { supabase: mockSupabase, messaging: mockMessaging });
+    assert.equal(resAuthInvalid.statusCode, 401);
+
+    // Non-Bearer scheme (Basic) rejected (401)
+    const { req: reqBasic, res: resBasic } = createMockHttp({
+      method: 'POST',
+      headers: { 'authorization': 'Basic secret-test-key-xyz' },
+      body: { batch_size: 10 },
+    });
+    await dispatchHandler(reqBasic, resBasic);
+    assert.equal(resBasic.statusCode, 401);
+
+    // Attempt via x-cron-secret rejected (401)
     const { req: reqCron, res: resCron } = createMockHttp({
       method: 'POST',
       headers: { 'x-cron-secret': 'secret-test-key-xyz' },
+      body: { batch_size: 10 },
     });
     await dispatchHandler(reqCron, resCron);
     assert.equal(resCron.statusCode, 401);
@@ -1771,9 +1835,13 @@ test('Phase 5.9.21 Runtime Dispatch Kill Switch Suite', async (t) => {
     delete process.env.NOTIFICATION_DISPATCH_ENABLED;
     process.env.INTERNAL_WORKER_SECRET = 'kill-switch-secret';
 
-    const getRes = createMockRes();
-    await dispatchHandler({ method: 'GET', headers: {} }, getRes);
-    assert.equal(getRes.statusCode, 405);
+    const unsupportedRes = createMockRes();
+    await dispatchHandler({ method: 'DELETE', headers: {} }, unsupportedRes);
+    assert.equal(unsupportedRes.statusCode, 405);
+
+    const getUnauthRes = createMockRes();
+    await dispatchHandler({ method: 'GET', headers: {} }, getUnauthRes);
+    assert.equal(getUnauthRes.statusCode, 401);
 
     const unauthRes = createMockRes();
     await dispatchHandler({ method: 'POST', headers: { 'x-worker-secret': 'wrong-secret' }, body: {} }, unauthRes);

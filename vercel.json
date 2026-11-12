@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/notifications/dispatch",
+      "schedule": "0 0 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/share/:type/:id",

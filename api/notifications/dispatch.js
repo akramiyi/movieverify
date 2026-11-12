@@ -1,14 +1,16 @@
 /**
- * POST /api/notifications/dispatch
+ * GET, POST /api/notifications/dispatch
  * 
  * Secure endpoint to invoke a batch FCM notification dispatch cycle.
- * Guarded by internal authorization via 'x-worker-secret' header.
+ * Dual-scheduler support:
+ * 1. GitHub Actions / manual workers via 'x-worker-secret' header (POST with JSON body).
+ * 2. Vercel Cron / external ping monitors via 'Authorization: Bearer <CRON_SECRET>' header (GET or POST).
  * 
  * Security Controls:
- * 1. Only accepts authentication via 'x-worker-secret' header.
- * 2. Rejects query parameters (?secret=), Bearer tokens, or alternate headers.
+ * 1. Accepts authentication via 'x-worker-secret' or 'Authorization: Bearer <token>'.
+ * 2. Rejects query parameters (?secret=), alternate headers (x-cron-secret), or invalid schemes.
  * 3. Uses constant-time secret comparison (crypto.timingSafeEqual with sha256).
- * 4. Fails closed if INTERNAL_WORKER_SECRET / CRON_SECRET is not configured.
+ * 4. Fails closed if neither INTERNAL_WORKER_SECRET nor CRON_SECRET is configured.
  */
 
 import crypto from 'node:crypto';
@@ -39,9 +41,9 @@ export function timingSafeCompare(a, b) {
  * Validates worker invocation authorization.
  * 
  * Strict Security Rules:
- * 1. Fails closed if INTERNAL_WORKER_SECRET or CRON_SECRET is not configured.
- * 2. Accepts worker secret ONLY via 'x-worker-secret' header.
- * 3. Rejects query parameters (?secret=), Bearer tokens, or alternate headers.
+ * 1. Fails closed if neither INTERNAL_WORKER_SECRET nor CRON_SECRET is configured.
+ * 2. Accepts worker secret via 'x-worker-secret' header OR 'Authorization: Bearer <token>' header.
+ * 3. Rejects query parameters (?secret=), non-Bearer authorization schemes, or alternate headers.
  * 4. Compares secrets in constant time using crypto.timingSafeEqual.
  * 
  * @param {object} headers Request headers
@@ -49,6 +51,7 @@ export function timingSafeCompare(a, b) {
  */
 export function isAuthorizedWorker(headers) {
   const configuredSecret = process.env.INTERNAL_WORKER_SECRET || process.env.CRON_SECRET;
+  const cronSecret = process.env.CRON_SECRET || process.env.INTERNAL_WORKER_SECRET;
 
   // Fail closed if worker secret is not configured
   if (!configuredSecret || typeof configuredSecret !== 'string' || configuredSecret.trim() === '') {
@@ -59,30 +62,52 @@ export function isAuthorizedWorker(headers) {
     return false;
   }
 
-  // Accept worker secret ONLY through x-worker-secret header (case-insensitive lookup)
-  const headerKey = Object.keys(headers).find((k) => k.toLowerCase() === 'x-worker-secret');
-  if (!headerKey) {
-    return false;
+  // Channel 1: Accept worker secret through x-worker-secret header (case-insensitive)
+  const workerSecretKey = Object.keys(headers).find((k) => k.toLowerCase() === 'x-worker-secret');
+  if (workerSecretKey) {
+    const providedWorkerSecret = headers[workerSecretKey];
+    if (typeof providedWorkerSecret === 'string' && providedWorkerSecret.trim() !== '') {
+      if (
+        timingSafeCompare(providedWorkerSecret.trim(), configuredSecret.trim()) ||
+        (cronSecret && timingSafeCompare(providedWorkerSecret.trim(), cronSecret.trim()))
+      ) {
+        return true;
+      }
+    }
   }
 
-  const providedSecret = headers[headerKey];
-  if (typeof providedSecret !== 'string') {
-    return false;
+  // Channel 2: Accept Bearer token through Authorization header (Vercel Cron standard)
+  const authHeaderKey = Object.keys(headers).find((k) => k.toLowerCase() === 'authorization');
+  if (authHeaderKey) {
+    const authVal = headers[authHeaderKey];
+    if (typeof authVal === 'string' && authVal.trim() !== '') {
+      const match = authVal.match(/^Bearer\s+(.+)$/i);
+      if (match && match[1]) {
+        const bearerToken = match[1].trim();
+        if (
+          timingSafeCompare(bearerToken, configuredSecret.trim()) ||
+          (cronSecret && timingSafeCompare(bearerToken, cronSecret.trim()))
+        ) {
+          return true;
+        }
+      }
+    }
   }
 
-  return timingSafeCompare(providedSecret.trim(), configuredSecret.trim());
+  return false;
 }
 
 export default async function handler(req, res, customDependencies = {}) {
-  // 1. Enforce HTTP Method
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return sendJson(res, 405, { error: 'Method not allowed. Use POST.' });
+  // 1. Enforce HTTP Method (GET for Vercel Cron/monitors, POST for workers/GitHub Actions)
+  const method = (req.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST');
+    return sendJson(res, 405, { error: 'Method not allowed. Use GET or POST.' });
   }
 
-  // 2. Validate Worker Authorization (strictly x-worker-secret only, fail closed)
+  // 2. Validate Worker Authorization (strictly x-worker-secret or Authorization: Bearer, fail closed)
   if (!isAuthorizedWorker(req.headers)) {
-    return sendJson(res, 401, { error: 'Unauthorized: Valid x-worker-secret header required.' });
+    return sendJson(res, 401, { error: 'Unauthorized: Valid x-worker-secret header required or Authorization Bearer token.' });
   }
 
   // 2b. Runtime Kill Switch (fail closed unless NOTIFICATION_DISPATCH_ENABLED === 'true')
@@ -95,59 +120,95 @@ export default async function handler(req, res, customDependencies = {}) {
     });
   }
 
-  // 3. Parse & Validate Strict Dispatch Configuration (Fail closed, never silently default)
-  const body = await parseJsonBody(req);
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return sendJson(res, 400, {
-      error: 'Bad Request',
-      message: 'Request body must be a valid JSON object.',
-    });
-  }
-
-  // A. Validate batch_size (Required integer between 1 and 100)
-  const rawBatchSize = body.batch_size;
-  if (
-    typeof rawBatchSize !== 'number' ||
-    !Number.isInteger(rawBatchSize) ||
-    rawBatchSize < 1 ||
-    rawBatchSize > 100
-  ) {
-    return sendJson(res, 400, {
-      error: 'Bad Request',
-      message: 'Field "batch_size" is required and must be an integer between 1 and 100.',
-    });
-  }
-  const batchSize = rawBatchSize;
-
-  // B. Validate lease_seconds (Optional integer between 15 and 300, defaults to 60)
+  // 3. Parse & Validate Strict Dispatch Configuration
+  let batchSize = 25;
   let leaseSeconds = 60;
-  if (body.lease_seconds !== undefined) {
-    const rawLeaseSeconds = body.lease_seconds;
+  let sweepFirst = true;
+
+  if (method === 'GET') {
+    // Vercel Cron and monitoring pings invoke via GET without request body
+    // Safe defaults: batch_size=25, lease_seconds=60, sweep_expired=true
+    let query = req.query;
+    if (!query && typeof req.url === 'string' && req.url.includes('?')) {
+      try {
+        const parsedUrl = new URL(req.url, 'http://localhost');
+        query = Object.fromEntries(parsedUrl.searchParams.entries());
+      } catch {
+        query = {};
+      }
+    }
+    query = query || {};
+
+    if (query.batch_size !== undefined) {
+      const qBatch = parseInt(query.batch_size, 10);
+      if (!Number.isNaN(qBatch) && qBatch >= 1 && qBatch <= 100) {
+        batchSize = qBatch;
+      }
+    }
+    if (query.lease_seconds !== undefined) {
+      const qLease = parseInt(query.lease_seconds, 10);
+      if (!Number.isNaN(qLease) && qLease >= 15 && qLease <= 300) {
+        leaseSeconds = qLease;
+      }
+    }
+    if (query.sweep_expired !== undefined) {
+      sweepFirst = query.sweep_expired === 'true' || query.sweep_expired === true;
+    }
+  } else {
+    // POST requests must follow the strict JSON payload schema
+    const body = await parseJsonBody(req);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return sendJson(res, 400, {
+        error: 'Bad Request',
+        message: 'Request body must be a valid JSON object.',
+      });
+    }
+
+    // A. Validate batch_size (Required integer between 1 and 100)
+    const rawBatchSize = body.batch_size;
     if (
-      typeof rawLeaseSeconds !== 'number' ||
-      !Number.isInteger(rawLeaseSeconds) ||
-      rawLeaseSeconds < 15 ||
-      rawLeaseSeconds > 300
+      typeof rawBatchSize !== 'number' ||
+      !Number.isInteger(rawBatchSize) ||
+      rawBatchSize < 1 ||
+      rawBatchSize > 100
     ) {
       return sendJson(res, 400, {
         error: 'Bad Request',
-        message: 'Field "lease_seconds", when provided, must be an integer between 15 and 300.',
+        message: 'Field "batch_size" is required and must be an integer between 1 and 100.',
       });
     }
-    leaseSeconds = rawLeaseSeconds;
-  }
+    batchSize = rawBatchSize;
 
-  // C. Validate sweep_expired (Optional boolean, defaults to false)
-  let sweepFirst = false;
-  if (body.sweep_expired !== undefined) {
-    const rawSweepExpired = body.sweep_expired;
-    if (typeof rawSweepExpired !== 'boolean') {
-      return sendJson(res, 400, {
-        error: 'Bad Request',
-        message: 'Field "sweep_expired", when provided, must be a boolean (true or false).',
-      });
+    // B. Validate lease_seconds (Optional integer between 15 and 300, defaults to 60)
+    if (body.lease_seconds !== undefined) {
+      const rawLeaseSeconds = body.lease_seconds;
+      if (
+        typeof rawLeaseSeconds !== 'number' ||
+        !Number.isInteger(rawLeaseSeconds) ||
+        rawLeaseSeconds < 15 ||
+        rawLeaseSeconds > 300
+      ) {
+        return sendJson(res, 400, {
+          error: 'Bad Request',
+          message: 'Field "lease_seconds", when provided, must be an integer between 15 and 300.',
+        });
+      }
+      leaseSeconds = rawLeaseSeconds;
     }
-    sweepFirst = rawSweepExpired;
+
+    // C. Validate sweep_expired (Optional boolean, defaults to false for targeted POST runs)
+    if (body.sweep_expired !== undefined) {
+      const rawSweepExpired = body.sweep_expired;
+      if (typeof rawSweepExpired !== 'boolean') {
+        return sendJson(res, 400, {
+          error: 'Bad Request',
+          message: 'Field "sweep_expired", when provided, must be a boolean (true or false).',
+        });
+      }
+      sweepFirst = rawSweepExpired;
+    } else {
+      sweepFirst = false;
+    }
   }
 
   try {
