@@ -166,6 +166,9 @@ self.addEventListener('push', (e) => {
         body,
         icon: '/logo192.png',
         badge: '/favicon.ico',
+        vibrate: [200, 100, 200, 100, 200],
+        silent: false,
+        renotify: true,
         data: {
           delivery_id: deliveryId,
           url: targetUrl,

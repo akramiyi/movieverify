@@ -238,6 +238,13 @@ export function buildFcmPayload(delivery, campaign = null) {
       headers: {
         Urgency: 'high',
       },
+      notification: {
+        icon: '/logo192.png',
+        badge: '/favicon.ico',
+        vibrate: [200, 100, 200, 100, 200],
+        silent: false,
+        renotify: true,
+      },
     },
   };
 
