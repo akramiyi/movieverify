@@ -205,7 +205,7 @@ const broadcastNotification = async ({ title, body, tmdbId, mediaType, imageUrl 
     const rpcParams = {
       p_title: title.trim(),
       p_body: body.trim(),
-      p_category: 'movie_update',
+      p_category: 'movie_release',
       p_url: url,
       p_image_url: imageUrl || null,
       p_target_criteria: targetCriteria,
@@ -221,7 +221,7 @@ const broadcastNotification = async ({ title, body, tmdbId, mediaType, imageUrl 
 
     const campaignId = data?.campaign_id;
     const totalRecipients = data?.total_recipients || 0;
-    const totalDeliveries = data?.total_deliveries || 0;
+    const totalDeliveries = data?.push_deliveries || data?.total_deliveries || 0;
 
     // 2. Trigger instant dispatch cycle on Vercel
     const workerSecret = process.env.INTERNAL_WORKER_SECRET || process.env.CRON_SECRET;
