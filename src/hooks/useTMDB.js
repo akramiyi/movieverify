@@ -201,16 +201,20 @@ export const fetchHomeFeed = async () => {
   if (homeFeedPromise) return homeFeedPromise;
 
   homeFeedPromise = (async () => {
-    // 1. Try sessionStorage cache first (1h TTL)
+    // 1. Try localStorage / sessionStorage cache first (4h TTL)
     try {
-      if (typeof sessionStorage !== 'undefined') {
-        const stored = sessionStorage.getItem('movieverify_home_feed_v1');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed && parsed.data && (Date.now() - parsed.timestamp < 3600000)) {
-            inMemoryFeed = parsed.data;
-            return parsed.data;
-          }
+      let stored = null;
+      if (typeof localStorage !== 'undefined') {
+        stored = localStorage.getItem('movieverify_home_feed_v1');
+      }
+      if (!stored && typeof sessionStorage !== 'undefined') {
+        stored = sessionStorage.getItem('movieverify_home_feed_v1');
+      }
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.data && (Date.now() - parsed.timestamp < 14400000)) {
+          inMemoryFeed = parsed.data;
+          return parsed.data;
         }
       }
     } catch {}
@@ -230,6 +234,14 @@ export const fetchHomeFeed = async () => {
         const feed = await res.json();
         if (feed && (feed.trending || feed.popular)) {
           inMemoryFeed = feed;
+          try {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('movieverify_home_feed_v1', JSON.stringify({
+                timestamp: Date.now(),
+                data: feed
+              }));
+            }
+          } catch {}
           try {
             if (typeof sessionStorage !== 'undefined') {
               sessionStorage.setItem('movieverify_home_feed_v1', JSON.stringify({
@@ -361,17 +373,81 @@ const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
   return results;
 };
 
+const getInitialTMDBData = () => {
+  let stored = null;
+  try {
+    if (typeof localStorage !== 'undefined') {
+      stored = localStorage.getItem('movieverify_home_feed_v1');
+    }
+  } catch {}
+  if (!stored) {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        stored = sessionStorage.getItem('movieverify_home_feed_v1');
+      }
+    } catch {}
+  }
+
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed && parsed.data && (Date.now() - parsed.timestamp < 14400000)) {
+        const feed = parsed.data;
+        const trendingList = (feed.trending || []).map(item => {
+          const mType = item.media_type || (item.first_air_date ? 'tv' : (item.release_date ? 'movie' : getMediaTypeFromId(item.id)));
+          return formatMovie({ ...item, media_type: mType });
+        });
+        const popularList = (feed.popular || []).map(item => formatMovie({ ...item, media_type: 'movie' }));
+        const bollywoodList = (feed.bollywood || []).map(item => formatMovie({ ...item, media_type: 'movie' }));
+        const southIndianList = (feed.southIndian || []).map(item => formatMovie({ ...item, media_type: 'movie' }));
+        const webSeriesList = (feed.webSeries || []).map(item => formatMovie({ ...item, media_type: 'tv' }));
+
+        const allItems = [...trendingList, ...popularList, ...bollywoodList];
+        const seenIds = new Set();
+        const featuredList = [];
+        allItems.forEach(m => {
+          if (m.backdrop && m.description && !seenIds.has(String(m.id))) {
+            seenIds.add(String(m.id));
+            featuredList.push(m);
+          }
+        });
+        featuredList.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+        if (trendingList.length > 0 || featuredList.length > 0) {
+          return {
+            data: {
+              trending: trendingList,
+              popular: popularList,
+              bollywood: bollywoodList,
+              southIndian: southIndianList,
+              webSeries: webSeriesList,
+              featured: featuredList.slice(0, 8),
+              downloadAvailable: []
+            },
+            isLoading: false
+          };
+        }
+      }
+    } catch {}
+  }
+  return {
+    data: {
+      trending: [],
+      popular: [],
+      bollywood: [],
+      southIndian: [],
+      webSeries: [],
+      featured: [],
+      downloadAvailable: []
+    },
+    isLoading: true
+  };
+};
+
 export const useTMDB = () => {
-  const [data, setData] = useState({
-    trending: [],
-    popular: [],
-    bollywood: [],
-    southIndian: [],
-    webSeries: [],
-    featured: [],
-    downloadAvailable: [],
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const initial = getInitialTMDBData();
+  const [data, setData] = useState(initial.data);
+  const [isLoading, setIsLoading] = useState(initial.isLoading);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -501,9 +577,9 @@ export const useTMDB = () => {
           }
         });
 
-        // Randomly shuffle to give a diverse cinematic layout
+        // Consistent featured sorting: prioritize highest popularity to eliminate hero flickers
         const featuredList = uniqueHeroPool
-          .sort(() => 0.5 - Math.random())
+          .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
           .slice(0, 8);
 
         // Resolve Download Available Movies (combines activeLinks keys + local movies with links)
