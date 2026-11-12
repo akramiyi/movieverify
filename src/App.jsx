@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Bell, X, Download, Sparkles, Check } from 'lucide-react';
 import SiteLockScreen from './components/SiteLockScreen';
@@ -10,7 +10,6 @@ import MovieRow from './components/MovieRow';
 import MovieCard from './components/MovieCard';
 import MovieDetailsModal from './components/MovieDetailsModal';
 import Footer from './components/Footer';
-import AdminPanel from './components/AdminPanel';
 import AuthModal from './components/AuthModal';
 import { getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
 import IntroAnimation from './components/IntroAnimation';
@@ -23,17 +22,20 @@ import { useLatestIndiaRelease } from './hooks/useLatestIndiaRelease';
 import InstallPWA from './components/InstallPWA';
 import NotificationPrompt from './components/NotificationPrompt';
 import ActorsRow from './components/ActorsRow';
-import ActorModal from './components/ActorModal';
 import { actors } from './data/actors';
-import AllActorsPage from './pages/AllActorsPage';
-import GenrePage from './pages/GenrePage';
 import { useRecentlyViewed } from './hooks/useRecentlyViewed';
 import { useDownloadHistory } from './hooks/useDownloadHistory';
-import DownloadHistoryModal from './components/DownloadHistoryModal';
-import NotificationCenter from './components/NotificationCenter';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { resolveNotificationTargetUrl, parseNotificationMovieLink } from './utils/notificationLinks';
 import { reportNotificationTelemetry } from './utils/notificationTelemetry';
+
+// Lazy-loaded routes and heavy modal components for optimal initial bundle performance
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const ActorModal = lazy(() => import('./components/ActorModal'));
+const AllActorsPage = lazy(() => import('./pages/AllActorsPage'));
+const GenrePage = lazy(() => import('./pages/GenrePage'));
+const DownloadHistoryModal = lazy(() => import('./components/DownloadHistoryModal'));
+const NotificationCenter = lazy(() => import('./components/NotificationCenter'));
 
 const getActors = () => actors.filter(a => a.type === 'actor');
 const getActresses = () => actors.filter(a => a.type === 'actress');
@@ -1024,48 +1026,52 @@ function App() {
         onRequireAuth={handleOpenAuthModal}
       />
 
-      <DownloadHistoryModal
-        isOpen={isHistoryModalOpen}
-        onClose={() => setIsHistoryModalOpen(false)}
-        history={history}
-        onClear={clearHistory}
-      />
+      <Suspense fallback={null}>
+        <DownloadHistoryModal
+          isOpen={isHistoryModalOpen}
+          onClose={() => setIsHistoryModalOpen(false)}
+          history={history}
+          onClear={clearHistory}
+        />
 
-      <NotificationCenter
-        isOpen={isNotificationCenterOpen}
-        onClose={() => setIsNotificationCenterOpen(false)}
-        onSelectMovie={handleMovieSelect}
-        onSelectActor={(actor) => {
-          setSelectedActor(actor);
-          setIsActorModalOpen(true);
-        }}
-        onUnreadCountChange={setUnreadNotifications}
-        refreshTrigger={inboxRefreshTrigger}
-      />
+        <NotificationCenter
+          isOpen={isNotificationCenterOpen}
+          onClose={() => setIsNotificationCenterOpen(false)}
+          onSelectMovie={handleMovieSelect}
+          onSelectActor={(actor) => {
+            setSelectedActor(actor);
+            setIsActorModalOpen(true);
+          }}
+          onUnreadCountChange={setUnreadNotifications}
+          refreshTrigger={inboxRefreshTrigger}
+        />
 
-      <ActorModal
-        actor={selectedActor}
-        isOpen={isActorModalOpen}
-        onClose={() => setIsActorModalOpen(false)}
-        onMovieClick={(movie) => {
-          setIsActorModalOpen(false);
-          handleMovieSelect(movie);
-        }}
-      />
+        <ActorModal
+          actor={selectedActor}
+          isOpen={isActorModalOpen}
+          onClose={() => setIsActorModalOpen(false)}
+          onMovieClick={(movie) => {
+            setIsActorModalOpen(false);
+            handleMovieSelect(movie);
+          }}
+        />
+      </Suspense>
 
           </>
         } />
-        <Route path="/admin" element={<AdminPanel onClose={handleCloseAdmin} />} />
-        <Route path="/actors" element={<AllActorsPage onMovieSelect={handleMovieSelect} type="actors" />} />
-        <Route path="/actresses" element={<AllActorsPage onMovieSelect={handleMovieSelect} type="actresses" />} />
+        <Route path="/admin" element={<Suspense fallback={null}><AdminPanel onClose={handleCloseAdmin} /></Suspense>} />
+        <Route path="/actors" element={<Suspense fallback={null}><AllActorsPage onMovieSelect={handleMovieSelect} type="actors" /></Suspense>} />
+        <Route path="/actresses" element={<Suspense fallback={null}><AllActorsPage onMovieSelect={handleMovieSelect} type="actresses" /></Suspense>} />
         <Route
           path="/genre/:genreSlug"
           element={
-            <GenrePage
-              onMovieClick={handleMovieSelect}
-              myList={myList}
-              onToggleMyList={toggleMyList}
-            />
+            <Suspense fallback={null}>
+              <GenrePage
+                onMovieClick={handleMovieSelect}
+                myList={myList}
+                onToggleMyList={toggleMyList}
+              />
+            </Suspense>
           }
         />
       </Routes>
@@ -1077,7 +1083,9 @@ function App() {
       />
 
       {showAdmin && (
-        <AdminPanel onClose={handleCloseAdmin} />
+        <Suspense fallback={null}>
+          <AdminPanel onClose={handleCloseAdmin} />
+        </Suspense>
       )}
       <InstallPWA />
       {!showIntro && !siteLocked && !showAdmin && location.pathname !== '/admin' && (
