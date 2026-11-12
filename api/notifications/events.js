@@ -82,30 +82,38 @@ function buildEventCampaignPayload(body) {
     event_type: eventType,
   };
 
+  const isBroadcast = body.target_type === 'all' || body.broadcast_all === true;
+
   if (eventType === 'movie_release') {
     category = 'movie_release';
     title = `${rawTitle} is Now Available!`;
     notificationBody = `${rawTitle} has been added with verified download links. Watch or download now on MovieVerify.`;
-    targetCriteria.type = 'movie';
+    targetCriteria.type = isBroadcast ? 'all' : 'movie';
     targetCriteria.movie_id = tmdbId;
-    defaultIdempotencyKey = `catalog:movie_release:${tmdbId}`;
+    defaultIdempotencyKey = isBroadcast
+      ? `catalog:movie_release:${tmdbId}:broadcast`
+      : `catalog:movie_release:${tmdbId}`;
   } else if (eventType === 'series_release') {
     category = 'movie_release';
     title = `${rawTitle} Series Added!`;
     notificationBody = `${rawTitle} episodes are now available on MovieVerify. Open series page to explore seasons.`;
-    targetCriteria.type = 'series';
+    targetCriteria.type = isBroadcast ? 'all' : 'series';
     targetCriteria.series_id = tmdbId;
     targetCriteria.movie_id = tmdbId;
-    defaultIdempotencyKey = `catalog:series_release:${tmdbId}`;
+    defaultIdempotencyKey = isBroadcast
+      ? `catalog:series_release:${tmdbId}:broadcast`
+      : `catalog:series_release:${tmdbId}`;
   } else if (eventType === 'season_release') {
     category = 'movie_release';
     title = `${rawTitle} — Season ${seasonNumber} Out Now!`;
     notificationBody = `Season ${seasonNumber} links for ${rawTitle} are live now on MovieVerify.`;
-    targetCriteria.type = 'season';
+    targetCriteria.type = isBroadcast ? 'all' : 'season';
     targetCriteria.series_id = tmdbId;
     targetCriteria.movie_id = tmdbId;
     targetCriteria.season_number = seasonNumber;
-    defaultIdempotencyKey = `catalog:season_release:${tmdbId}:s${seasonNumber}`;
+    defaultIdempotencyKey = isBroadcast
+      ? `catalog:season_release:${tmdbId}:s${seasonNumber}:broadcast`
+      : `catalog:season_release:${tmdbId}:s${seasonNumber}`;
   } else {
     category = 'content_update';
     const qualityTag = typeof body.release_quality === 'string' && body.release_quality.trim()
@@ -115,7 +123,7 @@ function buildEventCampaignPayload(body) {
     notificationBody = isTv
       ? `Updated episodes and download mirrors are now available for ${rawTitle}.`
       : `Updated ${qualityTag !== 'updated' ? `${qualityTag} ` : ''}download links are now available for ${rawTitle}.`;
-    targetCriteria.type = isTv ? 'series' : 'movie';
+    targetCriteria.type = isBroadcast ? 'all' : (isTv ? 'series' : 'movie');
     targetCriteria.movie_id = tmdbId;
     if (isTv) {
       targetCriteria.series_id = tmdbId;
@@ -123,7 +131,9 @@ function buildEventCampaignPayload(body) {
     if (Number.isInteger(seasonNumber) && seasonNumber > 0) {
       targetCriteria.season_number = seasonNumber;
     }
-    defaultIdempotencyKey = `catalog:content_update:${tmdbId}:${qualityTag}`;
+    defaultIdempotencyKey = isBroadcast
+      ? `catalog:content_update:${tmdbId}:${qualityTag}:broadcast`
+      : `catalog:content_update:${tmdbId}:${qualityTag}`;
   }
 
   const providedKey =

@@ -62,6 +62,7 @@ const AdminPanel = ({ onClose }) => {
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const [qualityFilter, setQualityFilter] = useState('all');
+  const [broadcastToAll, setBroadcastToAll] = useState(true);
 
   const [siteLockStatus, setSiteLockStatus] = useState(false);
   const [lockKeyInput, setLockKeyInput] = useState('');
@@ -471,6 +472,15 @@ const AdminPanel = ({ onClose }) => {
             }
 
             if (eventPayload) {
+              const saveTimestamp = Date.now();
+              if (broadcastToAll) {
+                eventPayload.target_type = 'all';
+                eventPayload.broadcast_all = true;
+                eventPayload.idempotency_key = `catalog:save:${cleanId}:broadcast:${saveTimestamp}`;
+              } else {
+                eventPayload.idempotency_key = `catalog:save:${cleanId}:targeted:${saveTimestamp}`;
+              }
+
               const notifyRes = await fetch('/api/notifications/events', {
                 method: 'POST',
                 headers: {
@@ -486,6 +496,21 @@ const AdminPanel = ({ onClose }) => {
                   type: 'success',
                   message: `${successMessage} (Notification queueing skipped: ${notifyErr.error || notifyRes.status})`,
                 });
+              } else {
+                const notifyData = await notifyRes.json().catch(() => ({}));
+                const pushSent = notifyData.immediate_dispatch?.sent ?? notifyData.push_deliveries ?? 0;
+                const totalRecip = notifyData.total_recipients ?? 0;
+                if (pushSent > 0) {
+                  setActionStatus({
+                    type: 'success',
+                    message: `${successMessage} • 🔔 Sent push alert to ${pushSent} subscriber(s)!`,
+                  });
+                } else if (totalRecip === 0) {
+                  setActionStatus({
+                    type: 'success',
+                    message: `${successMessage} (0 users were subscribed to this title. Keep "Broadcast to all" enabled to notify everyone).`,
+                  });
+                }
               }
             }
           }
@@ -956,6 +981,20 @@ const AdminPanel = ({ onClose }) => {
                   className="w-full bg-black/50 border border-white/10 rounded p-3 text-white focus:border-[#E50914] outline-none transition text-sm resize-none"
                 />
                 <p className="text-gray-500 text-[10px] mt-1">If left empty, the default TMDB description will be shown to users.</p>
+              </div>
+
+              <div className="flex items-center gap-2.5 p-3 bg-white/5 border border-white/10 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="broadcastNotification"
+                  checked={broadcastToAll}
+                  onChange={(e) => setBroadcastToAll(e.target.checked)}
+                  className="w-4 h-4 accent-[#E50914] cursor-pointer rounded"
+                />
+                <label htmlFor="broadcastNotification" className="text-xs text-gray-300 cursor-pointer select-none">
+                  <span className="font-semibold text-white">Broadcast push notification to all subscribers</span>
+                  <span className="block text-gray-400 text-[11px]">Send alert to all opted-in users immediately when saved</span>
+                </label>
               </div>
 
               <div className="flex gap-2">
