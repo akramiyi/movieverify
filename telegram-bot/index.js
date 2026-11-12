@@ -176,6 +176,107 @@ function getCacheTTL(endpoint) {
   return 21600; // 6h
 }
 
+// Consolidated Home Feed Endpoint (Reelipse-style single bundled request)
+app.get('/api/home-feed', async (req, res) => {
+  const cacheKey = 'bundle:home-feed';
+  const cachedFeed = tmdbCache.get(cacheKey);
+
+  if (cachedFeed) {
+    res.setHeader('X-Cache', 'HIT');
+    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=21600, stale-while-revalidate=1800');
+    return res.json(cachedFeed);
+  }
+
+  const serverToken = process.env.TMDB_TOKEN || process.env.VITE_TMDB_TOKEN;
+  const headers = {
+    'Accept': 'application/json',
+    ...(serverToken ? { 'Authorization': `Bearer ${serverToken}` } : {})
+  };
+
+  const fetchJson = async (endpoint) => {
+    try {
+      const url = `https://api.themoviedb.org/3${endpoint}`;
+      const r = await fetch(url, { headers });
+      if (!r.ok) return { results: [] };
+      return await r.json();
+    } catch {
+      return { results: [] };
+    }
+  };
+
+  try {
+    const today = new Date();
+    const sixtyDaysAgo = new Date(today);
+    sixtyDaysAgo.setDate(today.getDate() - 60);
+    const fromDate = sixtyDaysAgo.toISOString().split('T')[0];
+    const toDate = today.toISOString().split('T')[0];
+
+    const [
+      trending,
+      popular,
+      bollywood,
+      telugu,
+      tamil,
+      kannada,
+      malayalam,
+      webSeries,
+      indiaHi,
+      indiaTe,
+      indiaTa,
+      indiaKn,
+      indiaMl
+    ] = await Promise.all([
+      fetchJson('/trending/all/week'),
+      fetchJson('/movie/popular?language=en-US&page=1'),
+      fetchJson('/discover/movie?with_original_language=hi&sort_by=popularity.desc&page=1'),
+      fetchJson('/discover/movie?with_original_language=te&sort_by=popularity.desc&page=1'),
+      fetchJson('/discover/movie?with_original_language=ta&sort_by=popularity.desc&page=1'),
+      fetchJson('/discover/movie?with_original_language=kn&sort_by=popularity.desc&page=1'),
+      fetchJson('/discover/movie?with_original_language=ml&sort_by=popularity.desc&page=1'),
+      fetchJson('/tv/popular?language=en-US&page=1'),
+      fetchJson(`/discover/movie?with_original_language=hi&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`),
+      fetchJson(`/discover/movie?with_original_language=te&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`),
+      fetchJson(`/discover/movie?with_original_language=ta&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`),
+      fetchJson(`/discover/movie?with_original_language=kn&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`),
+      fetchJson(`/discover/movie?with_original_language=ml&region=IN&primary_release_date.gte=${fromDate}&primary_release_date.lte=${toDate}&sort_by=primary_release_date.desc&page=1`)
+    ]);
+
+    const processIndiaList = (r) => (r.results || [])
+      .filter((m) => m.backdrop_path && m.overview)
+      .sort((a, b) => new Date(b.release_date) - new Date(a.release_date))
+      .slice(0, 4);
+
+    const indiaLatestPool = [
+      ...processIndiaList(indiaHi),
+      ...processIndiaList(indiaTe),
+      ...processIndiaList(indiaTa),
+      ...processIndiaList(indiaKn),
+      ...processIndiaList(indiaMl)
+    ];
+
+    const feedData = {
+      trending: trending.results || [],
+      popular: popular.results || [],
+      bollywood: bollywood.results || [],
+      telugu: telugu.results || [],
+      tamil: tamil.results || [],
+      kannada: kannada.results || [],
+      malayalam: malayalam.results || [],
+      webSeries: webSeries.results || [],
+      indiaLatest: indiaLatestPool
+    };
+
+    tmdbCache.set(cacheKey, feedData, 21600); // 6 hours cache
+
+    res.setHeader('X-Cache', 'MISS');
+    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=21600, stale-while-revalidate=1800');
+    return res.json(feedData);
+  } catch (error) {
+    console.error('Home Feed Error:', error);
+    res.status(500).json({ error: 'Failed to generate home feed' });
+  }
+});
+
 // TMDB Proxy to bypass ISP blocking in India with in-memory & edge caching
 app.get('/api/tmdb/*path', async (req, res) => {
   try {

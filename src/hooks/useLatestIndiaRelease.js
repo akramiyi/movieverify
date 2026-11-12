@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { formatMovie } from './useTMDB';
+import { formatMovie, fetchHomeFeed } from './useTMDB';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
 const BASE_URL = `${API_URL}/api/tmdb`;
@@ -11,8 +11,33 @@ export const useLatestIndiaRelease = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchLatest = async () => {
       try {
+        // Step 1: Check if consolidated home feed already provided indiaLatest
+        const feed = await fetchHomeFeed();
+        if (feed && Array.isArray(feed.indiaLatest) && feed.indiaLatest.length > 0) {
+          const uniqueMap = new Map();
+          feed.indiaLatest.forEach((m) => uniqueMap.set(m.id, m));
+
+          const sorted = Array.from(uniqueMap.values())
+            .sort((a, b) => new Date(b.release_date) - new Date(a.release_date))
+            .map(formatMovie);
+
+          if (isMounted) {
+            setPool(sorted);
+            if (sorted.length > 0) {
+              const epoch = new Date('2024-01-01').getTime();
+              const daysSinceEpoch = Math.floor((Date.now() - epoch) / (1000 * 60 * 60 * 24));
+              const rotationIndex = Math.floor(daysSinceEpoch / ROTATION_DAYS) % sorted.length;
+              setCurrentMovie(sorted[rotationIndex]);
+            }
+          }
+          return;
+        }
+
+        // Step 2: Fallback to individual language queries if bundled feed unavailable
         const today = new Date();
         const sixtyDaysAgo = new Date(today);
         sixtyDaysAgo.setDate(today.getDate() - 60);
@@ -56,25 +81,28 @@ export const useLatestIndiaRelease = () => {
           )
           .map(formatMovie);
 
-        setPool(sorted);
+        if (isMounted) {
+          setPool(sorted);
 
-        if (sorted.length > 0) {
-          // Calculate which movie's "turn" it is based on real date
-          const epoch = new Date('2024-01-01').getTime();
-          const daysSinceEpoch = Math.floor(
-            (Date.now() - epoch) / (1000 * 60 * 60 * 24)
-          );
-          const rotationIndex = Math.floor(daysSinceEpoch / ROTATION_DAYS) % sorted.length;
-          setCurrentMovie(sorted[rotationIndex]);
+          if (sorted.length > 0) {
+            // Calculate which movie's "turn" it is based on real date
+            const epoch = new Date('2024-01-01').getTime();
+            const daysSinceEpoch = Math.floor(
+              (Date.now() - epoch) / (1000 * 60 * 60 * 24)
+            );
+            const rotationIndex = Math.floor(daysSinceEpoch / ROTATION_DAYS) % sorted.length;
+            setCurrentMovie(sorted[rotationIndex]);
+          }
         }
       } catch (err) {
         console.warn('Latest India release fetch failed:', err.message);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchLatest();
+    return () => { isMounted = false; };
   }, []);
 
   return { currentMovie, pool, loading };

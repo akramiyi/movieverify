@@ -28,6 +28,34 @@ const LiveTime = () => {
   );
 };
 
+const adminCheckCache = new Map();
+let inFlightAdminPromise = null;
+
+const verifyAdminCached = async (userId) => {
+  if (!userId) return false;
+  if (adminCheckCache.has(userId)) return adminCheckCache.get(userId);
+  if (inFlightAdminPromise) return inFlightAdminPromise;
+
+  inFlightAdminPromise = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_users')
+        .select('user_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const isAdmin = !error && !!data;
+      adminCheckCache.set(userId, isAdmin);
+      return isAdmin;
+    } catch {
+      return false;
+    } finally {
+      inFlightAdminPromise = null;
+    }
+  })();
+
+  return inFlightAdminPromise;
+};
+
 const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onProfileClick, onAdminClick, onHistoryClick, onNotificationClick, unreadNotificationCount }) => {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const displayedUnreadCount = typeof unreadNotificationCount === 'number' ? unreadNotificationCount : unreadNotifications;
@@ -133,19 +161,10 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
   useEffect(() => {
     let isMounted = true;
 
-    const verifyAdmin = async (userId) => {
-      try {
-        const { data, error } = await supabase
-          .from('admin_users')
-          .select('user_id')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (isMounted) {
-          setIsAdminUser(!error && !!data);
-        }
-      } catch {
-        if (isMounted) setIsAdminUser(false);
+    const checkAdmin = async (userId) => {
+      const isAdmin = await verifyAdminCached(userId);
+      if (isMounted) {
+        setIsAdminUser(isAdmin);
       }
     };
 
@@ -154,7 +173,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
       if (!isMounted) return;
       setCurrentUser(session?.user ?? null);
       if (session?.user?.id) {
-        verifyAdmin(session.user.id);
+        checkAdmin(session.user.id);
       } else {
         setIsAdminUser(false);
       }
@@ -165,7 +184,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
       if (!isMounted) return;
       setCurrentUser(session?.user ?? null);
       if (session?.user?.id) {
-        verifyAdmin(session.user.id);
+        checkAdmin(session.user.id);
         checkNotifications();
       } else {
         setIsAdminUser(false);

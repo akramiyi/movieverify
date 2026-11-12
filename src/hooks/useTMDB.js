@@ -192,6 +192,61 @@ const prioritizeDownloads = (list) => {
   });
 };
 
+// In-memory feed promise & cache to deduplicate concurrent requests across hooks
+let homeFeedPromise = null;
+let inMemoryFeed = null;
+
+export const fetchHomeFeed = async () => {
+  if (inMemoryFeed) return inMemoryFeed;
+  if (homeFeedPromise) return homeFeedPromise;
+
+  homeFeedPromise = (async () => {
+    // 1. Try sessionStorage cache first (1h TTL)
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const stored = sessionStorage.getItem('movieverify_home_feed_v1');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.data && (Date.now() - parsed.timestamp < 3600000)) {
+            inMemoryFeed = parsed.data;
+            return parsed.data;
+          }
+        }
+      }
+    } catch {}
+
+    // 2. Fetch single consolidated home feed (Reelipse pattern)
+    try {
+      let res = await fetch('/api/home-feed').catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetch(`${API_URL}/api/home-feed`).catch(() => null);
+      }
+      if (res && res.ok) {
+        const feed = await res.json();
+        if (feed && (feed.trending || feed.popular)) {
+          inMemoryFeed = feed;
+          try {
+            if (typeof sessionStorage !== 'undefined') {
+              sessionStorage.setItem('movieverify_home_feed_v1', JSON.stringify({
+                timestamp: Date.now(),
+                data: feed
+              }));
+            }
+          } catch {}
+          return feed;
+        }
+      }
+    } catch (e) {
+      console.warn('Bundled home-feed fetch failed, will fallback to individual endpoints:', e);
+    }
+    return null;
+  })();
+
+  const result = await homeFeedPromise;
+  homeFeedPromise = null;
+  return result;
+};
+
 // Reusable fetch helper
 const fetchTMDB = async (endpoint) => {
   const cacheKey = `tmdb_cache_${endpoint}`;
@@ -346,38 +401,67 @@ export const useTMDB = () => {
           // Gracefully relying on static local download links
         }
 
-        const [
-          trendingRes,
-          popularRes,
-          bollywoodRes,
-          teluguRes,
-          tamilRes,
-          kannadaRes,
-          malayalamRes,
-          webSeriesRes
-        ] = await Promise.all([
-          fetchTMDB('/trending/all/week'),
-          fetchTMDB('/movie/popular?language=en-US&page=1'),
-          fetchTMDB('/discover/movie?with_original_language=hi&sort_by=popularity.desc&page=1'),
-          fetchTMDB('/discover/movie?with_original_language=te&sort_by=popularity.desc&page=1'),
-          fetchTMDB('/discover/movie?with_original_language=ta&sort_by=popularity.desc&page=1'),
-          fetchTMDB('/discover/movie?with_original_language=kn&sort_by=popularity.desc&page=1'),
-          fetchTMDB('/discover/movie?with_original_language=ml&sort_by=popularity.desc&page=1'),
-          fetchTMDB('/tv/popular?language=en-US&page=1')
-        ]);
+        let trendingRaw = [];
+        let popularRaw = [];
+        let bollywoodRaw = [];
+        let teluguRaw = [];
+        let tamilRaw = [];
+        let kannadaRaw = [];
+        let malayalamRaw = [];
+        let webSeriesRaw = [];
 
-        const trendingList = (trendingRes.results || []).map(item => {
+        const feed = await fetchHomeFeed();
+        if (feed) {
+          trendingRaw = feed.trending || [];
+          popularRaw = feed.popular || [];
+          bollywoodRaw = feed.bollywood || [];
+          teluguRaw = feed.telugu || [];
+          tamilRaw = feed.tamil || [];
+          kannadaRaw = feed.kannada || [];
+          malayalamRaw = feed.malayalam || [];
+          webSeriesRaw = feed.webSeries || [];
+        } else {
+          const [
+            trendingRes,
+            popularRes,
+            bollywoodRes,
+            teluguRes,
+            tamilRes,
+            kannadaRes,
+            malayalamRes,
+            webSeriesRes
+          ] = await Promise.all([
+            fetchTMDB('/trending/all/week'),
+            fetchTMDB('/movie/popular?language=en-US&page=1'),
+            fetchTMDB('/discover/movie?with_original_language=hi&sort_by=popularity.desc&page=1'),
+            fetchTMDB('/discover/movie?with_original_language=te&sort_by=popularity.desc&page=1'),
+            fetchTMDB('/discover/movie?with_original_language=ta&sort_by=popularity.desc&page=1'),
+            fetchTMDB('/discover/movie?with_original_language=kn&sort_by=popularity.desc&page=1'),
+            fetchTMDB('/discover/movie?with_original_language=ml&sort_by=popularity.desc&page=1'),
+            fetchTMDB('/tv/popular?language=en-US&page=1')
+          ]);
+          trendingRaw = trendingRes?.results || [];
+          popularRaw = popularRes?.results || [];
+          bollywoodRaw = bollywoodRes?.results || [];
+          teluguRaw = teluguRes?.results || [];
+          tamilRaw = tamilRes?.results || [];
+          kannadaRaw = kannadaRes?.results || [];
+          malayalamRaw = malayalamRes?.results || [];
+          webSeriesRaw = webSeriesRes?.results || [];
+        }
+
+        const trendingList = trendingRaw.map(item => {
           const mType = item.media_type || (item.first_air_date ? 'tv' : (item.release_date ? 'movie' : getMediaTypeFromId(item.id)));
           return formatMovie({ ...item, media_type: mType });
         });
-        const popularList = (popularRes.results || []).map(item => formatMovie({ ...item, media_type: 'movie' }));
-        const bollywoodList = (bollywoodRes.results || []).map(item => formatMovie({ ...item, media_type: 'movie' }));
+        const popularList = popularRaw.map(item => formatMovie({ ...item, media_type: 'movie' }));
+        const bollywoodList = bollywoodRaw.map(item => formatMovie({ ...item, media_type: 'movie' }));
 
         const mergedSouth = [
-          ...(teluguRes.results || []),
-          ...(tamilRes.results || []),
-          ...(kannadaRes.results || []),
-          ...(malayalamRes.results || [])
+          ...teluguRaw,
+          ...tamilRaw,
+          ...kannadaRaw,
+          ...malayalamRaw
         ];
 
         const uniqueSouthMap = new Map();
