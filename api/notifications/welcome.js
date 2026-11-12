@@ -76,15 +76,19 @@ export default async function handler(req, res, customDependencies = {}) {
     // Fast read guard before RPC if a dispatch record already exists
     const { data: existingDispatch } = await supabase
       .from('user_welcome_dispatches')
-      .select('status, notification_id, created_at')
+      .select('status, notification_id, created_at, source')
       .eq('user_id', user.id)
       .maybeSingle();
 
     if (existingDispatch) {
+      const dispatchAgeMs = existingDispatch.created_at ? Date.now() - Date.parse(existingDispatch.created_at) : Infinity;
+      const isRecentRegistration = dispatchAgeMs <= 15 * 60 * 1000;
+
       return sendJson(res, 200, {
         success: true,
         created: false,
         already_processed: true,
+        is_first_welcome: isRecentRegistration,
         status: existingDispatch.status,
         notification_id: existingDispatch.notification_id || null,
       });

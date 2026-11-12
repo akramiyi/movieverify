@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { Bell, X, Download } from 'lucide-react';
+import { Bell, X, Download, Sparkles, Check } from 'lucide-react';
 import SiteLockScreen from './components/SiteLockScreen';
 import { supabase, getCachedAuthUser } from './data/supabaseClient';
 
@@ -150,6 +150,16 @@ function App() {
         return;
       }
       welcomeCheckedUsersRef.current.add(userId);
+
+      const welcomeStorageKey = `movieverify_welcome_shown_${userId}`;
+      const hasSeenWelcome = (() => {
+        try {
+          return localStorage.getItem(welcomeStorageKey) === 'true';
+        } catch {
+          return false;
+        }
+      })();
+
       try {
         const res = await fetch('/api/notifications/welcome', {
           method: 'POST',
@@ -161,9 +171,40 @@ function App() {
         });
         if (res.ok) {
           const json = await res.json().catch(() => ({}));
+          const isFirstWelcome = Boolean(json.created || json.is_first_welcome);
+
           if (json.created) {
             setInboxRefreshTrigger((prev) => prev + 1);
             refreshUnreadNotifications();
+          }
+
+          // Trigger the beautiful welcome celebration if first-time welcome and not yet shown
+          if ((isFirstWelcome || !hasSeenWelcome) && eventName === 'SIGNED_IN') {
+            try {
+              localStorage.setItem(welcomeStorageKey, 'true');
+            } catch {}
+
+            const rawName =
+              session?.user?.user_metadata?.full_name ||
+              session?.user?.user_metadata?.name ||
+              session?.user?.email?.split('@')[0] ||
+              'Viewer';
+            const firstName = rawName.split(' ')[0];
+            const userAvatar =
+              session?.user?.user_metadata?.avatar_url ||
+              session?.user?.user_metadata?.picture ||
+              null;
+
+            setForegroundPushAlert({
+              id: json.delivery_id || `welcome-${userId}-${Date.now()}`,
+              deliveryId: json.delivery_id || null,
+              title: `Welcome, ${firstName}! 🎉`,
+              body: 'Your account is verified! Enjoy instant HD downloads, fast 1080p links, and new movie release alerts.',
+              avatar: userAvatar,
+              isWelcome: true,
+              actionLabel: 'Explore Movies 🍿',
+              url: '/?section=notifications',
+            });
           }
         }
       } catch {
@@ -191,9 +232,10 @@ function App() {
 
   useEffect(() => {
     if (!foregroundPushAlert) return;
+    const duration = foregroundPushAlert.isWelcome ? 8000 : 6000;
     const timer = setTimeout(() => {
       setForegroundPushAlert(null);
-    }, 6000);
+    }, duration);
     return () => clearTimeout(timer);
   }, [foregroundPushAlert]);
 
@@ -1050,15 +1092,27 @@ function App() {
         <div
           role="status"
           data-testid="foreground-push-toast"
-          className="fixed top-20 right-4 md:right-8 z-[220] max-w-sm w-[calc(100vw-2rem)] bg-[#0d0d12]/95 backdrop-blur-xl border border-[#E50914]/60 rounded-2xl p-4 shadow-[0_0_30px_rgba(229,9,20,0.35)] flex flex-col transition-all duration-300 animate-in fade-in slide-in-from-top-4"
+          className={`fixed top-20 right-4 md:right-8 z-[220] max-w-sm w-[calc(100vw-2rem)] bg-[#0d0d12]/95 backdrop-blur-xl rounded-2xl p-4 shadow-[0_0_30px_rgba(229,9,20,0.35)] flex flex-col transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${
+            foregroundPushAlert.isWelcome
+              ? 'border border-amber-500/60 shadow-[0_0_35px_rgba(245,158,11,0.3)]'
+              : 'border border-[#E50914]/60'
+          }`}
         >
           {/* Header */}
           <div className="flex items-center justify-between w-full pb-2 border-b border-white/5">
             <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#FF3445] to-[#E50914] flex items-center justify-center text-white font-black text-[10px] shadow-[0_0_8px_rgba(229,9,20,0.7)] shrink-0">
-                M
-              </div>
-              <span className="text-white text-xs font-bold tracking-tight">MovieVerify</span>
+              {foregroundPushAlert.isWelcome ? (
+                <div className="w-5 h-5 rounded-md bg-gradient-to-br from-amber-400 to-[#E50914] flex items-center justify-center text-white font-black text-[10px] shadow-[0_0_8px_rgba(245,158,11,0.8)] shrink-0">
+                  <Sparkles className="w-3 h-3 text-white" />
+                </div>
+              ) : (
+                <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#FF3445] to-[#E50914] flex items-center justify-center text-white font-black text-[10px] shadow-[0_0_8px_rgba(229,9,20,0.7)] shrink-0">
+                  M
+                </div>
+              )}
+              <span className="text-white text-xs font-bold tracking-tight">
+                {foregroundPushAlert.isWelcome ? 'Welcome to MovieVerify' : 'MovieVerify'}
+              </span>
               <span className="text-gray-400 text-[11px]">• now</span>
             </div>
             <button
@@ -1082,16 +1136,50 @@ function App() {
             </button>
           </div>
 
-          {/* Title & Body */}
-          <div className="mt-2.5">
-            <p className="text-white text-sm font-extrabold leading-snug">{foregroundPushAlert.title}</p>
-            {foregroundPushAlert.body && (
-              <p className="text-gray-300 text-xs mt-1 leading-relaxed line-clamp-2">{foregroundPushAlert.body}</p>
-            )}
+          {/* Title & Body with Avatar or Icon */}
+          <div className="mt-2.5 flex items-start gap-3">
+            {foregroundPushAlert.avatar ? (
+              <div className="relative shrink-0">
+                <img
+                  src={foregroundPushAlert.avatar}
+                  alt="Profile"
+                  referrerPolicy="no-referrer"
+                  className="w-10 h-10 rounded-full border-2 border-emerald-500 shadow-md object-cover"
+                />
+                <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center text-black">
+                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                </div>
+              </div>
+            ) : foregroundPushAlert.isWelcome ? (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#E50914] to-red-800 flex items-center justify-center text-white font-bold text-sm shadow-md shrink-0 border border-white/20">
+                🎉
+              </div>
+            ) : null}
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-sm font-extrabold leading-snug">{foregroundPushAlert.title}</p>
+              {foregroundPushAlert.body && (
+                <p className="text-gray-300 text-xs mt-1 leading-relaxed line-clamp-2">{foregroundPushAlert.body}</p>
+              )}
+            </div>
           </div>
 
-          {/* Cinematic Movie Banner */}
-          {foregroundPushAlert.image && (
+          {/* Feature Badges for Welcome */}
+          {foregroundPushAlert.isWelcome && (
+            <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-gray-200 border border-white/10">
+                ⚡ 1080p / 720p HD
+              </span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
+                ✓ Verified
+              </span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-950/60 text-red-300 border border-red-800/40">
+                🔔 Release Alerts
+              </span>
+            </div>
+          )}
+
+          {/* Cinematic Movie Banner (when image provided and not welcome) */}
+          {!foregroundPushAlert.isWelcome && foregroundPushAlert.image && (
             <div className="mt-2.5 overflow-hidden rounded-xl border border-white/10 shadow-lg relative aspect-video bg-black/50">
               <img
                 src={foregroundPushAlert.image}
@@ -1102,7 +1190,7 @@ function App() {
             </div>
           )}
 
-          {/* Action Button: Download Now */}
+          {/* Action Button */}
           <button
             type="button"
             onClick={() => {
@@ -1129,8 +1217,14 @@ function App() {
             }}
             className="w-full mt-3 py-2.5 px-4 bg-gradient-to-r from-[#b80710] to-[#E50914] hover:from-[#c90812] hover:to-[#ff1f2d] shadow-[0_0_15px_rgba(229,9,20,0.5)] border border-[#E50914]/40 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5 text-white" />
-            Download Now
+            {foregroundPushAlert.actionLabel ? (
+              <span>{foregroundPushAlert.actionLabel}</span>
+            ) : (
+              <>
+                <Download className="w-3.5 h-3.5 text-white" />
+                <span>Download Now</span>
+              </>
+            )}
           </button>
         </div>
       )}
