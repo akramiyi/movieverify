@@ -215,12 +215,17 @@ export const fetchHomeFeed = async () => {
       }
     } catch {}
 
-    // 2. Fetch single consolidated home feed (Reelipse pattern)
+    // 2. Fetch single consolidated home feed (with 4.5s resilience timeout for slow networks)
     try {
-      let res = await fetch('/api/home-feed').catch(() => null);
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 4500) : null;
+
+      let res = await fetch('/api/home-feed', controller ? { signal: controller.signal } : {}).catch(() => null);
       if (!res || !res.ok) {
-        res = await fetch(`${API_URL}/api/home-feed`).catch(() => null);
+        res = await fetch(`${API_URL}/api/home-feed`, controller ? { signal: controller.signal } : {}).catch(() => null);
       }
+      if (timeoutId) clearTimeout(timeoutId);
+
       if (res && res.ok) {
         const feed = await res.json();
         if (feed && (feed.trending || feed.popular)) {
@@ -237,7 +242,7 @@ export const fetchHomeFeed = async () => {
         }
       }
     } catch (e) {
-      console.warn('Bundled home-feed fetch failed, will fallback to individual endpoints:', e);
+      console.warn('Bundled home-feed fetch failed or timed out, will fallback gracefully:', e);
     }
     return null;
   })();
