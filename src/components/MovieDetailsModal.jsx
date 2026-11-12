@@ -38,6 +38,8 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
   } = useSubscriptions();
   const notifying = movie ? isMovieNotifying(movie) : false;
   const [notifyFeedback, setNotifyFeedback] = useState(null);
+  const [downloadingState, setDownloadingState] = useState(null);
+  const downloadTimerRef = useRef([]);
   const [details, setDetails] = useState({
     cast: 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
     trailerUrl: '',
@@ -46,6 +48,24 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
     poster: null,
     title: null,
   });
+
+  const clearDownloadTimers = () => {
+    downloadTimerRef.current.forEach((t) => clearTimeout(t));
+    downloadTimerRef.current = [];
+  };
+
+  useEffect(() => {
+    return () => {
+      clearDownloadTimers();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      clearDownloadTimers();
+      setDownloadingState(null);
+    }
+  }, [isOpen, movie?.id]);
 
   useEffect(() => {
     setNotifyFeedback(null);
@@ -140,27 +160,6 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
   const similarMovies = movies
     .filter(m => m.id !== movie.id && (m.genre || '').split(',').some(g => (movie.genre || '').includes(g.trim())))
     .slice(0, 3);
-
-  const [downloadingState, setDownloadingState] = useState(null);
-  const downloadTimerRef = useRef([]);
-
-  const clearDownloadTimers = () => {
-    downloadTimerRef.current.forEach((t) => clearTimeout(t));
-    downloadTimerRef.current = [];
-  };
-
-  useEffect(() => {
-    return () => {
-      clearDownloadTimers();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) {
-      clearDownloadTimers();
-      setDownloadingState(null);
-    }
-  }, [isOpen, movie?.id]);
 
   const handleDownload = (quality, link, customLabel, size) => {
     if (!link || link === '#') {
