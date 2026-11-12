@@ -212,6 +212,15 @@ function App() {
     setSelectedMovie(enrichedMovie);
     addToRecentlyViewed(enrichedMovie);
 
+    // If poster/backdrop is missing, fetch full TMDB data to enrich the modal
+    if (!movie.backdrop && !movie.poster) {
+      fetchMovieOrTVById(cleanId, resolvedMediaType).then((details) => {
+        if (details) {
+          setSelectedMovie((prev) => (prev && String(prev.id).split('-')[0] === cleanId ? { ...prev, ...details } : prev));
+        }
+      }).catch(() => {});
+    }
+
     const searchParams = new URLSearchParams(location.search);
     const currentId = searchParams.get('id') || searchParams.get('movie') || searchParams.get('tv');
 
@@ -418,9 +427,11 @@ function App() {
       return;
     }
 
-    // If already displaying this movie, avoid redundant fetches
+    // If already displaying this movie with media, avoid redundant fetches
     if (selectedMovie && String(selectedMovie.id).split('-')[0] === String(parsedId)) {
-      return;
+      if (selectedMovie.backdrop || selectedMovie.poster) {
+        return;
+      }
     }
 
     let requestedType = searchParams.get('type');
@@ -460,14 +471,16 @@ function App() {
       });
 
       if (foundInMemory && !isCancelled) {
-        const itemType = foundInMemory.mediaType || foundInMemory.media_type || requestedType || getMediaTypeFromId(parsedId);
-        const enriched = itemType
-          ? { ...foundInMemory, mediaType: itemType, media_type: itemType }
-          : foundInMemory;
-        setSelectedMovie(enriched);
-        addToRecentlyViewed(enriched);
-        setDeepLinkLoading(false);
-        return;
+        if (foundInMemory.backdrop || foundInMemory.poster) {
+          const itemType = foundInMemory.mediaType || foundInMemory.media_type || requestedType || getMediaTypeFromId(parsedId);
+          const enriched = itemType
+            ? { ...foundInMemory, mediaType: itemType, media_type: itemType }
+            : foundInMemory;
+          setSelectedMovie(enriched);
+          addToRecentlyViewed(enriched);
+          setDeepLinkLoading(false);
+          return;
+        }
       }
 
       try {

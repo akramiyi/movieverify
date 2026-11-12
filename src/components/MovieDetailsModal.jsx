@@ -27,7 +27,10 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
   const [details, setDetails] = useState({
     cast: 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
     trailerUrl: '',
-    runtime: null
+    runtime: null,
+    backdrop: null,
+    poster: null,
+    title: null,
   });
 
   useEffect(() => {
@@ -62,14 +65,20 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
           setDetails({
             cast: res.cast || movie.cast || 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
             trailerUrl: res.trailerUrl || movie.trailerUrl || '',
-            runtime: res.runtime || movie.runtime || null
+            runtime: res.runtime || movie.runtime || null,
+            backdrop: res.backdrop || movie.backdrop || null,
+            poster: res.poster || movie.poster || null,
+            title: res.title || null,
           });
         });
       } else {
         setDetails({
           cast: movie.cast || 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
           trailerUrl: movie.trailerUrl || '',
-          runtime: movie.runtime || null
+          runtime: movie.runtime || null,
+          backdrop: movie.backdrop || null,
+          poster: movie.poster || null,
+          title: movie.title || null,
         });
       }
     }
@@ -160,16 +169,24 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
               {/* Top Banner Area */}
               <div className="relative w-full h-[300px] md:h-[450px] flex-none">
               <ImageWithFallback
-                src={movie.backdrop}
-                backdropSrc={movie.poster}
-                alt={movie.title}
-                className={`w-full h-full object-cover ${movie.title.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
+                src={movie.backdrop || details.backdrop}
+                backdropSrc={movie.poster || details.poster}
+                alt={details.title || movie.title}
+                className={`w-full h-full object-cover ${movie.title?.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-r from-[#181818]/80 to-transparent w-3/4" />
 
               <div className="absolute bottom-10 left-10">
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 drop-shadow-lg">{movie.title}</h2>
+                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 drop-shadow-lg">
+                  {(details.title || movie.title || '')
+                    .replace(/^(🎬|📺|🔥|✨)\s*/, '')
+                    .replace(/\s+is Now Available!.*$/i, '')
+                    .replace(/\s+Links Updated.*$/i, '')
+                    .replace(/\s+Series Added!.*$/i, '')
+                    .replace(/\s+—\s+Season\s+\d+\s+Out Now!.*$/i, '')
+                    .trim() || movie.title}
+                </h2>
                 <div className="flex flex-wrap items-center gap-4">
                   <button
                     onClick={() => {

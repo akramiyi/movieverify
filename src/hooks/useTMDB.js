@@ -628,14 +628,22 @@ export const fetchTMDBDetails = async (id, mediaType) => {
     return {
       runtime: res.runtime || (res.episode_run_time ? res.episode_run_time[0] : null),
       cast: castList,
-      trailerUrl
+      trailerUrl,
+      title: res.title || res.name || null,
+      overview: res.overview || null,
+      backdrop: res.backdrop_path ? `${IMG_BASE}/w1280${res.backdrop_path}` : null,
+      poster: res.poster_path ? `${IMG_BASE}/w780${res.poster_path}` : null,
     };
   } catch (err) {
     console.error('Error fetching TMDB details:', err);
     return {
       runtime: null,
       cast: 'Placeholder Actor 1, Placeholder Actor 2',
-      trailerUrl: ''
+      trailerUrl: '',
+      title: null,
+      overview: null,
+      backdrop: null,
+      poster: null,
     };
   }
 };
