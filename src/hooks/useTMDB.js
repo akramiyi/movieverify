@@ -473,7 +473,7 @@ export const useTMDB = () => {
           .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
           .map(item => formatMovie({ ...item, media_type: 'movie' }));
 
-        const webSeriesList = (webSeriesRes.results || []).map(item => formatMovie({ ...item, media_type: 'tv' }));
+        const webSeriesList = webSeriesRaw.map(item => formatMovie({ ...item, media_type: 'tv' }));
 
         const allFetchedSoFar = [
           ...trendingList,
