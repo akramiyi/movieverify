@@ -237,6 +237,17 @@ export function usePushNotifications(options = {}) {
   // 5. Synchronize Token Registration on Auth State Change and Page Load
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        // Token revocation is handled before sign-out via revokePushTokenBeforeSignOut
+        tokenRef.current = null;
+        setIsSubscribed(false);
+        try {
+          localStorage.removeItem(STORAGE_REGISTERED_KEY);
+          localStorage.removeItem(STORAGE_LAST_TOKEN_KEY);
+        } catch {}
+        return;
+      }
+
       const isEligibleEvent = event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED';
       if (!isEligibleEvent || !session?.access_token) return;
 
@@ -303,14 +314,6 @@ export function usePushNotifications(options = {}) {
         } catch (err) {
           console.warn('[usePushNotifications] Auto-registration failed:', err?.message);
         }
-      } else if (event === 'SIGNED_OUT') {
-        // Token revocation is handled before sign-out via revokePushTokenBeforeSignOut
-        tokenRef.current = null;
-        setIsSubscribed(false);
-        try {
-          localStorage.removeItem(STORAGE_REGISTERED_KEY);
-          localStorage.removeItem(STORAGE_LAST_TOKEN_KEY);
-        } catch {}
       }
     });
 
