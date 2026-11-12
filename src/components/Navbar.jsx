@@ -141,8 +141,10 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
   }, [isAdminUser, checkReports]);
 
   useEffect(() => {
-    checkNotifications();
-  }, [checkNotifications]);
+    if (typeof unreadNotificationCount !== 'number') {
+      checkNotifications();
+    }
+  }, [checkNotifications, unreadNotificationCount]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -185,7 +187,9 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
       setCurrentUser(session?.user ?? null);
       if (session?.user?.id) {
         checkAdmin(session.user.id);
-        checkNotifications();
+        if (typeof unreadNotificationCount !== 'number') {
+          checkNotifications();
+        }
       } else {
         setIsAdminUser(false);
         setUnreadNotifications(0);

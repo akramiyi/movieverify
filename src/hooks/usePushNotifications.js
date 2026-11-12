@@ -70,6 +70,7 @@ export function usePushNotifications(options = {}) {
 
   const tokenRef = useRef(null);
   const foregroundCallbackRef = useRef(onForegroundMessage);
+  const lastSyncedKeyRef = useRef('');
 
   useEffect(() => {
     foregroundCallbackRef.current = onForegroundMessage;
@@ -257,6 +258,10 @@ export function usePushNotifications(options = {}) {
       const storedToken = tokenRef.current || localStorage.getItem(STORAGE_LAST_TOKEN_KEY);
 
       if (storedToken) {
+        const syncKey = `${session.user?.id || ''}:${storedToken}`;
+        if (syncKey === lastSyncedKeyRef.current) return;
+        lastSyncedKeyRef.current = syncKey;
+
         // Passive auth-sync registration MUST NEVER silently reauthorize a revoked endpoint (reauthorize: false)
         try {
           const syncRes = await registerTokenWithBackend({

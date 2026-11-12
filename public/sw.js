@@ -29,10 +29,9 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   
-  // Only handle same-origin GET requests. Let all cross-origin 
-  // requests (TMDB API, Supabase, image CDNs) pass through 
-  // untouched by not calling respondWith at all.
-  if (e.request.method !== 'GET' || url.origin !== self.location.origin) {
+  // Only handle same-origin GET requests for static HTML/assets.
+  // Bypass API routes and static vector icons to avoid duplicate DevTools fetch reflection.
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/') || url.pathname.endsWith('.svg')) {
     return;
   }
 

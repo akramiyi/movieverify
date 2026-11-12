@@ -68,24 +68,34 @@ function App() {
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
 
-  const refreshUnreadNotifications = useCallback(async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        setUnreadNotifications(0);
-        return;
-      }
+  const inFlightNotificationCheck = useRef(null);
 
-      const res = await fetch('/api/notifications/user', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setUnreadNotifications(json.unread_count || 0);
+  const refreshUnreadNotifications = useCallback(async () => {
+    if (inFlightNotificationCheck.current) return inFlightNotificationCheck.current;
+
+    inFlightNotificationCheck.current = (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          setUnreadNotifications(0);
+          return;
+        }
+
+        const res = await fetch('/api/notifications/user', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setUnreadNotifications(json.unread_count || 0);
+        }
+      } catch {
+        // Preserve current unread count on transient network failure
+      } finally {
+        inFlightNotificationCheck.current = null;
       }
-    } catch {
-      // Preserve current unread count on transient network failure
-    }
+    })();
+
+    return inFlightNotificationCheck.current;
   }, []);
 
   const handleForegroundMessage = useCallback(
