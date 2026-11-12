@@ -135,14 +135,20 @@ export default async function handler(req, res, customDependencies = {}) {
   const ingestResult = await ingestCampaign(body, context, customSupabase);
 
   // Instant Inline Dispatch:
-  // If this is a newly created, non-draft, non-scheduled campaign (or has pending deliveries),
+  // If this is a newly created, non-draft, non-scheduled campaign (or has pending push deliveries),
   // immediately trigger a dispatch cycle in-process so push notifications reach user devices
   // in 1-2 seconds instead of waiting for the background GitHub Actions cron schedule.
+  const hasPushDeliveries =
+    (ingestResult.body?.push_deliveries > 0) ||
+    (ingestResult.body?.total_deliveries > 0) ||
+    ingestResult.body?.status === 'queued' ||
+    ingestResult.body?.status === 'processing';
+
   if (
     ingestResult.status === 201 &&
     !body.is_draft &&
     !body.scheduled_for &&
-    (ingestResult.body?.total_deliveries > 0 || ingestResult.body?.status === 'processing')
+    hasPushDeliveries
   ) {
     const dispatchFn = customDependencies.runDispatchCycle || runDispatchCycle;
     try {
