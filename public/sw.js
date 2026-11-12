@@ -174,7 +174,7 @@ self.addEventListener('push', (e) => {
           url: targetUrl,
         },
         actions: [
-          { action: 'open', title: '🎬 Watch Now' },
+          { action: 'download', title: '⬇️ Download Now' },
         ],
         tag: deliveryId || undefined, // Native OS deduplication tag
       };

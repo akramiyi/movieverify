@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { Bell, X } from 'lucide-react';
+import { Bell, X, Download } from 'lucide-react';
 import SiteLockScreen from './components/SiteLockScreen';
 import { supabase } from './data/supabaseClient';
 
@@ -100,11 +100,20 @@ function App() {
       });
 
       const deliveryId = data.delivery_id || null;
+      const imageUrl =
+        notification.image ||
+        notification.imageUrl ||
+        data.image ||
+        data.image_url ||
+        payload?.webpush?.notification?.image ||
+        null;
+
       setForegroundPushAlert({
         id: deliveryId || `${Date.now()}`,
         deliveryId,
         title,
         body,
+        image: imageUrl,
         url: targetUrl,
       });
       if (deliveryId) {
@@ -983,72 +992,87 @@ function App() {
         <div
           role="status"
           data-testid="foreground-push-toast"
-          className="fixed top-20 right-4 md:right-8 z-[220] max-w-sm w-[calc(100vw-2rem)] bg-[#181818]/95 backdrop-blur-md border border-[#E50914]/50 rounded-2xl p-4 shadow-2xl flex items-start gap-3"
+          className="fixed top-20 right-4 md:right-8 z-[220] max-w-sm w-[calc(100vw-2rem)] bg-[#0d0d12]/95 backdrop-blur-xl border border-[#E50914]/60 rounded-2xl p-4 shadow-[0_0_30px_rgba(229,9,20,0.35)] flex flex-col transition-all duration-300 animate-in fade-in slide-in-from-top-4"
         >
-          <div className="w-9 h-9 rounded-xl bg-[#E50914]/15 border border-[#E50914]/30 flex items-center justify-center text-[#E50914] shrink-0">
-            <Bell className="w-4 h-4" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-bold truncate">{foregroundPushAlert.title}</p>
-            {foregroundPushAlert.body && (
-              <p className="text-gray-300 text-xs mt-0.5 line-clamp-2">{foregroundPushAlert.body}</p>
-            )}
-            <div className="mt-2 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  const targetUrl = foregroundPushAlert.url;
-                  const title = foregroundPushAlert.title;
-                  const deliveryId = foregroundPushAlert.deliveryId;
-                  setForegroundPushAlert(null);
-                  if (deliveryId) {
-                    reportNotificationTelemetry({
-                      deliveryId,
-                      eventType: 'clicked',
-                      eventNonce: `fg-click-${deliveryId}-${Date.now()}`,
-                      metadata: { surface: 'foreground_toast', target_url: targetUrl },
-                    });
-                  }
-                  if (targetUrl) {
-                    const movieTarget = parseNotificationMovieLink(targetUrl, title);
-                    if (movieTarget) {
-                      handleMovieSelect(movieTarget);
-                      return;
-                    }
-                  }
-                  setIsNotificationCenterOpen(true);
-                }}
-                className="text-xs font-bold text-[#E50914] hover:underline cursor-pointer"
-              >
-                View
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const deliveryId = foregroundPushAlert.deliveryId;
-                  setForegroundPushAlert(null);
-                  if (deliveryId) {
-                    reportNotificationTelemetry({
-                      deliveryId,
-                      eventType: 'dismissed',
-                      eventNonce: `fg-dismiss-${deliveryId}-${Date.now()}`,
-                      metadata: { surface: 'foreground_toast' },
-                    });
-                  }
-                }}
-                className="text-xs text-gray-400 hover:text-white cursor-pointer"
-              >
-                Dismiss
-              </button>
+          {/* Header */}
+          <div className="flex items-center justify-between w-full pb-2 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#FF3445] to-[#E50914] flex items-center justify-center text-white font-black text-[10px] shadow-[0_0_8px_rgba(229,9,20,0.7)] shrink-0">
+                M
+              </div>
+              <span className="text-white text-xs font-bold tracking-tight">MovieVerify</span>
+              <span className="text-gray-400 text-[11px]">• now</span>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                const deliveryId = foregroundPushAlert.deliveryId;
+                setForegroundPushAlert(null);
+                if (deliveryId) {
+                  reportNotificationTelemetry({
+                    deliveryId,
+                    eventType: 'dismissed',
+                    eventNonce: `fg-dismiss-${deliveryId}-${Date.now()}`,
+                    metadata: { surface: 'foreground_toast' },
+                  });
+                }
+              }}
+              aria-label="Dismiss foreground notification"
+              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
+
+          {/* Title & Body */}
+          <div className="mt-2.5">
+            <p className="text-white text-sm font-extrabold leading-snug">{foregroundPushAlert.title}</p>
+            {foregroundPushAlert.body && (
+              <p className="text-gray-300 text-xs mt-1 leading-relaxed line-clamp-2">{foregroundPushAlert.body}</p>
+            )}
+          </div>
+
+          {/* Cinematic Movie Banner */}
+          {foregroundPushAlert.image && (
+            <div className="mt-2.5 overflow-hidden rounded-xl border border-white/10 shadow-lg relative aspect-video bg-black/50">
+              <img
+                src={foregroundPushAlert.image}
+                alt={foregroundPushAlert.title}
+                className="w-full h-full object-cover"
+                loading="eager"
+              />
+            </div>
+          )}
+
+          {/* Action Button: Download Now */}
           <button
             type="button"
-            onClick={() => setForegroundPushAlert(null)}
-            aria-label="Dismiss foreground notification"
-            className="text-gray-400 hover:text-white p-0.5 cursor-pointer"
+            onClick={() => {
+              const targetUrl = foregroundPushAlert.url;
+              const title = foregroundPushAlert.title;
+              const deliveryId = foregroundPushAlert.deliveryId;
+              setForegroundPushAlert(null);
+              if (deliveryId) {
+                reportNotificationTelemetry({
+                  deliveryId,
+                  eventType: 'clicked',
+                  eventNonce: `fg-click-${deliveryId}-${Date.now()}`,
+                  metadata: { surface: 'foreground_toast', target_url: targetUrl },
+                });
+              }
+              if (targetUrl) {
+                const movieTarget = parseNotificationMovieLink(targetUrl, title);
+                if (movieTarget) {
+                  handleMovieSelect(movieTarget);
+                  return;
+                }
+              }
+              setIsNotificationCenterOpen(true);
+            }}
+            className="w-full mt-3 py-2.5 px-4 bg-gradient-to-r from-[#b80710] to-[#E50914] hover:from-[#c90812] hover:to-[#ff1f2d] shadow-[0_0_15px_rgba(229,9,20,0.5)] border border-[#E50914]/40 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5 text-white" />
+            Download Now
           </button>
         </div>
       )}

@@ -249,7 +249,7 @@ export function buildFcmPayload(delivery, campaign = null) {
           delivery_id: delivery.delivery_id != null ? String(delivery.delivery_id) : '',
         },
         actions: [
-          { action: 'open', title: '🎬 Watch Now' },
+          { action: 'download', title: '⬇️ Download Now' },
         ],
       },
     },
