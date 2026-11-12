@@ -149,10 +149,120 @@ const getStats = async () => {
   }
 };
 
+/**
+ * Get comprehensive platform statistics for Telegram /stats command
+ */
+const getLiveStats = async () => {
+  try {
+    const [
+      downloadRows,
+      { count: activeTokens },
+      { count: totalCampaigns },
+      { count: movieAlerts },
+      { count: actorAlerts },
+      { count: pendingReports },
+      { data: siteSettings }
+    ] = await Promise.all([
+      supabase.from('download_links').select('media_type, download480p, download720p, download1080p'),
+      supabase.from('notification_tokens').select('*', { count: 'exact', head: true }).eq('is_active', true),
+      supabase.from('notification_campaigns').select('*', { count: 'exact', head: true }),
+      supabase.from('movie_notify_requests').select('*', { count: 'exact', head: true }),
+      supabase.from('actor_notify_requests').select('*', { count: 'exact', head: true }),
+      supabase.from('movie_reports').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('site_settings').select('is_locked').eq('id', 1).maybeSingle()
+    ]);
+
+    const rows = downloadRows.data || [];
+    return {
+      total: rows.length,
+      movies: rows.filter(r => r.media_type === 'movie').length,
+      tvShows: rows.filter(r => r.media_type === 'tv').length,
+      has480p: rows.filter(r => r.download480p).length,
+      has720p: rows.filter(r => r.download720p).length,
+      has1080p: rows.filter(r => r.download1080p).length,
+      activeTokens: activeTokens || 0,
+      totalCampaigns: totalCampaigns || 0,
+      totalAlerts: (movieAlerts || 0) + (actorAlerts || 0),
+      pendingReports: pendingReports || 0,
+      isLocked: Boolean(siteSettings?.is_locked)
+    };
+  } catch (err) {
+    console.error('getLiveStats error:', err);
+    return null;
+  }
+};
+
+/**
+ * Ingest and immediately dispatch a push notification campaign
+ */
+const broadcastNotification = async ({ title, body, tmdbId, mediaType, imageUrl }) => {
+  try {
+    const cleanMediaType = mediaType === 'tv' ? 'tv' : 'movie';
+    const targetCriteria = { type: 'all', movie_id: String(tmdbId), media_type: cleanMediaType };
+    const url = `/?type=${cleanMediaType}&id=${tmdbId}`;
+
+    // 1. Ingest campaign using public.ingest_notification_campaign RPC
+    const rpcParams = {
+      p_title: title.trim(),
+      p_body: body.trim(),
+      p_category: 'movie_update',
+      p_url: url,
+      p_image_url: imageUrl || null,
+      p_target_criteria: targetCriteria,
+      p_scheduled_for: null,
+      p_created_by: null
+    };
+
+    const { data, error } = await supabase.rpc('ingest_notification_campaign', rpcParams);
+    if (error) {
+      console.error('[Broadcast] RPC Error:', error.message);
+      throw error;
+    }
+
+    const campaignId = data?.campaign_id;
+    const totalRecipients = data?.total_recipients || 0;
+    const totalDeliveries = data?.total_deliveries || 0;
+
+    // 2. Trigger instant dispatch cycle on Vercel
+    const workerSecret = process.env.INTERNAL_WORKER_SECRET || process.env.CRON_SECRET;
+    let dispatchSuccess = false;
+
+    if (workerSecret) {
+      try {
+        const dispatchRes = await fetch('https://movieverify.vercel.app/api/notifications/dispatch', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-worker-secret': workerSecret
+          },
+          body: JSON.stringify({ batch_size: 500 })
+        });
+        dispatchSuccess = dispatchRes.ok;
+      } catch (dispErr) {
+        console.warn('[Broadcast] Dispatch trigger warning:', dispErr.message);
+      }
+    }
+
+    return {
+      success: true,
+      campaignId,
+      totalRecipients,
+      totalDeliveries,
+      dispatchTriggered: dispatchSuccess
+    };
+  } catch (err) {
+    console.error('broadcastNotification error:', err);
+    throw err;
+  }
+};
+
 module.exports = {
+  supabase,
   getDownloadConfig,
   upsertDownloadConfig,
   deleteDownloadConfig,
   listAllConfigs,
-  getStats
+  getStats,
+  getLiveStats,
+  broadcastNotification
 };

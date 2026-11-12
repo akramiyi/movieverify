@@ -30,6 +30,23 @@ const setCache = (key, data) => {
   }
 };
 
+const fetchWithRetry = async (url, options, maxRetries = 2) => {
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.status === 429 && i < maxRetries) {
+        console.warn('TMDB rate limited. Waiting 2s...');
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (i === maxRetries) throw err;
+      await new Promise(r => setTimeout(r, 500 * (i + 1)));
+    }
+  }
+};
+
 /**
  * Search TMDB for movies and TV shows
  * @param {string} query 
@@ -45,18 +62,7 @@ const searchMoviesAndTV = async (query) => {
   const url = `${BASE_URL}/search/multi?query=${encodeURIComponent(query.trim())}&language=en-US&page=1&include_adult=false`;
 
   try {
-    const res = await fetch(url, { headers });
-
-    if (res.status === 429) {
-      console.warn('TMDB rate limited. Waiting 2s...');
-      await new Promise(r => setTimeout(r, 2000));
-      const retryRes = await fetch(url, { headers });
-      if (!retryRes.ok) return [];
-      const retryData = await retryRes.json();
-      const results = formatResults(retryData.results);
-      setCache(cacheKey, results);
-      return results;
-    }
+    const res = await fetchWithRetry(url, { headers });
 
     if (!res.ok) {
       console.error('TMDB search error:', res.status);
@@ -86,7 +92,7 @@ const getDetails = async (tmdbId, mediaType) => {
 
   try {
     const url = `${BASE_URL}/${type}/${tmdbId}?language=en-US`;
-    const res = await fetch(url, { headers });
+    const res = await fetchWithRetry(url, { headers });
 
     if (!res.ok) {
       console.error(`TMDB details error for ${type}/${tmdbId}:`, res.status);
@@ -94,6 +100,7 @@ const getDetails = async (tmdbId, mediaType) => {
     }
 
     const data = await res.json();
+    const poster = data.poster_path ? `${IMG_BASE}/w500${data.poster_path}` : null;
     const result = {
       id: data.id,
       title: data.title || data.name || 'Untitled',
@@ -101,7 +108,9 @@ const getDetails = async (tmdbId, mediaType) => {
       mediaType: type,
       overview: data.overview || '',
       rating: data.vote_average ? data.vote_average.toFixed(1) : 'N/A',
-      poster: data.poster_path ? `${IMG_BASE}/w342${data.poster_path}` : null,
+      poster: poster,
+      posterUrl: poster,
+      backdropUrl: data.backdrop_path ? `${IMG_BASE}/w780${data.backdrop_path}` : null,
       language: data.original_language ? data.original_language.toUpperCase() : 'N/A'
     };
 
@@ -122,16 +131,20 @@ const formatResults = (results) => {
   return results
     .filter(item => item.media_type === 'movie' || item.media_type === 'tv')
     .slice(0, 8) // Limit results for Telegram display
-    .map(item => ({
-      id: item.id,
-      title: item.title || item.name || 'Untitled',
-      year: (item.release_date || item.first_air_date || '').slice(0, 4) || 'N/A',
-      mediaType: item.media_type,
-      poster: item.poster_path ? `${IMG_BASE}/w342${item.poster_path}` : null,
-      rating: item.vote_average ? item.vote_average.toFixed(1) : 'N/A',
-      overview: (item.overview || '').slice(0, 200),
-      language: item.original_language ? item.original_language.toUpperCase() : 'N/A'
-    }));
+    .map(item => {
+      const poster = item.poster_path ? `${IMG_BASE}/w500${item.poster_path}` : null;
+      return {
+        id: item.id,
+        title: item.title || item.name || 'Untitled',
+        year: (item.release_date || item.first_air_date || '').slice(0, 4) || 'N/A',
+        mediaType: item.media_type,
+        poster: poster,
+        posterUrl: poster,
+        rating: item.vote_average ? item.vote_average.toFixed(1) : 'N/A',
+        overview: (item.overview || '').slice(0, 200),
+        language: item.original_language ? item.original_language.toUpperCase() : 'N/A'
+      };
+    });
 };
 
 module.exports = {

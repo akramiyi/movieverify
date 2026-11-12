@@ -1,6 +1,6 @@
 const { ADMIN_IDS } = require('../config');
 const { searchMoviesAndTV, getDetails } = require('../tmdb');
-const { getDownloadConfig, upsertDownloadConfig, deleteDownloadConfig, listAllConfigs, getStats } = require('../supabase');
+const { getDownloadConfig, upsertDownloadConfig, deleteDownloadConfig, listAllConfigs, getStats, getLiveStats, broadcastNotification } = require('../supabase');
 const { buildSearchResultsKeyboard, buildPaginationKeyboard, buildConfirmKeyboard } = require('../utils/keyboard');
 
 /**
@@ -36,35 +36,103 @@ const registerAdminHandlers = (bot) => {
       `🔐 *Admin Panel — MovieVerify Bot*\n\n` +
       `*Available Commands:*\n` +
       `🔍 /searchadmin _query_ — Search TMDB to add/edit/delete\n` +
+      `📢 /broadcast _query or id_ — Send push notification to all users\n` +
       `📋 /list — List all configured downloads\n` +
-      `📊 /stats — View statistics\n\n` +
+      `📊 /stats — View live subscriber & platform analytics\n\n` +
       `_All changes sync instantly with the website._`,
       { parse_mode: 'Markdown' }
     );
   });
 
-  // /stats — Show statistics
+  // /stats — Show live platform analytics
   bot.onText(/\/stats/, async (msg) => {
     if (!adminGuard(bot, msg)) return;
     const chatId = msg.chat.id;
 
     try {
-      const stats = await getStats();
+      const stats = await getLiveStats();
+      if (!stats) {
+        return bot.sendMessage(chatId, '❌ Error fetching statistics.');
+      }
 
       bot.sendMessage(chatId,
-        `📊 *MovieVerify — Statistics*\n\n` +
-        `📦 Total Configured: *${stats.total}*\n` +
-        `🎬 Movies: *${stats.movies}*\n` +
-        `📺 TV Shows: *${stats.tvShows}*\n\n` +
-        `*Quality Breakdown:*\n` +
-        `• 480p configured: ${stats.has480p}\n` +
-        `• 720p configured: ${stats.has720p}\n` +
-        `• 1080p configured: ${stats.has1080p}`,
+        `📊 *MovieVerify — Live Platform Analytics*\n\n` +
+        `👥 *Push Subscribers:*\n` +
+        `• Active Web Push Devices: *${stats.activeTokens}*\n` +
+        `• Total Campaigns Sent: *${stats.totalCampaigns}*\n` +
+        `• User Watchlist Alerts: *${stats.totalAlerts}*\n\n` +
+        `📦 *Content Library:*\n` +
+        `• Total Configured: *${stats.total}*\n` +
+        `• 🎬 Movies: *${stats.movies}* | 📺 TV Shows: *${stats.tvShows}*\n` +
+        `• 1080p: ${stats.has1080p} | 720p: ${stats.has720p} | 480p: ${stats.has480p}\n\n` +
+        `🛡️ *System Health:*\n` +
+        `• Pending Broken Link Reports: *${stats.pendingReports}*\n` +
+        `• Site Lock: *${stats.isLocked ? '🔒 LOCKED' : '🟢 OPEN (Active)'}*`,
         { parse_mode: 'Markdown' }
       );
     } catch (err) {
       console.error('Stats error:', err);
       bot.sendMessage(chatId, '❌ Error fetching statistics.');
+    }
+  });
+
+  // /broadcast [query or tmdbId] or /notify [query or tmdbId]
+  bot.onText(/\/(?:broadcast|notify)(?:\s+(.+))?/, async (msg, match) => {
+    if (!adminGuard(bot, msg)) return;
+    const chatId = msg.chat.id;
+    const query = match[1] ? match[1].trim() : '';
+
+    if (!query) {
+      return bot.sendMessage(chatId,
+        `📢 *Push Notification Broadcast*\n\n` +
+        `Send an instant push notification to all subscribed users on MovieVerify!\n\n` +
+        `*Usage:*\n` +
+        `• \`/broadcast <movie name>\` — Search TMDB and select title\n` +
+        `• \`/broadcast <tmdb_id>\` — Broadcast directly by TMDB ID\n\n` +
+        `*Examples:*\n` +
+        `\`/broadcast Jawan\`\n` +
+        `\`/broadcast 872585\``,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    if (/^\d+$/.test(query)) {
+      return showBroadcastPreview(bot, chatId, query, 'movie');
+    }
+
+    const searching = await bot.sendMessage(chatId, `🔍 Searching TMDB for "${query}" to broadcast...`);
+    try {
+      const results = await searchMoviesAndTV(query);
+      if (results.length === 0) {
+        return bot.editMessageText(`😕 No TMDB results for "${query}".`, {
+          chat_id: chatId,
+          message_id: searching.message_id
+        });
+      }
+
+      let text = `📢 *Broadcast — Select Title to Notify Users:*\n\n`;
+      results.slice(0, 6).forEach((item, idx) => {
+        const emoji = item.mediaType === 'tv' ? '📺' : '🎬';
+        const cleanTitle = (item.title || 'Untitled').replace(/[*_`]/g, '');
+        text += `${idx + 1}. ${emoji} *${cleanTitle}* (${item.year})\n`;
+        text += `   TMDB ID: \`${item.id}\` • Type: ${item.mediaType}\n\n`;
+      });
+      text += `_Click a title below to prepare broadcast:_`;
+
+      const keyboard = results.slice(0, 6).map(item => ([{
+        text: `📢 ${item.mediaType === 'tv' ? '📺' : '🎬'} ${(item.title || '').slice(0, 30)} (${item.year})`,
+        callback_data: `broadcast_prompt:${item.id}:${item.mediaType}`
+      }]));
+
+      await bot.editMessageText(text, {
+        chat_id: chatId,
+        message_id: searching.message_id,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (err) {
+      console.error('Broadcast search error:', err);
+      bot.editMessageText('❌ Search failed.', { chat_id: chatId, message_id: searching.message_id });
     }
   });
 
@@ -171,6 +239,9 @@ const registerAdminHandlers = (bot) => {
       ];
 
       if (config) {
+        keyboard.push([
+          { text: '📢 Broadcast Push Alert', callback_data: `broadcast_prompt:${tmdbId}:${mediaType}` }
+        ]);
         keyboard.push([
           { text: '🗑️ Delete Config', callback_data: `admindelete:${tmdbId}:${mediaType}` }
         ]);
@@ -299,6 +370,115 @@ const registerAdminHandlers = (bot) => {
     });
   });
 
+  // Callback: broadcast_prompt:<tmdbId>:<mediaType>
+  bot.on('callback_query', async (callbackQuery) => {
+    if (!callbackQuery.data.startsWith('broadcast_prompt:')) return;
+    if (!isAdmin(callbackQuery.from.id)) {
+      return bot.answerCallbackQuery(callbackQuery.id, { text: '🔒 Unauthorized' });
+    }
+
+    const parts = callbackQuery.data.split(':');
+    const tmdbId = parts[1];
+    const mediaType = parts[2] || 'movie';
+    const chatId = callbackQuery.message.chat.id;
+
+    await bot.answerCallbackQuery(callbackQuery.id, { text: 'Loading preview...' });
+    await showBroadcastPreview(bot, chatId, tmdbId, mediaType, callbackQuery.message.message_id);
+  });
+
+  // Callback: broadcast_cancel
+  bot.on('callback_query', async (callbackQuery) => {
+    if (callbackQuery.data !== 'broadcast_cancel') return;
+    if (!isAdmin(callbackQuery.from.id)) {
+      return bot.answerCallbackQuery(callbackQuery.id, { text: '🔒 Unauthorized' });
+    }
+
+    await bot.answerCallbackQuery(callbackQuery.id, { text: 'Broadcast cancelled' });
+    const chatId = callbackQuery.message.chat.id;
+    const messageId = callbackQuery.message.message_id;
+
+    try {
+      if (callbackQuery.message.caption) {
+        await bot.editMessageCaption('❌ *Broadcast cancelled.* No notifications were sent.', {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown'
+        });
+      } else {
+        await bot.editMessageText('❌ *Broadcast cancelled.* No notifications were sent.', {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown'
+        });
+      }
+    } catch (_) {}
+  });
+
+  // Callback: broadcast_send:<tmdbId>:<mediaType>
+  bot.on('callback_query', async (callbackQuery) => {
+    if (!callbackQuery.data.startsWith('broadcast_send:')) return;
+    if (!isAdmin(callbackQuery.from.id)) {
+      return bot.answerCallbackQuery(callbackQuery.id, { text: '🔒 Unauthorized' });
+    }
+
+    const parts = callbackQuery.data.split(':');
+    const tmdbId = parts[1];
+    const mediaType = parts[2] || 'movie';
+    const chatId = callbackQuery.message.chat.id;
+    const messageId = callbackQuery.message.message_id;
+
+    await bot.answerCallbackQuery(callbackQuery.id, { text: 'Sending broadcast...' });
+
+    try {
+      let details = await getDetails(tmdbId, mediaType);
+      if (!details && mediaType === 'movie') {
+        details = await getDetails(tmdbId, 'tv');
+      }
+
+      const cleanTitle = (details?.title || 'New Release').replace(/[*_`]/g, '');
+      const year = details?.year ? ` (${details.year})` : '';
+      const imageUrl = details?.posterUrl || details?.backdropUrl || null;
+
+      const result = await broadcastNotification({
+        title: `🎬 ${cleanTitle} Available Now!`,
+        body: `Fast 1080p, 720p & 480p links are ready. Watch or download now on MovieVerify!`,
+        tmdbId,
+        mediaType,
+        imageUrl
+      });
+
+      const successText =
+        `🎉 *BROADCAST DISPATCHED SUCCESSFULLY!* 🚀\n\n` +
+        `🎬 *Title:* ${cleanTitle}${year}\n` +
+        `👥 *Queued Recipients:* *${result.totalRecipients || result.totalDeliveries || 'All active users'}*\n` +
+        `🆔 *Campaign ID:* \`${result.campaignId || 'N/A'}\`\n` +
+        `⚡ *Instant Dispatch:* ${result.dispatchTriggered ? '✅ Triggered (Vercel Dispatch)' : '⏳ Queued for Background Worker'}\n\n` +
+        `_All subscribed users will receive the push notification on their devices._`;
+
+      if (callbackQuery.message.caption) {
+        await bot.editMessageCaption(successText, {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown'
+        });
+      } else {
+        await bot.editMessageText(successText, {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown'
+        });
+      }
+    } catch (err) {
+      console.error('Broadcast send error:', err);
+      const failText = `❌ *Broadcast Failed!*\n\nError: \`${err.message}\``;
+      if (callbackQuery.message.caption) {
+        await bot.editMessageCaption(failText, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' });
+      } else {
+        await bot.editMessageText(failText, { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' });
+      }
+    }
+  });
+
   // Handle text messages for conversation flow (add/edit URLs)
   bot.on('message', async (msg) => {
     if (!msg.text || msg.text.startsWith('/')) return;
@@ -358,15 +538,24 @@ const registerAdminHandlers = (bot) => {
             download1080p: conv.data.download1080p,
           });
 
+          const cleanTitle = (conv.title || 'Untitled').replace(/[*_`]/g, '');
           let summary = `✅ *Saved Successfully!*\n\n`;
-          summary += `🎬 *${conv.title}*\n`;
+          summary += `🎬 *${cleanTitle}*\n`;
           summary += `🆔 ${conv.tmdbId} (${conv.mediaType})\n\n`;
           summary += `• 480p: ${conv.data.download480p ? '✅' : '❌'}\n`;
           summary += `• 720p: ${conv.data.download720p ? '✅' : '❌'}\n`;
           summary += `• 1080p: ${conv.data.download1080p ? '✅' : '❌'}\n\n`;
-          summary += `_Changes are live on the website immediately._`;
+          summary += `_Changes are live on the website immediately._\n\n` +
+                     `Would you like to notify all subscribers? 👇`;
 
-          bot.sendMessage(chatId, summary, { parse_mode: 'Markdown' });
+          const keyboard = [
+            [{ text: '📢 Broadcast Push Alert to Users 🚀', callback_data: `broadcast_prompt:${conv.tmdbId}:${conv.mediaType}` }]
+          ];
+
+          bot.sendMessage(chatId, summary, {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: keyboard }
+          });
         } catch (err) {
           console.error('Save error:', err);
           bot.sendMessage(chatId, `❌ Failed to save: ${err.message}`);
@@ -381,6 +570,75 @@ const registerAdminHandlers = (bot) => {
         break;
     }
   });
+};
+
+/**
+ * Show broadcast confirmation preview card
+ */
+const showBroadcastPreview = async (bot, chatId, tmdbId, mediaType = 'movie', editMessageId = null) => {
+  try {
+    let details = await getDetails(tmdbId, mediaType);
+    let detectedType = mediaType;
+    if (!details && mediaType === 'movie') {
+      details = await getDetails(tmdbId, 'tv');
+      if (details) detectedType = 'tv';
+    }
+
+    if (!details) {
+      const errText = `❌ Could not find details for TMDB ID \`${tmdbId}\`.`;
+      if (editMessageId) {
+        return bot.editMessageText(errText, { chat_id: chatId, message_id: editMessageId, parse_mode: 'Markdown' });
+      }
+      return bot.sendMessage(chatId, errText, { parse_mode: 'Markdown' });
+    }
+
+    const cleanTitle = (details.title || 'Untitled').replace(/[*_`]/g, '');
+    const stats = await getLiveStats();
+    const activeCount = stats?.activeTokens || 0;
+    const typeLabel = detectedType === 'tv' ? 'TV Show' : 'Movie';
+
+    const caption =
+      `📢 *CONFIRM PUSH BROADCAST*\n\n` +
+      `🎬 *Title:* ${cleanTitle} (${details.year})\n` +
+      `🎞 *Type:* ${typeLabel} | ID: \`${details.id}\`\n` +
+      `👥 *Target Audience:* *${activeCount} Active Push Devices*\n\n` +
+      `🔔 *Notification Preview:*\n` +
+      `📌 *Title:* 🎬 ${cleanTitle} Available Now!\n` +
+      `💬 *Body:* Fast 1080p, 720p & 480p links are ready. Watch or download now on MovieVerify!\n` +
+      `🔗 *Deep Link:* \`https://movieverify.vercel.app/?type=${detectedType}&id=${details.id}\`\n\n` +
+      `⚠️ *Are you sure you want to broadcast this push notification to all users right now?*`;
+
+    const keyboard = [
+      [
+        { text: '🚀 Yes, Broadcast Now!', callback_data: `broadcast_send:${details.id}:${detectedType}` }
+      ],
+      [
+        { text: '❌ Cancel', callback_data: 'broadcast_cancel' }
+      ]
+    ];
+
+    if (editMessageId) {
+      try {
+        await bot.deleteMessage(chatId, editMessageId);
+      } catch (_) {}
+    }
+
+    if (details.posterUrl) {
+      await bot.sendPhoto(chatId, details.posterUrl, {
+        caption,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } else {
+      await bot.sendMessage(chatId, caption, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    }
+  } catch (err) {
+    console.error('showBroadcastPreview error:', err);
+    bot.sendMessage(chatId, `❌ Failed to generate broadcast preview: ${err.message}`);
+  }
 };
 
 /**
