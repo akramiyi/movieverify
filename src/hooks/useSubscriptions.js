@@ -14,35 +14,76 @@ export function normalizeMovieSubscriptionId(movieOrId) {
   return String(movieOrId).split('-')[0].trim();
 }
 
-export function useSubscriptions() {
-  const [movieSubs, setMovieSubs] = useState([]);
-  const [actorSubs, setActorSubs] = useState([]);
-  const [genreSubs, setGenreSubs] = useState([]);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+// Module-level singleton cache & listeners to prevent duplicate N+1 queries across hook instances
+let globalState = {
+  movieSubs: [],
+  actorSubs: [],
+  genreSubs: [],
+  isAuthenticated: false,
+  userId: null,
+  lastSyncedAt: 0,
+};
 
-  const clearCachedSubs = useCallback(() => {
-    setMovieSubs([]);
-    setActorSubs([]);
-    setGenreSubs([]);
+// Try to hydrate initial state from localStorage immediately
+try {
+  const cachedMovies = localStorage.getItem(STORAGE_MOVIES_KEY);
+  const cachedActors = localStorage.getItem(STORAGE_ACTORS_KEY);
+  const cachedGenres = localStorage.getItem(STORAGE_GENRES_KEY);
+  if (cachedMovies) globalState.movieSubs = JSON.parse(cachedMovies);
+  if (cachedActors) globalState.actorSubs = JSON.parse(cachedActors);
+  if (cachedGenres) globalState.genreSubs = JSON.parse(cachedGenres);
+} catch {}
+
+const listeners = new Set();
+let inFlightSyncPromise = null;
+let globalAuthListenerInitialized = false;
+
+function notifyListeners() {
+  listeners.forEach((listener) => {
     try {
-      localStorage.removeItem(STORAGE_MOVIES_KEY);
-      localStorage.removeItem(STORAGE_ACTORS_KEY);
-      localStorage.removeItem(STORAGE_GENRES_KEY);
+      listener({ ...globalState });
     } catch {}
-  }, []);
+  });
+}
 
-  // Sync with Supabase on mount / auth change
-  const syncWithSupabase = useCallback(async () => {
+function clearCachedSubs() {
+  globalState = {
+    movieSubs: [],
+    actorSubs: [],
+    genreSubs: [],
+    isAuthenticated: false,
+    userId: null,
+    lastSyncedAt: Date.now(),
+  };
+  try {
+    localStorage.removeItem(STORAGE_MOVIES_KEY);
+    localStorage.removeItem(STORAGE_ACTORS_KEY);
+    localStorage.removeItem(STORAGE_GENRES_KEY);
+  } catch {}
+  notifyListeners();
+}
+
+// Global deduplicated sync function
+async function syncSubscriptionsWithSupabase(force = false) {
+  if (inFlightSyncPromise) {
+    return inFlightSyncPromise;
+  }
+
+  inFlightSyncPromise = (async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
-        setIsAuthenticated(false);
-        clearCachedSubs();
+        if (globalState.isAuthenticated) {
+          clearCachedSubs();
+        }
         return;
       }
 
-      setIsAuthenticated(true);
+      const now = Date.now();
+      // Cache valid for 30 seconds unless forced (eliminates duplicate initial auth & mount calls)
+      if (!force && globalState.userId === session.user.id && (now - globalState.lastSyncedAt < 30000)) {
+        return;
+      }
 
       const [moviesRes, actorsRes, genresRes] = await Promise.all([
         supabase.from('movie_notify_requests').select('*').eq('user_id', session.user.id),
@@ -50,49 +91,83 @@ export function useSubscriptions() {
         supabase.from('genre_notify_requests').select('*').eq('user_id', session.user.id),
       ]);
 
-      if (moviesRes.data) {
-        const mapped = moviesRes.data.map(m => ({
-          id: m.movie_id,
-          title: m.movie_title || m.movie_id,
-          mediaType: m.media_type || 'movie',
-          targetSeason: m.target_season || null,
-        }));
-        setMovieSubs(mapped);
-        try {
-          localStorage.setItem(STORAGE_MOVIES_KEY, JSON.stringify(mapped));
-        } catch {}
-      }
-      if (actorsRes.data) {
-        const mapped = actorsRes.data.map(a => ({ id: a.actor_id, name: a.actor_name || a.actor_id }));
-        setActorSubs(mapped);
-        try {
-          localStorage.setItem(STORAGE_ACTORS_KEY, JSON.stringify(mapped));
-        } catch {}
-      }
-      if (genresRes.data) {
-        const mapped = genresRes.data.map(g => ({ id: g.genre_id, name: g.genre_name || g.genre_id }));
-        setGenreSubs(mapped);
-        try {
-          localStorage.setItem(STORAGE_GENRES_KEY, JSON.stringify(mapped));
-        } catch {}
-      }
+      const movieSubs = moviesRes.data
+        ? moviesRes.data.map(m => ({
+            id: m.movie_id,
+            title: m.movie_title || m.movie_id,
+            mediaType: m.media_type || 'movie',
+            targetSeason: m.target_season || null,
+          }))
+        : globalState.movieSubs;
+
+      const actorSubs = actorsRes.data
+        ? actorsRes.data.map(a => ({ id: a.actor_id, name: a.actor_name || a.actor_id }))
+        : globalState.actorSubs;
+
+      const genreSubs = genresRes.data
+        ? genresRes.data.map(g => ({ id: g.genre_id, name: g.genre_name || g.genre_id }))
+        : globalState.genreSubs;
+
+      globalState = {
+        movieSubs,
+        actorSubs,
+        genreSubs,
+        isAuthenticated: true,
+        userId: session.user.id,
+        lastSyncedAt: Date.now(),
+      };
+
+      try {
+        localStorage.setItem(STORAGE_MOVIES_KEY, JSON.stringify(movieSubs));
+        localStorage.setItem(STORAGE_ACTORS_KEY, JSON.stringify(actorSubs));
+        localStorage.setItem(STORAGE_GENRES_KEY, JSON.stringify(genreSubs));
+      } catch {}
+
+      notifyListeners();
     } catch (err) {
       console.warn('[useSubscriptions] Sync failed:', err.message);
+    } finally {
+      inFlightSyncPromise = null;
     }
-  }, [clearCachedSubs]);
+  })();
+
+  return inFlightSyncPromise;
+}
+
+// Initialize Supabase auth listener exactly ONCE at module level
+function initGlobalAuthListener() {
+  if (globalAuthListenerInitialized) return;
+  globalAuthListenerInitialized = true;
+
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT' || !session?.user) {
+      clearCachedSubs();
+    } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      syncSubscriptionsWithSupabase(false);
+    }
+  });
+}
+
+export function useSubscriptions() {
+  const [state, setState] = useState(() => ({ ...globalState }));
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    syncWithSupabase();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session?.user) {
-        setIsAuthenticated(false);
-        clearCachedSubs();
-      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-        syncWithSupabase();
-      }
-    });
-    return () => subscription?.unsubscribe();
-  }, [syncWithSupabase, clearCachedSubs]);
+    initGlobalAuthListener();
+    listeners.add(setState);
+
+    // Initial sync (deduplicated across all hook instances)
+    syncSubscriptionsWithSupabase(false);
+
+    return () => {
+      listeners.delete(setState);
+    };
+  }, []);
+
+  const movieSubs = state.movieSubs;
+  const actorSubs = state.actorSubs;
+  const genreSubs = state.genreSubs;
+  const isAuthenticated = state.isAuthenticated;
 
   // Toggle Movie Subscription (requires authenticated Supabase session)
   const toggleMovieNotify = useCallback(async (movie) => {
@@ -102,7 +177,7 @@ export function useSubscriptions() {
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
-      setIsAuthenticated(false);
+      clearCachedSubs();
       return { success: false, requiresAuth: true, error: 'Sign in required to save release alerts.' };
     }
 
@@ -142,10 +217,12 @@ export function useSubscriptions() {
               Number(m.targetSeason || 0) === seasonScope
             )
         );
-        setMovieSubs(updated);
+        globalState.movieSubs = updated;
+        globalState.lastSyncedAt = Date.now();
         try {
           localStorage.setItem(STORAGE_MOVIES_KEY, JSON.stringify(updated));
         } catch {}
+        notifyListeners();
         return { success: true, subscribed: false };
       } else {
         const { error } = await supabase
@@ -170,10 +247,12 @@ export function useSubscriptions() {
           ...movieSubs,
           { id: movieId, title: movieTitle, mediaType, targetSeason, addedAt: Date.now() },
         ];
-        setMovieSubs(updated);
+        globalState.movieSubs = updated;
+        globalState.lastSyncedAt = Date.now();
         try {
           localStorage.setItem(STORAGE_MOVIES_KEY, JSON.stringify(updated));
         } catch {}
+        notifyListeners();
         return { success: true, subscribed: true };
       }
     } finally {
@@ -189,7 +268,7 @@ export function useSubscriptions() {
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
-      setIsAuthenticated(false);
+      clearCachedSubs();
       return { success: false, requiresAuth: true, error: 'Sign in required to save actor alerts.' };
     }
 
@@ -206,10 +285,12 @@ export function useSubscriptions() {
       if (error) return { success: false, error: error.message };
 
       const updated = actorSubs.filter((a) => String(a.id) !== actorId);
-      setActorSubs(updated);
+      globalState.actorSubs = updated;
+      globalState.lastSyncedAt = Date.now();
       try {
         localStorage.setItem(STORAGE_ACTORS_KEY, JSON.stringify(updated));
       } catch {}
+      notifyListeners();
       return { success: true, subscribed: false };
     } else {
       const { error } = await supabase
@@ -225,10 +306,12 @@ export function useSubscriptions() {
       if (error) return { success: false, error: error.message };
 
       const updated = [...actorSubs, { id: actorId, name: actorName, addedAt: Date.now() }];
-      setActorSubs(updated);
+      globalState.actorSubs = updated;
+      globalState.lastSyncedAt = Date.now();
       try {
         localStorage.setItem(STORAGE_ACTORS_KEY, JSON.stringify(updated));
       } catch {}
+      notifyListeners();
       return { success: true, subscribed: true };
     }
   }, [actorSubs]);
@@ -241,7 +324,7 @@ export function useSubscriptions() {
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
-      setIsAuthenticated(false);
+      clearCachedSubs();
       return { success: false, requiresAuth: true, error: 'Sign in required to save genre alerts.' };
     }
 
@@ -258,10 +341,12 @@ export function useSubscriptions() {
       if (error) return { success: false, error: error.message };
 
       const updated = genreSubs.filter((g) => String(g.id) !== genreId);
-      setGenreSubs(updated);
+      globalState.genreSubs = updated;
+      globalState.lastSyncedAt = Date.now();
       try {
         localStorage.setItem(STORAGE_GENRES_KEY, JSON.stringify(updated));
       } catch {}
+      notifyListeners();
       return { success: true, subscribed: false };
     } else {
       const { error } = await supabase
@@ -277,10 +362,12 @@ export function useSubscriptions() {
       if (error) return { success: false, error: error.message };
 
       const updated = [...genreSubs, { id: genreId, name: genreName, addedAt: Date.now() }];
-      setGenreSubs(updated);
+      globalState.genreSubs = updated;
+      globalState.lastSyncedAt = Date.now();
       try {
         localStorage.setItem(STORAGE_GENRES_KEY, JSON.stringify(updated));
       } catch {}
+      notifyListeners();
       return { success: true, subscribed: true };
     }
   }, [genreSubs]);
@@ -309,7 +396,6 @@ export function useSubscriptions() {
     },
     isActorNotifying: (id) => actorSubs.some((a) => String(a.id) === String(id)),
     isGenreNotifying: (id) => genreSubs.some((g) => String(g.id) === String(id)),
-    refreshSubscriptions: syncWithSupabase,
+    refreshSubscriptions: () => syncSubscriptionsWithSupabase(true),
   };
 }
-

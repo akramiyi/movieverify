@@ -91,25 +91,28 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
     } catch {}
   }, [unreadNotificationCount]);
 
-  useEffect(() => {
-    const checkReports = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return; // only fetch if admin is logged in
-        
-        const { count, error } = await supabase
-          .from('movie_reports')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending');
-        
-        if (!error) {
-          setPendingReports(count || 0);
-        }
-      } catch {
-        // Silently ignore if database is unreachable
+  const checkReports = useCallback(async () => {
+    try {
+      const { count, error } = await supabase
+        .from('movie_reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      
+      if (!error) {
+        setPendingReports(count || 0);
       }
-    };
-    checkReports();
+    } catch {
+      // Silently ignore if database is unreachable
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAdminUser) {
+      checkReports();
+    }
+  }, [isAdminUser, checkReports]);
+
+  useEffect(() => {
     checkNotifications();
   }, [checkNotifications]);
 
