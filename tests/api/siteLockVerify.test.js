@@ -195,3 +195,4 @@ describe('Site-Lock Verification Suite', () => {
     assert.equal(jsonBody.site_locked, false);
   });
 });
+

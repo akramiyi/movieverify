@@ -5,18 +5,23 @@ import { searchActorByName } from '../hooks/useActorSearch';
 
 const ActorMovieCard = ({ actor, onActorClick }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [actorData, setActorData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [actorData, setActorData] = useState(() => (actor.image && actor.tmdb_id ? actor : null));
+  const [loading, setLoading] = useState(() => !(actor.image && actor.tmdb_id));
 
   useEffect(() => {
+    if (actor.image && actor.tmdb_id) {
+      setActorData(actor);
+      setLoading(false);
+      return;
+    }
     searchActorByName(actor.name).then(data => {
       setActorData(data);
       setLoading(false);
     });
-  }, [actor.name]);
+  }, [actor]);
 
-  const imageUrl = actorData?.image;
-  const tmdbId = actorData?.tmdb_id;
+  const imageUrl = actorData?.image || actor?.image;
+  const tmdbId = actorData?.tmdb_id || actor?.tmdb_id;
 
   const handleClick = () => {
     if (!tmdbId) return; // don't open modal if actor lookup failed

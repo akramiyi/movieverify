@@ -248,28 +248,29 @@ const fetchTMDB = async (endpoint) => {
 };
 
 const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
-  const BATCH_SIZE = 5;
-  const BATCH_DELAY_MS = 300;
   const results = [];
-
   const idsToFetch = [];
+
   for (const idStr of ids) {
     const parsedId = parseInt(idStr.split('-')[0], 10);
     if (isNaN(parsedId)) continue;
 
-    const existing = alreadyFetchedList.find(m => String(m.id) === String(parsedId));
+    const existing = alreadyFetchedList.find(m => String(m.id) === String(parsedId))
+      || localMovies.find(m => String(m.id) === String(parsedId));
+
     if (existing) {
-      results.push(existing);
+      results.push(existing.quality ? existing : formatMovie(existing));
     } else {
       idsToFetch.push(idStr);
     }
   }
 
-  for (let i = 0; i < idsToFetch.length; i += BATCH_SIZE) {
-    const batch = idsToFetch.slice(i, i + BATCH_SIZE);
+  // Guard: Cap external individual metadata fetches to at most 6 to prevent N+1 network storms on homepage
+  const cappedBatch = idsToFetch.slice(0, 6);
 
+  if (cappedBatch.length > 0) {
     const batchResults = await Promise.all(
-      batch.map(async (idStr) => {
+      cappedBatch.map(async (idStr) => {
         const parsedId = parseInt(idStr.split('-')[0], 10);
         const mediaType = idStr.includes('-tv')
           ? 'tv'
@@ -278,7 +279,6 @@ const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
             : getMediaTypeFromId(parsedId));
 
         if (!mediaType) {
-          // If media type remains unknown or ambiguous, skip that item from typed metadata fetching
           return null;
         }
 
@@ -296,10 +296,6 @@ const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
     );
 
     results.push(...batchResults.filter(Boolean));
-
-    if (i + BATCH_SIZE < idsToFetch.length) {
-      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-    }
   }
 
   return results;

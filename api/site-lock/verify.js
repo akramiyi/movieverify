@@ -182,3 +182,4 @@ export default async function handler(req, res, customSupabase = null) {
     return sendJson(res, 500, { error: 'Internal server verification error.' });
   }
 }
+
