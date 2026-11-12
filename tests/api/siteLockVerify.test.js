@@ -194,5 +194,163 @@ describe('Site-Lock Verification Suite', () => {
     assert.equal(jsonBody.success, true);
     assert.equal(jsonBody.site_locked, false);
   });
+
+  describe('Admin Site-Lock Management Suite', () => {
+    function createMockSupabaseForAdmin({
+      user = { id: 'admin-1', email: 'admin@movieverify.com' },
+      isAdmin = true,
+      initialSettings = { is_locked: false, lock_password: 'initial_password' }
+    } = {}) {
+      let settings = { ...initialSettings };
+      return {
+        auth: {
+          getUser: async (token) => {
+            if (!token || token === 'invalid_token') {
+              return { data: { user: null }, error: { message: 'Invalid token' } };
+            }
+            return { data: { user }, error: null };
+          }
+        },
+        from: (table) => {
+          if (table === 'admin_users') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  maybeSingle: async () => ({
+                    data: isAdmin ? { user_id: user.id } : null,
+                    error: null
+                  })
+                })
+              })
+            };
+          }
+          if (table === 'site_settings') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  single: async () => ({
+                    data: settings,
+                    error: null
+                  })
+                })
+              }),
+              update: (payload) => ({
+                eq: () => {
+                  settings = { ...settings, ...payload };
+                  return Promise.resolve({ data: settings, error: null });
+                }
+              })
+            };
+          }
+          return {};
+        }
+      };
+    }
+
+    test('Admin toggle rejects unauthenticated request with 401', async () => {
+      const req = {
+        method: 'POST',
+        headers: {},
+        body: { action: 'toggle', is_locked: true }
+      };
+      let status = 0;
+      let jsonBody = null;
+      const res = {
+        setHeader: () => {},
+        end: (data) => { jsonBody = JSON.parse(data); },
+        set statusCode(val) { status = val; }
+      };
+
+      const mockSupabase = createMockSupabaseForAdmin();
+      await handler(req, res, mockSupabase);
+      assert.equal(status, 401);
+      assert.ok(jsonBody.error.includes('Authentication required'));
+    });
+
+    test('Admin toggle rejects non-admin authenticated user with 403', async () => {
+      const req = {
+        method: 'POST',
+        headers: { authorization: 'Bearer viewer_token' },
+        body: { action: 'toggle', is_locked: true }
+      };
+      let status = 0;
+      let jsonBody = null;
+      const res = {
+        setHeader: () => {},
+        end: (data) => { jsonBody = JSON.parse(data); },
+        set statusCode(val) { status = val; }
+      };
+
+      const mockSupabase = createMockSupabaseForAdmin({ isAdmin: false });
+      await handler(req, res, mockSupabase);
+      assert.equal(status, 403);
+      assert.ok(jsonBody.error.includes('Forbidden'));
+    });
+
+    test('Admin toggle successfully locks site with new password via service_role', async () => {
+      const req = {
+        method: 'POST',
+        headers: { authorization: 'Bearer valid_admin_token' },
+        body: { action: 'toggle', is_locked: true, lock_password: 'super_secure_key_2026' }
+      };
+      let status = 0;
+      let jsonBody = null;
+      const res = {
+        setHeader: () => {},
+        end: (data) => { jsonBody = JSON.parse(data); },
+        set statusCode(val) { status = val; }
+      };
+
+      const mockSupabase = createMockSupabaseForAdmin();
+      await handler(req, res, mockSupabase);
+      assert.equal(status, 200);
+      assert.equal(jsonBody.success, true);
+      assert.equal(jsonBody.is_locked, true);
+      assert.equal(jsonBody.message, 'Site locked successfully.');
+    });
+
+    test('Admin toggle successfully unlocks site', async () => {
+      const req = {
+        method: 'POST',
+        headers: { authorization: 'Bearer valid_admin_token' },
+        body: { action: 'toggle', is_locked: false }
+      };
+      let status = 0;
+      let jsonBody = null;
+      const res = {
+        setHeader: () => {},
+        end: (data) => { jsonBody = JSON.parse(data); },
+        set statusCode(val) { status = val; }
+      };
+
+      const mockSupabase = createMockSupabaseForAdmin({ initialSettings: { is_locked: true } });
+      await handler(req, res, mockSupabase);
+      assert.equal(status, 200);
+      assert.equal(jsonBody.success, true);
+      assert.equal(jsonBody.is_locked, false);
+      assert.equal(jsonBody.message, 'Site unlocked successfully.');
+    });
+
+    test('Admin status action retrieves current lock status', async () => {
+      const req = {
+        method: 'POST',
+        headers: { authorization: 'Bearer valid_admin_token' },
+        body: { action: 'status' }
+      };
+      let status = 0;
+      let jsonBody = null;
+      const res = {
+        setHeader: () => {},
+        end: (data) => { jsonBody = JSON.parse(data); },
+        set statusCode(val) { status = val; }
+      };
+
+      const mockSupabase = createMockSupabaseForAdmin({ initialSettings: { is_locked: true, updated_at: '2026-11-13T00:00:00Z' } });
+      await handler(req, res, mockSupabase);
+      assert.equal(status, 200);
+      assert.equal(jsonBody.success, true);
+      assert.equal(jsonBody.is_locked, true);
+    });
+  });
 });
 

@@ -769,7 +769,8 @@ function App() {
     return <IntroAnimation onComplete={() => setShowIntro(false)} />;
   }
 
-  if (siteLocked) {
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  if (siteLocked && !isAdminRoute) {
     return <SiteLockScreen onUnlock={() => setSiteLocked(false)} />;
   }
 

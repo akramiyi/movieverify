@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight } from 'lucide-react';
+import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, fetchMovieOrTVById, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
@@ -109,6 +109,8 @@ const AdminPanel = ({ onClose }) => {
   const [siteLockStatus, setSiteLockStatus] = useState(false);
   const [lockKeyInput, setLockKeyInput] = useState('');
   const [lockToggling, setLockToggling] = useState(false);
+  const [lockKeyUpdating, setLockKeyUpdating] = useState(false);
+  const [lockMessage, setLockMessage] = useState(null);
 
   // Fetch all link configurations from Supabase
   const fetchCurrentLinks = async () => {
@@ -149,7 +151,7 @@ const AdminPanel = ({ onClose }) => {
         .eq('id', 1)
         .single();
       if (data) {
-        setSiteLockStatus(data.is_locked);
+        setSiteLockStatus(Boolean(data.is_locked));
       }
     } catch (e) {
       console.warn('Failed to fetch site lock status:', e.message);
@@ -158,29 +160,141 @@ const AdminPanel = ({ onClose }) => {
 
   const handleToggleSiteLock = async () => {
     setLockToggling(true);
+    setLockMessage(null);
     const newStatus = !siteLockStatus;
     
     try {
-      const updatePayload = {
-        is_locked: newStatus,
-        updated_at: new Date().toISOString()
-      };
-      if (lockKeyInput.trim()) {
-        updatePayload.lock_password = lockKeyInput.trim();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      let handled = false;
+
+      // 1. Primary path: Call serverless endpoint using service_role with admin JWT
+      if (token) {
+        try {
+          const res = await fetch('/api/site-lock/verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'toggle',
+              is_locked: newStatus,
+              lock_password: lockKeyInput.trim() || undefined
+            })
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.success) {
+            setSiteLockStatus(newStatus);
+            handled = true;
+            setLockMessage({
+              type: 'success',
+              text: newStatus 
+                ? (lockKeyInput.trim() ? '🔒 Site locked and access key updated successfully!' : '🔒 Site is now locked! Visitors will need the access key to enter.') 
+                : '🔓 Site unlocked successfully! The site is now open to the public.'
+            });
+            if (newStatus) {
+              sessionStorage.removeItem('movieverify_unlocked');
+              localStorage.removeItem('movieverify_site_unlocked');
+            }
+            if (lockKeyInput.trim()) {
+              setLockKeyInput('');
+            }
+          } else {
+            console.warn('[SiteLock] Serverless endpoint returned error:', data.error);
+          }
+        } catch (fetchErr) {
+          console.warn('[SiteLock] Serverless network error:', fetchErr.message);
+        }
       }
 
-      const { error } = await supabase
-        .from('site_settings')
-        .update(updatePayload)
-        .eq('id', 1);
+      // 2. Fallback: Direct client supabase update (is_locked only to avoid column permission errors)
+      if (!handled) {
+        const { error } = await supabase
+          .from('site_settings')
+          .update({ is_locked: newStatus, updated_at: new Date().toISOString() })
+          .eq('id', 1);
 
-      if (!error) {
-        setSiteLockStatus(newStatus);
+        if (!error) {
+          setSiteLockStatus(newStatus);
+          setLockMessage({
+            type: 'success',
+            text: newStatus ? '🔒 Site locked successfully.' : '🔓 Site unlocked successfully.'
+          });
+          if (newStatus) {
+            sessionStorage.removeItem('movieverify_unlocked');
+            localStorage.removeItem('movieverify_site_unlocked');
+          }
+        } else {
+          setLockMessage({
+            type: 'error',
+            text: `Failed to update site lock: ${error.message}`
+          });
+        }
       }
     } catch (e) {
-      console.warn('Failed to update site lock:', e.message);
+      setLockMessage({
+        type: 'error',
+        text: `Error updating site lock: ${e.message}`
+      });
+    } finally {
+      setLockToggling(false);
     }
-    setLockToggling(false);
+  };
+
+  const handleSaveLockKey = async () => {
+    if (!lockKeyInput.trim()) {
+      setLockMessage({ type: 'error', text: 'Please enter an access key before saving.' });
+      return;
+    }
+
+    setLockKeyUpdating(true);
+    setLockMessage(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        setLockMessage({ type: 'error', text: 'Admin session expired. Please sign in again.' });
+        setLockKeyUpdating(false);
+        return;
+      }
+
+      const res = await fetch('/api/site-lock/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'update',
+          lock_password: lockKeyInput.trim()
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setLockMessage({
+          type: 'success',
+          text: '🔑 Access key updated and saved successfully!'
+        });
+        setLockKeyInput('');
+      } else {
+        setLockMessage({
+          type: 'error',
+          text: data.error || 'Failed to update access key.'
+        });
+      }
+    } catch (e) {
+      setLockMessage({
+        type: 'error',
+        text: `Network error saving access key: ${e.message}`
+      });
+    } finally {
+      setLockKeyUpdating(false);
+    }
   };
 
   // Initialize lockout state from localStorage on mount
@@ -1034,37 +1148,112 @@ const AdminPanel = ({ onClose }) => {
             </div>
           </div>
 
-          <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 mb-6">
+          <div className={`bg-[#1a1a1a] border rounded-xl p-4 mb-6 transition-all duration-300 ${
+            siteLockStatus ? 'border-red-500/40 bg-gradient-to-r from-red-950/20 via-[#1a1a1a] to-[#1a1a1a]' : 'border-white/5'
+          }`}>
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h4 className="text-white font-bold text-sm">Site Lock</h4>
-                <p className="text-gray-400 text-xs mt-0.5">
-                  {siteLockStatus ? 'Site is currently locked' : 'Site is currently public'}
+                <div className="flex items-center gap-2">
+                  <h4 className="text-white font-bold text-sm">Site Lock</h4>
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide uppercase ${
+                    siteLockStatus 
+                      ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
+                      : 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${siteLockStatus ? 'bg-red-400 animate-ping' : 'bg-green-400'}`} />
+                    {siteLockStatus ? 'Locked (Private)' : 'Public (Active)'}
+                  </span>
+                </div>
+                <p className="text-gray-400 text-xs mt-1">
+                  {siteLockStatus 
+                    ? 'Site is currently password-protected. Visitors must enter the access key.' 
+                    : 'Site is open and accessible to all visitors without restrictions.'}
                 </p>
               </div>
               <button
+                type="button"
                 onClick={handleToggleSiteLock}
-                disabled={lockToggling}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition ${
+                disabled={lockToggling || lockKeyUpdating}
+                className={`px-4 py-2 rounded-full text-xs font-bold transition flex items-center gap-1.5 shadow-md ${
                   siteLockStatus 
-                    ? 'bg-red-600 hover:bg-red-700 text-white' 
-                    : 'bg-white/10 hover:bg-white/20 text-white'
-                }`}
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-900/40' 
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40'
+                } disabled:opacity-50`}
               >
-                {lockToggling ? 'Updating...' : siteLockStatus ? 'Unlock Site' : 'Lock Site'}
+                {lockToggling ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Updating...</span>
+                  </>
+                ) : siteLockStatus ? (
+                  <>
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Unlock Site</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Lock Site</span>
+                  </>
+                )}
               </button>
             </div>
             
-            <input
-              type="text"
-              placeholder="Set access key"
-              value={lockKeyInput}
-              onChange={(e) => setLockKeyInput(e.target.value)}
-              className="w-full bg-black/50 border border-white/10 rounded p-2 text-white text-sm outline-none focus:border-[#E50914] transition"
-            />
-            <p className="text-gray-500 text-[10px] mt-1">
-              This is the key visitors will need to enter to access the site while locked.
-            </p>
+            <div className="space-y-2 pt-2 border-t border-white/5">
+              <label className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5 text-red-400" />
+                Access Key Management
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Set or change access key..."
+                  value={lockKeyInput}
+                  onChange={(e) => setLockKeyInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveLockKey();
+                    }
+                  }}
+                  className="flex-1 bg-black/50 border border-white/10 rounded px-3 py-2 text-white text-sm outline-none focus:border-[#E50914] transition"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveLockKey}
+                  disabled={lockKeyUpdating || lockToggling || !lockKeyInput.trim()}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 text-white rounded text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  {lockKeyUpdating ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save Key</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-gray-500 text-[11px]">
+                {siteLockStatus 
+                  ? 'Visitors will need to enter this key to unlock and browse the catalog.' 
+                  : 'Enter a key and click "Lock Site" to lock immediately with this key, or click "Save Key" to update it in advance.'}
+              </p>
+
+              {lockMessage && (
+                <div className={`flex items-center gap-2 p-2.5 rounded text-xs border mt-2 transition ${
+                  lockMessage.type === 'success' 
+                    ? 'bg-green-950/40 border-green-800/60 text-green-300' 
+                    : 'bg-red-950/40 border-red-800/60 text-red-300'
+                }`}>
+                  {lockMessage.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                  <span>{lockMessage.text}</span>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>

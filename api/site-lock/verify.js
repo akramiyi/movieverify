@@ -1,15 +1,18 @@
 /**
- * MovieVerify Site-Lock Verification API
+ * MovieVerify Site-Lock Verification & Management API
  * 
  * Verifies the site access key server-side with:
  * 1. Brute-force protection (In-memory IP rate limiter: max 5 failed attempts per 15 min).
  * 2. Constant-time secret comparison (timingSafeCompare) to prevent timing side channels.
  * 3. Zero client credential exposure (lock_password never sent to client).
+ * 4. Authenticated admin management (Lock/Unlock toggle & access key update via service_role).
  */
 
 import crypto from 'crypto';
 import { getSupabaseServerClient } from '../_lib/supabaseServer.js';
 import { parseJsonBody, sendJson } from '../_lib/requestUtils.js';
+import { authenticateRequest } from '../_lib/authMiddleware.js';
+import { isServerSideAdmin } from '../_lib/campaignService.js';
 
 // In-memory rate limiting map: ip -> { count: number, blockedUntil: number }
 const rateLimitStore = new Map();
@@ -105,6 +108,83 @@ export default async function handler(req, res, customSupabase = null) {
     return sendJson(res, 405, { error: 'Method not allowed. Use POST.' });
   }
 
+  const body = await parseJsonBody(req);
+
+  // 1. Admin Management Action (Lock / Unlock / Set Key via service_role)
+  if (body?.action === 'toggle' || body?.action === 'update' || body?.action === 'status') {
+    const auth = await authenticateRequest(req, customSupabase);
+    if (!auth.authenticated || !auth.user) {
+      return sendJson(res, 401, { error: auth.error || 'Administrator authentication required.' });
+    }
+
+    const isAdmin = await isServerSideAdmin(auth.user, customSupabase);
+    if (!isAdmin) {
+      return sendJson(res, 403, { error: 'Forbidden: administrator credentials required.' });
+    }
+
+    const supabase = getSupabaseServerClient(customSupabase);
+
+    if (body.action === 'status') {
+      const { data, error: fetchErr } = await supabase
+        .from('site_settings')
+        .select('is_locked, updated_at')
+        .eq('id', 1)
+        .single();
+
+      if (fetchErr) {
+        return sendJson(res, 500, { error: 'Failed to fetch status: ' + fetchErr.message });
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        is_locked: Boolean(data?.is_locked),
+        updated_at: data?.updated_at
+      });
+    }
+
+    const updatePayload = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (body.action === 'toggle') {
+      if (typeof body.is_locked === 'boolean') {
+        updatePayload.is_locked = body.is_locked;
+      } else {
+        const { data: currentSettings } = await supabase
+          .from('site_settings')
+          .select('is_locked')
+          .eq('id', 1)
+          .single();
+        updatePayload.is_locked = !Boolean(currentSettings?.is_locked);
+      }
+    } else if (body.is_locked !== undefined) {
+      updatePayload.is_locked = Boolean(body.is_locked);
+    }
+
+    if (body.lock_password && typeof body.lock_password === 'string' && body.lock_password.trim()) {
+      updatePayload.lock_password = body.lock_password.trim();
+    }
+
+    const { error: updateErr } = await supabase
+      .from('site_settings')
+      .update(updatePayload)
+      .eq('id', 1);
+
+    if (updateErr) {
+      console.error('[SiteLock] Admin update error:', updateErr.message);
+      return sendJson(res, 500, { error: 'Database update failed: ' + updateErr.message });
+    }
+
+    return sendJson(res, 200, {
+      success: true,
+      is_locked: updatePayload.is_locked,
+      message: updatePayload.is_locked === true
+        ? 'Site locked successfully.'
+        : (updatePayload.is_locked === false ? 'Site unlocked successfully.' : 'Site settings updated.')
+    });
+  }
+
+  // 2. Visitor Access Verification
   const clientIp = getClientIp(req);
   const rateLimitStatus = checkRateLimit(clientIp);
 
@@ -115,8 +195,6 @@ export default async function handler(req, res, customSupabase = null) {
       retry_after_seconds: rateLimitStatus.retryAfterSeconds
     });
   }
-
-  const body = await parseJsonBody(req);
   const password = body?.password;
 
   if (!password || typeof password !== 'string' || !password.trim()) {
