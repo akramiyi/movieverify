@@ -277,7 +277,18 @@ export function usePushNotifications(options = {}) {
 
           // If the token was revoked on server (e.g. UNREGISTERED / permissions reset), automatically re-register a fresh FCM token
           if (syncRes?.status === 409) {
-            console.log('[usePushNotifications] Stored device token was revoked or expired; requesting fresh token from Google FCM...');
+            console.log('[usePushNotifications] Stored device token was revoked or expired; reauthorizing endpoint...');
+            const directReauth = await registerTokenWithBackend({
+              token: storedToken,
+              accessToken: session.access_token,
+              reauthorize: true,
+            });
+            if (directReauth?.success) {
+              localStorage.setItem(STORAGE_REGISTERED_KEY, 'true');
+              setIsSubscribed(true);
+              return;
+            }
+
             const freshToken = await getDeviceFcmToken({ vapidKey });
             if (freshToken) {
               tokenRef.current = freshToken;
