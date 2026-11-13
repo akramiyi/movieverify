@@ -230,6 +230,8 @@ export function buildFcmPayload(delivery, campaign = null) {
       campaign_id: delivery.campaign_id != null ? String(delivery.campaign_id) : '',
       category: String(campaign?.category || 'system'),
       url: String(linkUrl),
+      title: String(title),
+      body: String(body),
     },
     webpush: {
       fcmOptions: {
@@ -237,6 +239,7 @@ export function buildFcmPayload(delivery, campaign = null) {
       },
       headers: {
         Urgency: 'high',
+        TTL: '86400',
       },
       notification: {
         icon: '/logo192.png',
