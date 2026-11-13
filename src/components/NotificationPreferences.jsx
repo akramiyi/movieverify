@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, Bell, BellOff, Loader2, Moon, Smartphone, AlertCircle } from 'lucide-react';
+import { Settings, Bell, BellOff, Loader2, Moon, Smartphone, AlertCircle, Send, CheckCircle2, ChevronDown, ChevronUp, Radio } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
@@ -62,6 +62,10 @@ export default function NotificationPreferences({ onClose }) {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [updatingField, setUpdatingField] = useState(null);
   const [statusMessage, setStatusMessage] = useState(null);
+  const [isTestingPush, setIsTestingPush] = useState(false);
+  const [testPushResult, setTestPushResult] = useState(null);
+  const [deviceDiagnostics, setDeviceDiagnostics] = useState(null);
+  const [showAndroidGuide, setShowAndroidGuide] = useState(false);
 
   const {
     isSupported: isPushSupported,
@@ -80,6 +84,7 @@ export default function NotificationPreferences({ onClose }) {
       if (!session) {
         setIsSignedIn(false);
         setPreferences(null);
+        setDeviceDiagnostics(null);
         return;
       }
 
@@ -93,6 +98,22 @@ export default function NotificationPreferences({ onClose }) {
       } else {
         setStatusMessage({ type: 'error', text: 'Failed to load preferences.' });
       }
+
+      // Query active registered devices diagnostics
+      try {
+        const diagRes = await fetch('/api/notifications/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ action: 'diagnostics' }),
+        });
+        if (diagRes.ok) {
+          const diagJson = await diagRes.json();
+          setDeviceDiagnostics(diagJson);
+        }
+      } catch {}
     } catch (err) {
       console.warn('Failed to load notification preferences:', err.message);
       setStatusMessage({ type: 'error', text: 'Unable to reach notification preferences API.' });
@@ -100,6 +121,47 @@ export default function NotificationPreferences({ onClose }) {
       setLoading(false);
     }
   }, []);
+
+  const handleTestPush = async () => {
+    setIsTestingPush(true);
+    setTestPushResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setTestPushResult({ type: 'error', text: 'Please sign in to test push delivery.' });
+        return;
+      }
+
+      const res = await fetch('/api/notifications/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action: 'test_push' }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.success) {
+        setTestPushResult({
+          type: 'success',
+          text: '🔔 Test alert sent! Check your notification bar or drawer.',
+        });
+      } else {
+        setTestPushResult({
+          type: 'error',
+          text: json.error || 'Failed to dispatch test notification.',
+        });
+      }
+    } catch (err) {
+      setTestPushResult({
+        type: 'error',
+        text: 'Network error while triggering test push: ' + err.message,
+      });
+    } finally {
+      setIsTestingPush(false);
+    }
+  };
 
   useEffect(() => {
     fetchPrefs();
@@ -254,6 +316,75 @@ export default function NotificationPreferences({ onClose }) {
             </button>
           )}
         </div>
+
+        {/* Device Diagnostics & Actions */}
+        {isDevicePushSubscribed && (
+          <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[11px] text-gray-400 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+              <span>Token Registered</span>
+              {deviceDiagnostics && deviceDiagnostics.device_count > 0 && (
+                <span className="bg-white/10 px-2 py-0.5 rounded text-[10px] text-gray-300">
+                  {deviceDiagnostics.device_count} device(s) linked
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              disabled={isTestingPush}
+              onClick={handleTestPush}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition cursor-pointer disabled:opacity-50"
+            >
+              {isTestingPush ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Send className="w-3 h-3" />
+              )}
+              {isTestingPush ? 'Sending Test...' : '⚡ Test Alert to This Device'}
+            </button>
+          </div>
+        )}
+
+        {testPushResult && (
+          <p
+            className={`text-xs px-2.5 py-1.5 rounded-lg border mt-2 flex items-center gap-1.5 ${
+              testPushResult.type === 'error'
+                ? 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+                : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+            }`}
+          >
+            {testPushResult.type === 'error' ? (
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+            )}
+            {testPushResult.text}
+          </p>
+        )}
+
+        {/* Android Push Delay Troubleshooting Helper */}
+        <div className="pt-2 border-t border-white/5">
+          <button
+            type="button"
+            onClick={() => setShowAndroidGuide((prev) => !prev)}
+            className="text-[11px] text-gray-400 hover:text-white flex items-center justify-between w-full transition cursor-pointer py-0.5"
+          >
+            <span>📱 Android Phone: SMS / Alert late ya Chrome kholne par aata hai?</span>
+            <span>{showAndroidGuide ? '▲' : '▼'}</span>
+          </button>
+          {showAndroidGuide && (
+            <div className="mt-2 p-2.5 rounded-lg bg-black/40 border border-white/10 text-[11px] text-gray-300 space-y-1.5">
+              <p className="font-semibold text-amber-400">Android Doze Mode / Background Freeze Fix:</p>
+              <ol className="list-decimal list-inside space-y-1 text-gray-300 text-[11px]">
+                <li><strong>Chrome Notification:</strong> Chrome icon par long-press karein &gt; App Info &gt; Notifications &gt; Sites &gt; MovieVerify par click karke <em>"Pop on screen / Allow Sound"</em> on karein.</li>
+                <li><strong>Battery Saver:</strong> App Info &gt; Battery / Battery Saver &gt; <em>"No restrictions" (Unrestricted)</em> select karein taaki Android Chrome ko freeze na kare.</li>
+                <li><strong>Install App (PWA):</strong> Chrome me 3 dots menu &gt; <em>"Add to Home screen" / "Install App"</em> karein. Isse phone background me instant alert deta hai.</li>
+              </ol>
+            </div>
+          )}
+        </div>
+
         {pushError && (
           <p className="text-xs text-rose-400 flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />

@@ -566,6 +566,29 @@ test('HTTP Handler Endpoints Suite (/api/notifications/register & /revoke)', asy
     assert.equal(json.token_hash, hashToken(rawFcmToken));
   });
 
+  await t.test('4A. POST /api/notifications/register: Dispatches test push with action: test_push (200)', async () => {
+    let sentPayload = null;
+    const mockMessaging = {
+      send: async (msg) => {
+        sentPayload = msg;
+        return 'test-msg-id-12345';
+      },
+    };
+    const { req, res } = createMockHttp({
+      method: 'POST',
+      headers: { authorization: 'Bearer valid-user-1-jwt' },
+      body: { action: 'test_push', token: rawFcmToken },
+    });
+
+    await registerHandler(req, res, mockSupabase, { messaging: mockMessaging });
+    assert.equal(res.statusCode, 200);
+    const json = res.json();
+    assert.equal(json.success, true);
+    assert.equal(json.messageId, 'test-msg-id-12345');
+    assert.equal(sentPayload.token, rawFcmToken);
+    assert.equal(sentPayload.webpush.headers.Urgency, 'high');
+  });
+
   await t.test('5. POST /api/notifications/revoke: Rejects non-POST/DELETE methods (405)', async () => {
     const { req, res } = createMockHttp({ method: 'PUT' });
     await revokeHandler(req, res, mockSupabase);

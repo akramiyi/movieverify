@@ -177,7 +177,16 @@ export async function getDeviceFcmToken(options = {}) {
   let swReg = explicitReg;
   if (!swReg && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
     try {
-      swReg = await navigator.serviceWorker.ready;
+      swReg = await navigator.serviceWorker.getRegistration('/sw.js');
+      if (!swReg) {
+        swReg = await navigator.serviceWorker.register('/sw.js');
+      }
+      if (swReg && !swReg.active) {
+        await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((resolve) => setTimeout(resolve, 3000)),
+        ]);
+      }
     } catch (swErr) {
       console.warn('[FCMClient] Service worker ready check failed:', swErr.message);
     }
@@ -226,13 +235,31 @@ export async function registerTokenWithBackend({
 
   const navPlatform = typeof navigator !== 'undefined' ? navigator.platform : null;
   const navUserAgent = typeof navigator !== 'undefined' ? navigator.userAgent : null;
-  const resolvedDeviceName = (deviceName || deviceInfo.device_name || deviceInfo.deviceName || navPlatform || null)?.slice(0, 128) || null;
-  const resolvedBrowser = (browser || deviceInfo.browser || navUserAgent || null)?.slice(0, 64) || null;
-  const resolvedOs = (os || deviceInfo.os || deviceInfo.platform || navPlatform || null)?.slice(0, 64) || null;
+  const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navUserAgent || '');
+  const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navUserAgent || '');
+  const detectedDeviceType = isAndroid ? 'android' : isIOS ? 'ios' : 'web';
+
+  let detectedOs = 'Unknown OS';
+  if (isAndroid) detectedOs = 'Android';
+  else if (isIOS) detectedOs = 'iOS';
+  else if (typeof navigator !== 'undefined' && /Windows/i.test(navUserAgent || '')) detectedOs = 'Windows';
+  else if (typeof navigator !== 'undefined' && /Mac/i.test(navUserAgent || '')) detectedOs = 'macOS';
+
+  let detectedBrowser = 'Browser';
+  if (typeof navigator !== 'undefined' && navUserAgent) {
+    if (/Edg/i.test(navUserAgent)) detectedBrowser = 'Edge';
+    else if (/Chrome/i.test(navUserAgent)) detectedBrowser = 'Chrome';
+    else if (/Firefox/i.test(navUserAgent)) detectedBrowser = 'Firefox';
+    else if (/Safari/i.test(navUserAgent)) detectedBrowser = 'Safari';
+  }
+
+  const resolvedDeviceName = (deviceName || deviceInfo.device_name || deviceInfo.deviceName || (navPlatform ? `${detectedOs} - ${detectedBrowser}` : null))?.slice(0, 128) || null;
+  const resolvedBrowser = (browser || deviceInfo.browser || (navUserAgent ? detectedBrowser : null))?.slice(0, 64) || null;
+  const resolvedOs = (os || deviceInfo.os || deviceInfo.platform || (navPlatform ? detectedOs : null))?.slice(0, 64) || null;
 
   const payload = {
     token,
-    device_type: 'web',
+    device_type: deviceInfo.device_type || detectedDeviceType,
     ...(resolvedDeviceName ? { device_name: resolvedDeviceName } : {}),
     ...(resolvedBrowser ? { browser: resolvedBrowser } : {}),
     ...(resolvedOs ? { os: resolvedOs } : {}),

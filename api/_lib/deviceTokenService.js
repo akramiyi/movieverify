@@ -57,6 +57,39 @@ function sanitizeString(val, maxLen = MAX_DEVICE_NAME_LENGTH) {
 }
 
 /**
+ * Ensures a default user_notification_preferences record exists for the subscriber.
+ * Non-fatal: safely ignored if table or client mock does not implement it.
+ * @param {object} supabase 
+ * @param {string} userId 
+ */
+async function seedUserPreferencesSafely(supabase, userId) {
+  if (!supabase || !userId) return;
+  try {
+    if (typeof supabase.from === 'function') {
+      await supabase
+        .from('user_notification_preferences')
+        .upsert(
+          {
+            user_id: userId,
+            opt_in_all: true,
+            notify_new_movies: true,
+            notify_new_series: true,
+            notify_movie_updates: true,
+            notify_promotions: false,
+            notify_system: true,
+            channel_in_app: true,
+            channel_push: true,
+            max_daily_push: 20,
+          },
+          { onConflict: 'user_id', ignoreDuplicates: true }
+        );
+    }
+  } catch {
+    // Non-fatal if table mock throws or user preferences already exist
+  }
+}
+
+/**
  * Validate token registration payload
  * @param {object} payload 
  * @returns {{ valid: boolean, error?: string, sanitized?: object }}
@@ -166,6 +199,9 @@ export async function registerDeviceToken(authenticatedUser, payload, customSupa
         return { success: false, error: 'Failed to register device token.', status: 500 };
       }
 
+      // Ensure canonical user_notification_preferences exist so this subscriber receives broadcasts
+      await seedUserPreferencesSafely(supabase, authenticatedUser.id);
+
       return {
         success: true,
         status: 201,
@@ -257,6 +293,9 @@ export async function registerDeviceToken(authenticatedUser, payload, customSupa
     } else if (isRevoked && reauthorize) {
       action = 'reauthorized';
     }
+
+    // Ensure canonical user_notification_preferences exist so this subscriber receives broadcasts
+    await seedUserPreferencesSafely(supabase, authenticatedUser.id);
 
     return {
       success: true,
