@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, Calendar, Users, Film, User, Layers, AlertCircle, CheckCircle, Clock, Trash2, RefreshCw, Eye } from 'lucide-react';
+import { Send, Calendar, Users, Film, User, Layers, AlertCircle, CheckCircle, Clock, Trash2, RefreshCw, Eye, Zap } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 
 const TARGET_TYPES = [
@@ -23,6 +23,7 @@ export default function CampaignManager() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [actionStatus, setActionStatus] = useState({ type: '', message: '' });
+  const [isDispatching, setIsDispatching] = useState(false);
 
   // Form State
   const [title, setTitle] = useState('');
@@ -123,19 +124,26 @@ export default function CampaignManager() {
       const immediateSent = resData.immediate_dispatch?.sent;
 
       let msg = `Campaign created! (ID: ${resData.campaign_id?.substring(0, 8)}...)`;
-      if (pushCount > 0) {
-        msg += ` • ${pushCount} push alert(s) queued${immediateSent !== undefined ? ` (${immediateSent} sent instantly)` : ''}.`;
+      if (resData.status === 'scheduled') {
+        const schedTime = resData.scheduled_for || scheduledFor;
+        msg = `📅 Campaign scheduled for ${new Date(schedTime).toLocaleString()}! When due, it will be dispatched automatically, or you can click "Dispatch Due Now" to trigger it immediately.`;
+      } else if (resData.status === 'draft') {
+        msg = `📝 Campaign saved as draft.`;
       } else {
-        msg += ` • 0 push alerts queued.`;
-      }
-      if (inAppCount > 0) {
-        msg += ` • ${inAppCount} inbox alert(s).`;
-      }
-      if (suppressedCount > 0) {
-        msg += ` ⚠️ ${suppressedCount} device(s) reached daily limit (5/day). Increase limit in Preferences to receive more.`;
-      }
-      if (pushCount === 0 && suppressedCount === 0 && resData.status !== 'draft') {
-        msg += ` ⚠️ No active push devices found for this target. Verify push is enabled in browser.`;
+        if (pushCount > 0) {
+          msg += ` • ${pushCount} push alert(s) queued${immediateSent !== undefined ? ` (${immediateSent} sent instantly)` : ''}.`;
+        } else {
+          msg += ` • 0 push alerts queued.`;
+        }
+        if (inAppCount > 0) {
+          msg += ` • ${inAppCount} inbox alert(s).`;
+        }
+        if (suppressedCount > 0) {
+          msg += ` ⚠️ ${suppressedCount} device(s) reached daily limit (5/day). Increase limit in Preferences to receive more.`;
+        }
+        if (pushCount === 0 && suppressedCount === 0) {
+          msg += ` ⚠️ No active push devices found for this target. Verify push is enabled in browser.`;
+        }
       }
 
       setActionStatus({
@@ -148,11 +156,58 @@ export default function CampaignManager() {
       setBody('');
       setTargetId('');
       setSeasonNumber('');
+      setIsScheduled(false);
+      setScheduledFor('');
       fetchCampaigns();
     } catch (err) {
       setActionStatus({ type: 'error', message: err.message });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleTriggerDispatch = async () => {
+    setIsDispatching(true);
+    setActionStatus({ type: '', message: '' });
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Admin session required.');
+      }
+
+      const res = await fetch('/api/notifications/campaigns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action: 'dispatch_due' }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || data.error || 'Failed to trigger dispatch');
+      }
+
+      const promoted = data.promoted_campaigns || 0;
+      const sent = data.sent || 0;
+      const processed = data.processed || 0;
+
+      let msg = `⚡ Dispatch complete! ${promoted} scheduled campaign(s) promoted, ${sent} push notification(s) sent successfully.`;
+      if (promoted === 0 && sent === 0) {
+        msg = `Checked: No scheduled campaigns are currently due (or all have already been dispatched).`;
+      }
+
+      setActionStatus({
+        type: 'success',
+        message: msg,
+      });
+
+      await fetchCampaigns();
+    } catch (err) {
+      setActionStatus({ type: 'error', message: err.message });
+    } finally {
+      setIsDispatching(false);
     }
   };
 
@@ -414,19 +469,35 @@ export default function CampaignManager() {
 
       {/* Campaigns History Table */}
       <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h3 className="text-lg font-bold text-white flex items-center gap-2">
             <Clock className="w-5 h-5 text-[#E50914]" />
             Campaign Dispatch & Delivery History
           </h3>
-          <button
-            onClick={fetchCampaigns}
-            disabled={loading}
-            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition"
-            title="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleTriggerDispatch}
+              disabled={isDispatching || loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-500 hover:to-red-500 text-white text-xs font-semibold rounded-xl shadow-md transition disabled:opacity-50"
+              title="Process and send scheduled campaigns that are due right now"
+            >
+              <Zap className={`w-3.5 h-3.5 ${isDispatching ? 'animate-bounce text-yellow-300' : ''}`} />
+              <span>{isDispatching ? 'Dispatching...' : 'Dispatch Due Now'}</span>
+              {campaigns.filter((c) => c.status === 'scheduled').length > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 bg-white/20 rounded-full text-[10px] font-bold">
+                  {campaigns.filter((c) => c.status === 'scheduled').length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={fetchCampaigns}
+              disabled={loading}
+              className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition"
+              title="Refresh"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
 
         {campaigns.length === 0 ? (
@@ -455,19 +526,30 @@ export default function CampaignManager() {
                     </td>
                     <td className="py-3 capitalize">{c.category?.replace('_', ' ')}</td>
                     <td className="py-3">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          c.status === 'completed'
-                            ? 'bg-emerald-500/20 text-emerald-300'
-                            : c.status === 'processing'
-                            ? 'bg-amber-500/20 text-amber-300'
-                            : c.status === 'cancelled'
-                            ? 'bg-rose-500/20 text-rose-300'
-                            : 'bg-blue-500/20 text-blue-300'
-                        }`}
-                      >
-                        {c.status}
-                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold w-fit ${
+                            c.status === 'completed'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : c.status === 'processing'
+                              ? 'bg-amber-500/20 text-amber-300'
+                              : c.status === 'cancelled'
+                              ? 'bg-rose-500/20 text-rose-300'
+                              : c.status === 'scheduled'
+                              ? 'bg-blue-500/20 text-blue-300'
+                              : 'bg-gray-500/20 text-gray-300'
+                          }`}
+                        >
+                          {c.status}
+                        </span>
+                        {c.status === 'scheduled' && c.scheduled_for && (
+                          <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                            {new Date(c.scheduled_for) <= new Date()
+                              ? '⚡ Due Now'
+                              : `Due: ${new Date(c.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3">{c.total_recipients || 0}</td>
                     <td className="py-3">
@@ -482,15 +564,27 @@ export default function CampaignManager() {
                       })}
                     </td>
                     <td className="py-3 text-right">
-                      {c.status !== 'completed' && c.status !== 'cancelled' && (
-                        <button
-                          onClick={() => handleCancelCampaign(c.id)}
-                          className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-950/30 transition"
-                          title="Cancel Campaign"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {c.status === 'scheduled' && (
+                          <button
+                            onClick={handleTriggerDispatch}
+                            disabled={isDispatching}
+                            className="text-amber-400 hover:text-amber-300 p-1 rounded hover:bg-amber-950/30 transition"
+                            title="Dispatch Due Scheduled Campaigns Now"
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {c.status !== 'completed' && c.status !== 'cancelled' && (
+                          <button
+                            onClick={() => handleCancelCampaign(c.id)}
+                            className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-950/30 transition"
+                            title="Cancel Campaign"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

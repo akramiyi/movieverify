@@ -918,4 +918,64 @@ test('Phase 6A: Request-Scoped Admin Supabase Client & RPC Authorization Suite',
     assert.equal(res.json().success, true);
     assert.equal(rpcCalledWithToken, true);
   });
+
+  await t.test('22. Admin Manual Dispatch Trigger: Successfully promotes due campaigns and runs dispatch cycle', async () => {
+    let promoteCalled = false;
+    let dispatchCalled = false;
+
+    const mockSupabase = {
+      auth: {
+        async getUser() {
+          return { data: { user: { id: 'admin-dispatch-user-id' } }, error: null };
+        },
+      },
+      from(table) {
+        if (table === 'admin_users') {
+          return {
+            select() {
+              return {
+                eq() {
+                  return {
+                    maybeSingle: async () => ({ data: { user_id: 'admin-dispatch-user-id' }, error: null }),
+                  };
+                },
+              };
+            },
+          };
+        }
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
+      },
+    };
+
+    const mockPromote = async () => {
+      promoteCalled = true;
+      return { promoted_count: 2, campaigns: [{ id: 'c-1' }, { id: 'c-2' }] };
+    };
+
+    const mockDispatch = async () => {
+      dispatchCalled = true;
+      return { processed: 2, sent: 2, failed: 0, rejected: 0 };
+    };
+
+    const { req, res } = createMockHttp({
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-bearer-token' },
+      body: { action: 'dispatch_due' },
+    });
+
+    await campaignsHandler(req, res, {
+      supabase: mockSupabase,
+      promoteDueScheduledCampaigns: mockPromote,
+      runDispatchCycle: mockDispatch,
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = res.json();
+    assert.equal(body.success, true);
+    assert.equal(body.action, 'dispatch_due');
+    assert.equal(body.promoted_campaigns, 2);
+    assert.equal(body.sent, 2);
+    assert.equal(promoteCalled, true);
+    assert.equal(dispatchCalled, true);
+  });
 });

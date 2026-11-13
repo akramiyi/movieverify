@@ -62,7 +62,7 @@ jobs:
           # --max-time 90: Client timeout bounded to 90 seconds (allows full Vercel maxDuration)
           # -s -S: Silent progress, display real errors
           # -w: Capture HTTP response code
-          # -o: Suppress response body to prevent secret or user data leakage
+          # -o: Write response body to temp file for clear audit logging in GitHub Actions
           HTTP_STATUS=$(curl \
             --proto "=https" \
             --max-redirs 0 \
@@ -72,8 +72,15 @@ jobs:
             -H "Content-Type: application/json" \
             -H "x-worker-secret: $WORKER_SECRET" \
             -d "$JSON_PAYLOAD" \
-            -o /dev/null \
+            -o /tmp/dispatch_response.json \
             -w "%{http_code}")
+
+          echo "HTTP Status: $HTTP_STATUS"
+          if [ -f /tmp/dispatch_response.json ]; then
+            echo "Dispatch Response Summary:"
+            cat /tmp/dispatch_response.json
+            echo ""
+          fi
 
           if [ "$HTTP_STATUS" -ne 200 ]; then
             echo "::error::Dispatch invocation failed with HTTP status: $HTTP_STATUS"

@@ -26,6 +26,10 @@ import {
   cancelCampaign,
 } from '../_lib/campaignService.js';
 import { runDispatchCycle } from '../_lib/dispatchWorker.js';
+import {
+  promoteDueScheduledCampaigns,
+  promoteDueScheduledCampaignsFallback,
+} from '../_lib/scheduledCampaignService.js';
 
 const MAX_BODY_BYTES = 64 * 1024; // 64 KB
 
@@ -129,6 +133,59 @@ export default async function handler(req, res, customDependencies = {}) {
 
     const cancelResult = await cancelCampaign(campaignId, context, customSupabase);
     return sendJson(res, cancelResult.status, cancelResult.body);
+  }
+
+  // Admin Manual or Scheduled Dispatch Trigger:
+  // Allows authorized admins to immediately promote due scheduled campaigns and trigger
+  // a dispatch cycle without having to wait hours for background cron queues.
+  if (method === 'POST' && (body.action === 'dispatch_due' || body.action === 'dispatch_now')) {
+    let promoResult = { promoted_count: 0, campaigns: [] };
+    let promoError = null;
+    try {
+      const promoteFn = customDependencies.promoteDueScheduledCampaigns || promoteDueScheduledCampaigns;
+      promoResult = await promoteFn(customSupabase);
+    } catch (err) {
+      const isUninstalled = /PGRST202|42883|Could not find the function/i.test(err.message || '');
+      if (isUninstalled) {
+        try {
+          promoResult = await promoteDueScheduledCampaignsFallback(customSupabase);
+        } catch (fbErr) {
+          promoError = fbErr.message;
+        }
+      } else {
+        promoError = err.message;
+      }
+      if (promoError) {
+        console.warn('[Campaigns] Scheduled promotion error during manual dispatch:', promoError);
+      }
+    }
+
+    const dispatchFn = customDependencies.runDispatchCycle || runDispatchCycle;
+    let dispatchSummary = { processed: 0, sent: 0, failed: 0, rejected: 0 };
+    let dispatchError = null;
+    try {
+      dispatchSummary = await dispatchFn({
+        batchSize: 50,
+        leaseSeconds: 60,
+        customSupabase,
+        customMessaging: customDependencies.messaging || null,
+      });
+    } catch (err) {
+      dispatchError = err.message;
+      console.warn('[Campaigns] Dispatch cycle error during manual dispatch:', err.message);
+    }
+
+    return sendJson(res, 200, {
+      success: true,
+      action: body.action,
+      promoted_campaigns: promoResult?.promoted_count || 0,
+      processed: dispatchSummary?.processed || 0,
+      sent: dispatchSummary?.sent || 0,
+      failed: dispatchSummary?.failed || 0,
+      rejected: dispatchSummary?.rejected || 0,
+      promo_error: promoError,
+      dispatch_error: dispatchError,
+    });
   }
 
   // Otherwise POST is Campaign Creation
