@@ -141,6 +141,15 @@ function buildEventCampaignPayload(body) {
       ? body.idempotency_key.trim().slice(0, 128)
       : defaultIdempotencyKey.slice(0, 128);
 
+  const resolvedEventImage =
+    body.image_url ||
+    body.image ||
+    (body.poster_path ? `https://image.tmdb.org/t/p/w780${String(body.poster_path).startsWith('/') ? '' : '/'}${body.poster_path}` : null) ||
+    (body.backdrop_path ? `https://image.tmdb.org/t/p/w780${String(body.backdrop_path).startsWith('/') ? '' : '/'}${body.backdrop_path}` : null) ||
+    body.poster ||
+    body.backdrop ||
+    (category === 'movie_release' ? 'https://movieverify.vercel.app/og-fallback.jpg' : null);
+
   return {
     valid: true,
     campaignPayload: {
@@ -148,7 +157,7 @@ function buildEventCampaignPayload(body) {
       body: body.notification_body ? String(body.notification_body).trim() : notificationBody.slice(0, 1000),
       category,
       url: canonicalUrl,
-      image_url: body.image_url || null,
+      image_url: resolvedEventImage,
       target_criteria: targetCriteria,
       scheduled_for: body.scheduled_for || null,
       idempotency_key: providedKey,

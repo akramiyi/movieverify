@@ -538,9 +538,20 @@ export default function NotificationCenter({
                             }`}
                           >
                             <div className="shrink-0 pt-0.5">
-                              <div className="w-8 h-8 rounded-full bg-[#E50914]/10 border border-[#E50914]/20 flex items-center justify-center text-[#E50914]">
-                                <Film className="w-4 h-4" />
-                              </div>
+                              {item.image_url ? (
+                                <img
+                                  src={item.image_url}
+                                  alt={item.title}
+                                  className="w-10 h-14 object-cover rounded-md border border-white/10 shadow-sm shrink-0"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-[#E50914]/10 border border-[#E50914]/20 flex items-center justify-center text-[#E50914]">
+                                  <Film className="w-4 h-4" />
+                                </div>
+                              )}
                             </div>
 
                             <div className="flex-1 min-w-0">

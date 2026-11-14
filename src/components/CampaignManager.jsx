@@ -93,6 +93,7 @@ export default function CampaignManager({ initialView = 'form' }) {
   const [targetId, setTargetId] = useState('');
   const [seasonNumber, setSeasonNumber] = useState('');
   const [url, setUrl] = useState('/');
+  const [imageUrl, setImageUrl] = useState('');
   const [isDraft, setIsDraft] = useState(false);
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduledFor, setScheduledFor] = useState('');
@@ -183,6 +184,7 @@ export default function CampaignManager({ initialView = 'form' }) {
         body: body.trim(),
         category,
         url: url.trim() || '/',
+        image_url: imageUrl.trim() || (category === 'movie_release' ? 'https://movieverify.vercel.app/og-fallback.jpg' : null),
         target_criteria,
         is_draft: isDraft,
         scheduled_for: isScheduled && scheduledFor ? new Date(scheduledFor).toISOString() : null,
@@ -439,12 +441,13 @@ export default function CampaignManager({ initialView = 'form' }) {
           series_id: String(item.id),
           tmdb_id: String(item.id),
         },
-        url: '/',
-        image_url: item.backdrop_path
-          ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}`
-          : item.poster_path
-          ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
-          : null,
+        url: `/?type=${isTv ? 'tv' : 'movie'}&id=${item.id}`,
+        image_url:
+          item.backdrop ||
+          (item.backdrop_path ? `https://image.tmdb.org/t/p/w780${String(item.backdrop_path).startsWith('/') ? '' : '/'}${item.backdrop_path}` : null) ||
+          item.poster ||
+          (item.poster_path ? `https://image.tmdb.org/t/p/w500${String(item.poster_path).startsWith('/') ? '' : '/'}${item.poster_path}` : null) ||
+          'https://movieverify.vercel.app/og-fallback.jpg',
         scheduled_for: scheduledForIso,
         is_draft: false,
       };
@@ -481,12 +484,20 @@ export default function CampaignManager({ initialView = 'form' }) {
     const catInfo = RELEASE_CATEGORIES.find((c) => c.id === item.release_category);
     const catLabel = catInfo ? catInfo.label : (isTv ? 'Web Series' : 'Movie');
 
+    const moviePhoto =
+      item.backdrop ||
+      (item.backdrop_path ? `https://image.tmdb.org/t/p/w780${String(item.backdrop_path).startsWith('/') ? '' : '/'}${item.backdrop_path}` : '') ||
+      item.poster ||
+      (item.poster_path ? `https://image.tmdb.org/t/p/w500${String(item.poster_path).startsWith('/') ? '' : '/'}${item.poster_path}` : '') ||
+      'https://movieverify.vercel.app/og-fallback.jpg';
+
     setTitle(`🎬 ${item.title} Release Alert!`);
     setBody(
       `Don't miss the upcoming ${catLabel} premiere of ${item.title} on ${item.release_date}. Get ready to watch and verify links now!`
     );
     setCategory(isTv ? 'content_update' : 'movie_release');
-    setUrl(isTv ? `/series/${item.id}` : `/movie/${item.id}`);
+    setUrl(`/?type=${isTv ? 'tv' : 'movie'}&id=${item.id}`);
+    setImageUrl(moviePhoto);
     setTargetType(isTv ? 'series' : 'movie');
     setTargetId(String(item.id));
     setIsDraft(false);
@@ -560,12 +571,13 @@ export default function CampaignManager({ initialView = 'form' }) {
             series_id: String(item.id),
             tmdb_id: String(item.id),
           },
-          url: '/',
-          image_url: item.backdrop_path
-            ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}`
-            : item.poster_path
-            ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
-            : null,
+          url: `/?type=${isTv ? 'tv' : 'movie'}&id=${item.id}`,
+          image_url:
+            item.backdrop ||
+            (item.backdrop_path ? `https://image.tmdb.org/t/p/w780${String(item.backdrop_path).startsWith('/') ? '' : '/'}${item.backdrop_path}` : null) ||
+            item.poster ||
+            (item.poster_path ? `https://image.tmdb.org/t/p/w500${String(item.poster_path).startsWith('/') ? '' : '/'}${item.poster_path}` : null) ||
+            'https://movieverify.vercel.app/og-fallback.jpg',
           scheduled_for: scheduledForIso,
           is_draft: false,
         };
@@ -1254,14 +1266,26 @@ export default function CampaignManager({ initialView = 'form' }) {
                           </div>
                         </div>
 
-                        {/* Title and Message */}
-                        <div>
-                          <h4 className="text-white font-bold text-sm leading-snug line-clamp-2">
-                            {c.title}
-                          </h4>
-                          <p className="text-gray-300 text-xs mt-1.5 leading-relaxed line-clamp-3">
-                            {c.body}
-                          </p>
+                        {/* Title and Message with Photo */}
+                        <div className="flex gap-3">
+                          {c.image_url && (
+                            <img
+                              src={c.image_url}
+                              alt={c.title}
+                              className="w-12 h-16 rounded-lg object-cover border border-white/10 shrink-0 shadow-sm"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-white font-bold text-sm leading-snug line-clamp-2">
+                              {c.title}
+                            </h4>
+                            <p className="text-gray-300 text-xs mt-1.5 leading-relaxed line-clamp-3">
+                              {c.body}
+                            </p>
+                          </div>
                         </div>
 
                         {/* Target Criteria & Deep Link */}
@@ -1486,6 +1510,55 @@ export default function CampaignManager({ initialView = 'form' }) {
                   </div>
                 )}
 
+                {/* Banner / Poster Photo URL */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Notification Poster / Banner Photo URL</span>
+                    {imageUrl && (
+                      <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                        ✓ Photo Attached
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="https://image.tmdb.org/t/p/w780/... (Leave empty for auto fallback)"
+                      className="w-full bg-[#141414] border border-white/10 rounded-xl px-4 py-2 text-white text-xs placeholder:text-gray-600 focus:outline-none focus:border-[#E50914] transition"
+                    />
+                    {imageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl('')}
+                        className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-xl text-gray-400 hover:text-white text-xs transition cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  {imageUrl ? (
+                    <div className="mt-2.5 relative w-full h-28 rounded-xl overflow-hidden border border-white/10 bg-black/50 shadow-inner">
+                      <img
+                        src={imageUrl}
+                        alt="Notification Photo Preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = '/og-fallback.jpg';
+                        }}
+                      />
+                      <div className="absolute bottom-1.5 right-2 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-gray-300 font-medium border border-white/10">
+                        📸 Photo Preview
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-[11px] mt-1.5">
+                      💡 Movie release alerts me photo hone se notification phone par bada aur professional dikhta hai.
+                    </p>
+                  )}
+                </div>
+
                 {/* Scheduling and Draft Controls */}
                 <div className="flex flex-wrap items-center gap-6 pt-2">
                   <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
@@ -1636,6 +1709,22 @@ export default function CampaignManager({ initialView = 'form' }) {
                       {body.trim() || 'This is how your message will appear on user devices and locksreens.'}
                     </p>
                   </div>
+
+                  {imageUrl && (
+                    <div className="rounded-xl overflow-hidden border border-white/10 bg-black/40 h-28 w-full relative">
+                      <img
+                        src={imageUrl}
+                        alt="Notification Banner Preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = '/og-fallback.jpg';
+                        }}
+                      />
+                      <div className="absolute bottom-1 right-2 bg-black/75 px-1.5 py-0.5 rounded text-[9px] text-gray-300 font-mono">
+                        Rich Media Push Banner
+                      </div>
+                    </div>
+                  )}
 
                   <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-gray-500">
                     <span>Category: {category}</span>

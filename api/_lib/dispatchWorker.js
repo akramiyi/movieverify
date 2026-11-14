@@ -265,10 +265,30 @@ export function buildFcmPayload(delivery, campaign = null) {
     },
   };
 
-  if (campaign?.image_url) {
-    fcmMessage.notification.imageUrl = campaign.image_url;
-    fcmMessage.webpush.notification.image = campaign.image_url;
-    fcmMessage.data.image = String(campaign.image_url);
+  const resolvedImageUrl =
+    campaign?.image_url ||
+    campaign?.image ||
+    campaign?.target_criteria?.image_url ||
+    campaign?.target_criteria?.poster ||
+    (campaign?.target_criteria?.poster_path
+      ? `https://image.tmdb.org/t/p/w780${String(campaign.target_criteria.poster_path).startsWith('/') ? '' : '/'}${campaign.target_criteria.poster_path}`
+      : null) ||
+    (campaign?.category === 'movie_release' && !campaign?.image_url
+      ? 'https://movieverify.vercel.app/og-fallback.jpg'
+      : null);
+
+  if (resolvedImageUrl) {
+    fcmMessage.notification.imageUrl = resolvedImageUrl;
+    fcmMessage.webpush.notification.image = resolvedImageUrl;
+    fcmMessage.data.image = String(resolvedImageUrl);
+    fcmMessage.android = {
+      priority: 'high',
+      ttl: 86400 * 1000,
+      notification: {
+        imageUrl: resolvedImageUrl,
+        icon: 'https://movieverify.vercel.app/logo192.png',
+      },
+    };
   }
 
   return fcmMessage;

@@ -146,7 +146,7 @@ self.addEventListener('push', (e) => {
   const deliveryId = data.delivery_id || payload.delivery_id || '';
   const title = notification.title || data.title || 'MovieVerify';
   const body = notification.body || data.body || 'You have a new update.';
-  const imageUrl = notification.imageUrl || notification.image || data.image || null;
+  const imageUrl = notification.imageUrl || notification.image || data.image || (data.category === 'movie_release' ? '/og-fallback.jpg' : null);
   const targetUrl = data.url || payload.fcmOptions?.link || '/';
 
   e.waitUntil(
