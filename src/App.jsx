@@ -64,6 +64,7 @@ function App() {
   const [inboxRefreshTrigger, setInboxRefreshTrigger] = useState(0);
   const [foregroundPushAlert, setForegroundPushAlert] = useState(null);
   const welcomeCheckedUsersRef = useRef(new Set());
+  const handleLogOutResetRef = useRef(null);
   const [showIntro, setShowIntro] = useState(() => {
     return !localStorage.getItem('introShown');
   });
@@ -232,7 +233,13 @@ function App() {
     }).catch(() => {});
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session?.user) {
+      if (event === 'SIGNED_OUT') {
+        if (handleLogOutResetRef.current) {
+          handleLogOutResetRef.current();
+        } else {
+          setUnreadNotifications(0);
+        }
+      } else if (!session?.user) {
         setUnreadNotifications(0);
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         refreshUnreadNotifications();
@@ -782,6 +789,26 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
 
+  const handleLogOutReset = useCallback(() => {
+    setActiveTab('home');
+    setSeeAllSection(null);
+    setSearchQuery('');
+    setSelectedMovie(null);
+    setSelectedActor(null);
+    setIsActorModalOpen(false);
+    setIsHistoryModalOpen(false);
+    setIsNotificationCenterOpen(false);
+    setShowAdmin(false);
+    setShowAuthModal(false);
+    setUnreadNotifications(0);
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    } catch {}
+    navigate('/', { replace: true });
+  }, [navigate]);
+
+  handleLogOutResetRef.current = handleLogOutReset;
+
   if (showIntro) {
     return <IntroAnimation onComplete={() => setShowIntro(false)} />;
   }
@@ -806,6 +833,7 @@ function App() {
               onHistoryClick={() => setIsHistoryModalOpen(true)}
               onNotificationClick={() => setIsNotificationCenterOpen(true)}
               unreadNotificationCount={unreadNotifications}
+              onLogOut={handleLogOutReset}
             />
 
       {tmdbError && (

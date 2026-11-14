@@ -68,7 +68,7 @@ const verifyAdminCached = async (userId) => {
   return inFlightAdminPromise;
 };
 
-const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onProfileClick, onAdminClick, onHistoryClick, onNotificationClick, unreadNotificationCount }) => {
+const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onProfileClick, onAdminClick, onHistoryClick, onNotificationClick, unreadNotificationCount, onLogOut }) => {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const displayedUnreadCount = typeof unreadNotificationCount === 'number' ? unreadNotificationCount : unreadNotifications;
   const [isScrolled, setIsScrolled] = useState(false);
@@ -231,10 +231,37 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
   const handleSignOut = async () => {
     setIsProfileMenuOpen(false);
     setIsMobileMenuOpen(false);
+    setShowSuggestions(false);
+    setIsSearchExpanded(false);
+
     // Instant optimistic state reset: clear session immediately so user sees zero lag
     setCurrentUser(null);
     setIsAdminUser(false);
     setUnreadNotifications(0);
+
+    // Immediate 0ms redirection to starting homepage
+    if (typeof onLogOut === 'function') {
+      try {
+        onLogOut();
+      } catch (err) {
+        console.warn('onLogOut error:', err);
+      }
+    }
+    if (typeof setActiveTab === 'function') {
+      try {
+        setActiveTab('home');
+      } catch {}
+    }
+    if (typeof onSearch === 'function') {
+      try {
+        onSearch('');
+      } catch {}
+    }
+
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    } catch {}
+
     try {
       localStorage.removeItem('movieverify_auth_popup_dismissed');
       sessionStorage.removeItem('movieverify_auth_popup_dismissed');

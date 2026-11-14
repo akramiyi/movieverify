@@ -536,11 +536,17 @@ const AdminPanel = ({ onClose }) => {
   // Sign out admin session
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
       setIsLoggedIn(false);
       setSelectedMovie(null);
       setEmailVal('');
       setPassVal('');
+      if (typeof onClose === 'function') {
+        onClose();
+      }
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } catch {}
+      await supabase.auth.signOut();
     } catch (e) {
       console.warn('Logout failed:', e.message);
     }
