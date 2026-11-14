@@ -108,6 +108,10 @@ export default async function handler(req, res, customSupabase = null, customDep
           body: 'Push notifications are working! You will receive instant movie link updates.',
           test_sent_at: new Date().toISOString(),
         },
+        android: {
+          priority: 'high',
+          ttl: 86400 * 1000,
+        },
         webpush: {
           fcmOptions: {
             link: '/',

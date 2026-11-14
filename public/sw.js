@@ -169,6 +169,8 @@ self.addEventListener('push', (e) => {
         vibrate: [200, 100, 200, 100, 200],
         silent: false,
         renotify: true,
+        requireInteraction: true,
+        timestamp: Date.now(),
         data: {
           delivery_id: deliveryId,
           url: targetUrl,

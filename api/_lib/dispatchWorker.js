@@ -233,6 +233,10 @@ export function buildFcmPayload(delivery, campaign = null) {
       title: String(title),
       body: String(body),
     },
+    android: {
+      priority: 'high',
+      ttl: 86400 * 1000,
+    },
     webpush: {
       fcmOptions: {
         link: linkUrl,
