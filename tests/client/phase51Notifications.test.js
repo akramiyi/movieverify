@@ -68,3 +68,20 @@ test('App wires foreground FCM toast/unread refresh and NotificationCenter propa
   assert.match(prefsCode, /opt_in_all/);
 });
 
+test('App triggers AuthModal ("Sign in to continue") directly on user logout and resets auth dismissal flags', () => {
+  const appCode = fs.readFileSync(path.resolve('src/App.jsx'), 'utf-8');
+
+  // Verify handleLogOutReset resets views and directly opens AuthModal
+  const logoutFnStart = appCode.indexOf('const handleLogOutReset');
+  assert.ok(logoutFnStart !== -1, 'handleLogOutReset must exist in App.jsx');
+  const logoutFnEnd = appCode.indexOf('handleLogOutResetRef.current = handleLogOutReset;', logoutFnStart);
+  const logoutFnBody = appCode.substring(logoutFnStart, logoutFnEnd);
+
+  assert.match(logoutFnBody, /setShowAuthModal\(\s*true\s*\)/, 'handleLogOutReset must open AuthModal directly');
+  assert.match(logoutFnBody, /setAuthPopupDismissed\(\s*false\s*\)/, 'handleLogOutReset must clear dismissed state');
+  assert.match(logoutFnBody, /localStorage\.removeItem\(\s*['"]movieverify_auth_popup_dismissed['"]\s*\)/, 'handleLogOutReset must clear localStorage dismissal flag');
+  assert.match(logoutFnBody, /sessionStorage\.removeItem\(\s*['"]movieverify_auth_popup_dismissed['"]\s*\)/, 'handleLogOutReset must clear sessionStorage dismissal flag');
+  assert.match(logoutFnBody, /navigate\(\s*['"]\/['"]\s*,\s*\{\s*replace:\s*true\s*\}\s*\)/, 'handleLogOutReset must redirect to /');
+});
+
+

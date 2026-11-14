@@ -799,8 +799,13 @@ function App() {
     setIsHistoryModalOpen(false);
     setIsNotificationCenterOpen(false);
     setShowAdmin(false);
-    setShowAuthModal(false);
+    setAuthPopupDismissed(false);
+    setShowAuthModal(true);
     setUnreadNotifications(0);
+    try {
+      localStorage.removeItem('movieverify_auth_popup_dismissed');
+      sessionStorage.removeItem('movieverify_auth_popup_dismissed');
+    } catch {}
     try {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     } catch {}
