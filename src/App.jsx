@@ -69,6 +69,7 @@ function App() {
   const [deepLinkLoading, setDeepLinkLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
+  const [hasNotificationPrompt, setHasNotificationPrompt] = useState(false);
 
   const inFlightNotificationCheck = useRef(null);
 
@@ -1096,10 +1097,12 @@ function App() {
           <AdminPanel onClose={handleCloseAdmin} />
         </Suspense>
       )}
-      <InstallPWA />
+      <InstallPWA hasNotificationPrompt={hasNotificationPrompt} />
       {!showIntro && !siteLocked && !showAdmin && location.pathname !== '/admin' && (
         <NotificationPrompt
+          onVisibilityChange={setHasNotificationPrompt}
           onSubscribeSuccess={() => {
+            setHasNotificationPrompt(false);
             setToastMessage('Notifications enabled! You will receive new release alerts.');
             setShowToast(true);
           }}

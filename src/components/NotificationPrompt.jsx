@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell, X } from 'lucide-react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
 const STORAGE_DISMISSED_KEY = 'movieverify_push_prompt_dismissed';
 
-export const NotificationPrompt = ({ onSubscribeSuccess = null }) => {
+export const NotificationPrompt = ({ onSubscribeSuccess = null, onVisibilityChange = null }) => {
   const { isSupported, permission, isSubscribed, isLoading, subscribe } = usePushNotifications();
   const [isDismissed, setIsDismissed] = useState(() => {
     try {
@@ -14,13 +14,29 @@ export const NotificationPrompt = ({ onSubscribeSuccess = null }) => {
     }
   });
 
+  const isVisible = isSupported && !isSubscribed && permission !== 'denied' && !isDismissed;
+
+  useEffect(() => {
+    if (typeof onVisibilityChange === 'function') {
+      onVisibilityChange(isVisible);
+    }
+    return () => {
+      if (typeof onVisibilityChange === 'function') {
+        onVisibilityChange(false);
+      }
+    };
+  }, [isVisible, onVisibilityChange]);
+
   // Strict Policy: Never prompt if unsupported, already subscribed, denied, or dismissed
-  if (!isSupported || isSubscribed || permission === 'denied' || isDismissed) {
+  if (!isVisible) {
     return null;
   }
 
   const handleDismiss = () => {
     setIsDismissed(true);
+    if (typeof onVisibilityChange === 'function') {
+      onVisibilityChange(false);
+    }
     try {
       localStorage.setItem(STORAGE_DISMISSED_KEY, 'true');
     } catch {}
@@ -29,6 +45,9 @@ export const NotificationPrompt = ({ onSubscribeSuccess = null }) => {
   const handleEnable = async () => {
     const res = await subscribe();
     if (res?.success) {
+      if (typeof onVisibilityChange === 'function') {
+        onVisibilityChange(false);
+      }
       if (typeof onSubscribeSuccess === 'function') {
         onSubscribeSuccess();
       }
@@ -38,7 +57,7 @@ export const NotificationPrompt = ({ onSubscribeSuccess = null }) => {
   return (
     <aside 
       aria-label="Notification Updates"
-      className="fixed bottom-6 right-6 z-40 max-w-sm w-[calc(100vw-3rem)] bg-[#1a1a1a]/95 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-bottom-4"
+      className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 left-4 sm:left-auto z-40 max-w-sm w-[calc(100vw-2rem)] sm:w-[380px] bg-[#1a1a1a]/95 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-bottom-4"
     >
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl bg-red-600/20 border border-red-500/30 flex items-center justify-center flex-shrink-0 text-red-500">
