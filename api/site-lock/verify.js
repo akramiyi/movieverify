@@ -127,7 +127,7 @@ export default async function handler(req, res, customSupabase = null) {
     if (body.action === 'status') {
       const { data, error: fetchErr } = await supabase
         .from('site_settings')
-        .select('is_locked, updated_at')
+        .select('is_locked, lock_password, updated_at')
         .eq('id', 1)
         .single();
 
@@ -135,9 +135,12 @@ export default async function handler(req, res, customSupabase = null) {
         return sendJson(res, 500, { error: 'Failed to fetch status: ' + fetchErr.message });
       }
 
+      const hasPassword = Boolean(data?.lock_password && String(data.lock_password).trim());
+
       return sendJson(res, 200, {
         success: true,
         is_locked: Boolean(data?.is_locked),
+        has_password: hasPassword,
         updated_at: data?.updated_at
       });
     }
@@ -163,6 +166,24 @@ export default async function handler(req, res, customSupabase = null) {
 
     if (body.lock_password && typeof body.lock_password === 'string' && body.lock_password.trim()) {
       updatePayload.lock_password = body.lock_password.trim();
+    }
+
+    // Strict Guard: Prevent locking site if no access key is provided and no access key exists in DB
+    if (updatePayload.is_locked === true) {
+      const newPass = updatePayload.lock_password && String(updatePayload.lock_password).trim();
+      if (!newPass) {
+        const { data: currentSettings } = await supabase
+          .from('site_settings')
+          .select('lock_password')
+          .eq('id', 1)
+          .single();
+        const existingPass = currentSettings?.lock_password && String(currentSettings.lock_password).trim();
+        if (!existingPass) {
+          return sendJson(res, 400, {
+            error: 'Pehle access key set karein! Cannot lock site without an access key.'
+          });
+        }
+      }
     }
 
     const { error: updateErr } = await supabase

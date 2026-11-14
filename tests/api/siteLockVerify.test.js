@@ -309,6 +309,28 @@ describe('Site-Lock Verification Suite', () => {
       assert.equal(jsonBody.message, 'Site locked successfully.');
     });
 
+    test('Admin toggle rejects locking when no access key is configured or provided', async () => {
+      const req = {
+        method: 'POST',
+        headers: { authorization: 'Bearer valid_admin_token' },
+        body: { action: 'toggle', is_locked: true }
+      };
+      let status = 0;
+      let jsonBody = null;
+      const res = {
+        setHeader: () => {},
+        end: (data) => { jsonBody = JSON.parse(data); },
+        set statusCode(val) { status = val; }
+      };
+
+      const mockSupabase = createMockSupabaseForAdmin({
+        initialSettings: { is_locked: false, lock_password: null }
+      });
+      await handler(req, res, mockSupabase);
+      assert.equal(status, 400);
+      assert.ok(jsonBody.error.includes('access key'));
+    });
+
     test('Admin toggle successfully unlocks site', async () => {
       const req = {
         method: 'POST',

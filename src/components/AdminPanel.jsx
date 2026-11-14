@@ -107,6 +107,7 @@ const AdminPanel = ({ onClose }) => {
   const [broadcastToAll, setBroadcastToAll] = useState(true);
 
   const [siteLockStatus, setSiteLockStatus] = useState(false);
+  const [hasLockKey, setHasLockKey] = useState(false);
   const [lockKeyInput, setLockKeyInput] = useState('');
   const [lockToggling, setLockToggling] = useState(false);
   const [lockKeyUpdating, setLockKeyUpdating] = useState(false);
@@ -145,6 +146,28 @@ const AdminPanel = ({ onClose }) => {
 
   const fetchSiteLockStatus = async () => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (token) {
+        try {
+          const res = await fetch('/api/site-lock/verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ action: 'status' })
+          });
+          const json = await res.json().catch(() => ({}));
+          if (res.ok && json.success) {
+            setSiteLockStatus(Boolean(json.is_locked));
+            setHasLockKey(Boolean(json.has_password));
+            return;
+          }
+        } catch {}
+      }
+
       const { data } = await supabase
         .from('site_settings')
         .select('is_locked')
@@ -159,9 +182,21 @@ const AdminPanel = ({ onClose }) => {
   };
 
   const handleToggleSiteLock = async () => {
+    const newStatus = !siteLockStatus;
+
+    // Strict guard: Cannot lock the site without an access key configured or typed
+    if (newStatus && !hasLockKey && !lockKeyInput.trim()) {
+      setLockMessage({
+        type: 'error',
+        text: '⚠️ Pehle password dalo! Site lock karne se pehle access key enter karke save karein ya yahan type karein.'
+      });
+      const inputEl = document.getElementById('site-lock-key-input');
+      if (inputEl) inputEl.focus();
+      return;
+    }
+
     setLockToggling(true);
     setLockMessage(null);
-    const newStatus = !siteLockStatus;
     
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -188,6 +223,10 @@ const AdminPanel = ({ onClose }) => {
           if (res.ok && data.success) {
             setSiteLockStatus(newStatus);
             handled = true;
+            if (lockKeyInput.trim()) {
+              setHasLockKey(true);
+              setLockKeyInput('');
+            }
             setLockMessage({
               type: 'success',
               text: newStatus 
@@ -198,11 +237,13 @@ const AdminPanel = ({ onClose }) => {
               sessionStorage.removeItem('movieverify_unlocked');
               localStorage.removeItem('movieverify_site_unlocked');
             }
-            if (lockKeyInput.trim()) {
-              setLockKeyInput('');
-            }
           } else {
             console.warn('[SiteLock] Serverless endpoint returned error:', data.error);
+            setLockMessage({
+              type: 'error',
+              text: data.error || 'Failed to update site lock.'
+            });
+            handled = true; // Mark as handled so fallback doesn't bypass rejection
           }
         } catch (fetchErr) {
           console.warn('[SiteLock] Serverless network error:', fetchErr.message);
@@ -211,6 +252,14 @@ const AdminPanel = ({ onClose }) => {
 
       // 2. Fallback: Direct client supabase update (is_locked only to avoid column permission errors)
       if (!handled) {
+        if (newStatus && !hasLockKey && !lockKeyInput.trim()) {
+          setLockMessage({
+            type: 'error',
+            text: '⚠️ Pehle password dalo! Site lock karne se pehle access key enter karein.'
+          });
+          return;
+        }
+
         const { error } = await supabase
           .from('site_settings')
           .update({ is_locked: newStatus, updated_at: new Date().toISOString() })
@@ -276,6 +325,7 @@ const AdminPanel = ({ onClose }) => {
 
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
+        setHasLockKey(true);
         setLockMessage({
           type: 'success',
           text: '🔑 Access key updated and saved successfully!'
@@ -1259,14 +1309,26 @@ const AdminPanel = ({ onClose }) => {
             </div>
             
             <div className="space-y-2 pt-2 border-t border-white/5">
-              <label className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
-                <Key className="w-3.5 h-3.5 text-red-400" />
-                Access Key Management
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-red-400" />
+                  Access Key Management
+                </label>
+                {hasLockKey ? (
+                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">
+                    ✓ Key Configured
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-semibold">
+                    ⚠️ Key Required to Lock
+                  </span>
+                )}
+              </div>
               <div className="flex gap-2">
                 <input
+                  id="site-lock-key-input"
                   type="text"
-                  placeholder="Set or change access key..."
+                  placeholder={hasLockKey ? "Change access key..." : "Enter access key (required to lock)..."}
                   value={lockKeyInput}
                   onChange={(e) => setLockKeyInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -1299,7 +1361,9 @@ const AdminPanel = ({ onClose }) => {
               <p className="text-gray-500 text-[11px]">
                 {siteLockStatus 
                   ? 'Visitors will need to enter this key to unlock and browse the catalog.' 
-                  : 'Enter a key and click "Lock Site" to lock immediately with this key, or click "Save Key" to update it in advance.'}
+                  : hasLockKey
+                    ? 'Access key is configured. You can toggle lock anytime, or type a new key above to update it.'
+                    : '⚠️ Site lock lagane ke liye pehle yahan access key type karke "Save Key" karein ya seedhe "Lock Site" dabayein.'}
               </p>
 
               {lockMessage && (
