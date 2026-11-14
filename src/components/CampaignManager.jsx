@@ -23,9 +23,11 @@ import {
   Tag,
   ArrowUpRight,
   ListFilter,
+  Play,
 } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { fetchUpcomingReleases, fetchUpcomingIndianMovies } from '../hooks/useTMDB';
+import MovieDetailsModal from './MovieDetailsModal';
 
 export const isCampaignCompleted = (c) => {
   if (!c) return false;
@@ -113,6 +115,7 @@ export default function CampaignManager({ initialView = 'form' }) {
   const [scannerSearch, setScannerSearch] = useState('');
   const [schedulingMovieId, setSchedulingMovieId] = useState(null);
   const [batchScheduling, setBatchScheduling] = useState(false);
+  const [previewMovie, setPreviewMovie] = useState(null);
 
   // Sync view when initialView prop changes
   useEffect(() => {
@@ -1916,35 +1919,56 @@ export default function CampaignManager({ initialView = 'form' }) {
                 const isAlreadyScheduled = Boolean(existingCampaign);
                 const isAlreadySent = existingCampaign && isCampaignCompleted(existingCampaign);
 
+                const imageUrl =
+                  (item.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : null) ||
+                  item.backdrop ||
+                  (item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null) ||
+                  item.poster;
+
                 return (
                   <div
                     key={`${item.media_type || 'movie'}_${item.id}`}
                     className="glass-card rounded-2xl overflow-hidden border border-white/10 hover:border-white/25 transition-all flex flex-col justify-between group hover:-translate-y-1 shadow-xl"
                   >
-                    <div>
+                    <div
+                      onClick={() => setPreviewMovie(item)}
+                      className="cursor-pointer"
+                      title="Tap to view full details, cast & trailer"
+                    >
                       {/* Movie Backdrop / Poster Image */}
                       <div className="relative aspect-video bg-black/50 overflow-hidden">
-                        {item.backdrop_path || item.poster_path ? (
+                        {imageUrl ? (
                           <img
-                            src={
-                              item.backdrop_path
-                                ? `https://image.tmdb.org/t/p/w500${item.backdrop_path}`
-                                : `https://image.tmdb.org/t/p/w300${item.poster_path}`
-                            }
+                            src={imageUrl}
                             alt={item.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                             loading="lazy"
+                            onError={(e) => {
+                              if (item.poster && e.currentTarget.src !== item.poster) {
+                                e.currentTarget.src = item.poster;
+                              }
+                            }}
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-600">
-                            <Film className="w-8 h-8" />
+                          <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-gradient-to-br from-white/5 to-white/0 p-4 text-center">
+                            <Film className="w-8 h-8 mb-1 opacity-40 text-amber-400" />
+                            <span className="text-[11px] font-semibold text-gray-400 line-clamp-1">{item.title}</span>
+                            <span className="text-[9px] text-gray-500 uppercase tracking-wider">{item.industry_name || 'Upcoming'}</span>
                           </div>
                         )}
 
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none"></div>
+
+                        {/* Hover Overlay indicating preview */}
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                          <span className="px-3 py-1.5 rounded-full bg-black/80 border border-white/20 text-white text-xs font-semibold backdrop-blur-md flex items-center gap-1.5 shadow-lg">
+                            <Play className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
+                            <span>View Details & Trailer</span>
+                          </span>
+                        </div>
 
                         {/* Top Badges */}
-                        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1 flex-wrap">
+                        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1 flex-wrap pointer-events-none">
                           <div className="flex items-center gap-1">
                             <span
                               className={`text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md border ${
@@ -1972,7 +1996,7 @@ export default function CampaignManager({ initialView = 'form' }) {
                         </div>
 
                         {/* Release Date Banner */}
-                        <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-white text-[11px] font-medium">
+                        <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-white text-[11px] font-medium pointer-events-none">
                           <span className="flex items-center gap-1 font-mono">
                             <Calendar className="w-3 h-3 text-amber-400" />
                             {item.release_date}
@@ -1987,9 +2011,14 @@ export default function CampaignManager({ initialView = 'form' }) {
 
                       {/* Content Body */}
                       <div className="p-4 space-y-2">
-                        <h4 className="text-white font-bold text-sm leading-snug line-clamp-1 group-hover:text-rose-400 transition">
-                          {item.title}
-                        </h4>
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-white font-bold text-sm leading-snug line-clamp-1 group-hover:text-rose-400 transition">
+                            {item.title}
+                          </h4>
+                          <span className="text-[10px] text-gray-500 group-hover:text-amber-400 flex items-center gap-0.5 shrink-0 transition">
+                            Details <ArrowUpRight className="w-3 h-3" />
+                          </span>
+                        </div>
                         <p className="text-gray-400 text-xs line-clamp-2 leading-relaxed">
                           {item.overview || `Upcoming ${catInfo ? catInfo.label : 'entertainment'} release.`}
                         </p>
@@ -2011,7 +2040,10 @@ export default function CampaignManager({ initialView = 'form' }) {
                           </span>
                           <button
                             type="button"
-                            onClick={() => setActiveView('queue')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveView('queue');
+                            }}
                             className="text-[10px] text-amber-400 underline hover:text-white cursor-pointer"
                           >
                             View
@@ -2020,7 +2052,10 @@ export default function CampaignManager({ initialView = 'form' }) {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => handleAutoScheduleMovie(item)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAutoScheduleMovie(item);
+                          }}
                           disabled={schedulingMovieId === item.id}
                           className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
@@ -2042,6 +2077,14 @@ export default function CampaignManager({ initialView = 'form' }) {
           )}
         </div>
       ) : null}
+
+      {/* Movie Details Modal for upcoming releases */}
+      <MovieDetailsModal
+        movie={previewMovie}
+        isOpen={Boolean(previewMovie)}
+        onClose={() => setPreviewMovie(null)}
+        onSelectMovie={(m) => setPreviewMovie(m)}
+      />
     </div>
   );
 }

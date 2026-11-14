@@ -987,16 +987,29 @@ export const fetchUpcomingReleases = async () => {
 
       if (item && item.id && !seen.has(uniqueKey) && title && relDate) {
         seen.add(uniqueKey);
-        const formatted = formatMovie(item);
+        const formatted = formatMovie({
+          ...item,
+          media_type: item.resolved_media_type,
+        });
         unique.push({
+          ...item,
           ...formatted,
           id: item.id,
           title,
+          name: title,
           release_date: relDate,
+          first_air_date: relDate,
           original_lang_code: item.original_lang_code,
           release_category: item.release_category,
           industry_name: item.industry_name,
           media_type: item.resolved_media_type,
+          mediaType: item.resolved_media_type,
+          poster_path: item.poster_path || null,
+          backdrop_path: item.backdrop_path || null,
+          poster: formatted.poster || (item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : null),
+          backdrop: formatted.backdrop || (item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : null),
+          overview: item.overview || formatted.description || '',
+          vote_average: item.vote_average ?? 0,
         });
       }
     }
