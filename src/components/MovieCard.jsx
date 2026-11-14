@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Plus, ThumbsUp, ChevronDown, Check } from 'lucide-react';
@@ -21,8 +21,7 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100 })
   const isAddedToList = myList.some((m) => m.id === movie.id);
 
   const handleMouseEnter = () => {
-    setIsHovered(true);
-    if(cardRef.current) {
+    if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect();
       setCardPos({
         top: rect.top,
@@ -30,12 +29,32 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100 })
         width: rect.width,
         height: rect.height
       });
+      setIsHovered(true);
     }
   };
 
   const handleMouseLeave = () => {
     setIsHovered(false);
   };
+
+  // Automatically dismiss hover card popup immediately on any scroll or wheel event
+  useEffect(() => {
+    if (!isHovered) return;
+
+    const handleDismissOnScroll = () => {
+      setIsHovered(false);
+    };
+
+    window.addEventListener('scroll', handleDismissOnScroll, { passive: true, capture: true });
+    window.addEventListener('wheel', handleDismissOnScroll, { passive: true });
+    window.addEventListener('touchmove', handleDismissOnScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleDismissOnScroll, { capture: true });
+      window.removeEventListener('wheel', handleDismissOnScroll);
+      window.removeEventListener('touchmove', handleDismissOnScroll);
+    };
+  }, [isHovered]);
 
   let transformOrigin = 'center center';
   if (cardPos) {
@@ -92,7 +111,7 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100 })
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1.25 }}
-            exit={{ opacity: 0, scale: 0.95 }}
+            exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15, delay: 0 } }}
             transition={{ duration: 0.3, delay: 0.4 }}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={handleMouseLeave}
