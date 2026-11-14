@@ -890,3 +890,48 @@ export const fetchMovieOrTVById = async (id, requestedType = null) => {
     media_type: resolvedType
   };
 };
+
+// Auto-Scanner: Fetch upcoming South Indian and Bollywood releases from TMDB
+export const fetchUpcomingIndianMovies = async () => {
+  const today = new Date().toISOString().split('T')[0];
+  const ninetyDaysFromNow = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const languages = ['te', 'ta', 'hi', 'kn', 'ml'];
+
+  try {
+    const requests = languages.map(async (lang) => {
+      try {
+        const endpoint = `/discover/movie?with_original_language=${lang}&region=IN&primary_release_date.gte=${today}&primary_release_date.lte=${ninetyDaysFromNow}&sort_by=popularity.desc&page=1`;
+        const data = await fetchTMDB(endpoint);
+        if (data && Array.isArray(data.results)) {
+          return data.results.map((m) => ({ ...m, original_lang_code: lang }));
+        }
+      } catch (e) {
+        console.warn(`TMDB upcoming fetch failed for ${lang}:`, e.message);
+      }
+      return [];
+    });
+
+    const results = await Promise.all(requests);
+    const flat = results.flat();
+    const seen = new Set();
+    const unique = [];
+
+    for (const m of flat) {
+      if (m && m.id && !seen.has(m.id) && m.title && m.release_date) {
+        seen.add(m.id);
+        const formatted = formatMovie(m);
+        unique.push({
+          ...formatted,
+          original_lang_code: m.original_lang_code,
+          release_date: m.release_date,
+        });
+      }
+    }
+
+    // Sort by release_date ascending (nearest release first)
+    return unique.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
+  } catch (err) {
+    console.error('fetchUpcomingIndianMovies error:', err);
+    return [];
+  }
+};

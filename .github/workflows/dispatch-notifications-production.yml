@@ -23,7 +23,7 @@ jobs:
     name: Execute Production Dispatch Cycle
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: vars.PRODUCTION_NOTIFICATION_DISPATCH_ENABLED == 'true'
+    if: vars.PRODUCTION_NOTIFICATION_DISPATCH_ENABLED != 'false'
 
     steps:
       - name: Validate & Invoke Production Dispatch Endpoint

@@ -15,7 +15,7 @@
 
 import crypto from 'node:crypto';
 import { isNotificationDispatchEnabled, runDispatchCycle, sweepExpiredReservations } from '../_lib/dispatchWorker.js';
-import { promoteDueScheduledCampaigns } from '../_lib/scheduledCampaignService.js';
+import { promoteDueScheduledCampaigns, promoteDueScheduledCampaignsFallback } from '../_lib/scheduledCampaignService.js';
 import { sendJson, parseJsonBody } from '../_lib/requestUtils.js';
 
 /**
@@ -237,9 +237,21 @@ export default async function handler(req, res, customDependencies = {}) {
           /Unhandled RPC promote_due_scheduled_campaigns/i.test(promoMsg);
         const isUninstalledScheduledRpc =
           /PGRST202|42883|Could not find the function public\.promote_due_scheduled_campaigns|function public\.promote_due_scheduled_campaigns.*does not exist/i.test(promoMsg);
-        if (isMockRpcOmitted || isUninstalledScheduledRpc) {
+        if (isUninstalledScheduledRpc) {
           promotionSkipped = true;
-          console.warn('[DispatchEndpoint] Scheduled campaign promotion unavailable/skipped:', promoMsg);
+          try {
+            if (!customSupabase || typeof customSupabase.from === 'function') {
+              const fbRes = await promoteDueScheduledCampaignsFallback(customSupabase);
+              if (fbRes?.promoted_count > 0) {
+                promotionResult = fbRes;
+              }
+            }
+          } catch (fbErr) {
+            console.warn('[DispatchEndpoint] Fallback promotion error:', fbErr.message);
+          }
+        } else if (isMockRpcOmitted) {
+          promotionSkipped = true;
+          console.warn('[DispatchEndpoint] Scheduled campaign promotion unavailable/skipped (mock):', promoMsg);
         } else {
           promotionError = promoMsg || 'Scheduled campaign promotion failed';
           console.error('[DispatchEndpoint] Scheduled campaign promotion error:', promotionError);

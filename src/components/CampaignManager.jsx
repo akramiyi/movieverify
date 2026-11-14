@@ -25,6 +25,30 @@ import {
   ListFilter,
 } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
+import { fetchUpcomingIndianMovies } from '../hooks/useTMDB';
+
+export const isCampaignCompleted = (c) => {
+  if (!c) return false;
+  if (c.status === 'completed') return true;
+  const sent = c.sent_count ?? c.sent_deliveries ?? 0;
+  const total = c.total_recipients ?? c.total_deliveries ?? 0;
+  return sent > 0 && total > 0 && sent >= total;
+};
+
+export const isCampaignQueued = (c) => {
+  if (!c) return false;
+  if (isCampaignCompleted(c)) return false;
+  return c.status === 'scheduled' || c.status === 'queued' || c.status === 'processing';
+};
+
+export const INDIAN_LANGUAGES = [
+  { code: 'all', label: 'All South & Bollywood', sub: 'Te, Ta, Ml, Kn, Hi' },
+  { code: 'te', label: 'Telugu', sub: 'Tollywood', color: 'text-amber-400 bg-amber-500/15 border-amber-500/30' },
+  { code: 'ta', label: 'Tamil', sub: 'Kollywood', color: 'text-cyan-400 bg-cyan-500/15 border-cyan-500/30' },
+  { code: 'ml', label: 'Malayalam', sub: 'Mollywood', color: 'text-purple-400 bg-purple-500/15 border-purple-500/30' },
+  { code: 'kn', label: 'Kannada', sub: 'Sandalwood', color: 'text-rose-400 bg-rose-500/15 border-rose-500/30' },
+  { code: 'hi', label: 'Hindi', sub: 'Bollywood', color: 'text-orange-400 bg-orange-500/15 border-orange-500/30' },
+];
 
 const TARGET_TYPES = [
   { value: 'all', label: 'All Subscribers', icon: Users, desc: 'Send to all opted-in subscribers and active devices' },
@@ -71,6 +95,15 @@ export default function CampaignManager({ initialView = 'form' }) {
   const [customDate, setCustomDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'queue' | 'sent'
   const [trackerSearch, setTrackerSearch] = useState('');
+
+  // Upcoming South & Indian Movie Scanner State
+  const [upcomingMovies, setUpcomingMovies] = useState([]);
+  const [scannerLoading, setScannerLoading] = useState(false);
+  const [scannerLangFilter, setScannerLangFilter] = useState('all');
+  const [scannerHorizonFilter, setScannerHorizonFilter] = useState('all');
+  const [scannerSearch, setScannerSearch] = useState('');
+  const [schedulingMovieId, setSchedulingMovieId] = useState(null);
+  const [batchScheduling, setBatchScheduling] = useState(false);
 
   // Sync view when initialView prop changes
   useEffect(() => {
@@ -252,11 +285,11 @@ export default function CampaignManager({ initialView = 'form' }) {
         throw new Error(data.message || data.error || 'Failed to dispatch due campaigns');
       }
 
-      const sentCount = data.dispatch_summary?.sent || 0;
-      const promotedCount = data.promotion_summary?.promoted_count || 0;
+      const sentCount = data.sent ?? data.dispatch_summary?.sent ?? 0;
+      const promotedCount = data.promoted_campaigns ?? data.promotion_summary?.promoted_count ?? 0;
       setActionStatus({
         type: 'success',
-        message: `Dispatch Cycle complete! ${promotedCount} scheduled campaign(s) promoted, ${sentCount} push delivery attempts executed.`,
+        message: `Dispatch Cycle complete! ${promotedCount} scheduled campaign(s) promoted, ${sentCount} push delivery attempt(s) executed.`,
       });
       fetchCampaigns();
     } catch (err) {
@@ -267,7 +300,7 @@ export default function CampaignManager({ initialView = 'form' }) {
   };
 
   const handleDispatchSpecificCampaign = async (campaignId) => {
-    if (!confirm('Are you sure you want to dispatch this scheduled campaign right now to active user devices?')) {
+    if (!confirm('Are you sure you want to dispatch this campaign right now to active user devices?')) {
       return;
     }
 
@@ -299,7 +332,7 @@ export default function CampaignManager({ initialView = 'form' }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to dispatch');
 
-      const sentCount = data.dispatch_summary?.sent || 0;
+      const sentCount = data.sent ?? data.dispatch_summary?.sent ?? 0;
       setActionStatus({
         type: 'success',
         message: `Campaign dispatched! ${sentCount} push alert(s) dispatched to active devices.`,
@@ -336,6 +369,176 @@ export default function CampaignManager({ initialView = 'form' }) {
       fetchCampaigns();
     } catch (err) {
       setActionStatus({ type: 'error', message: err.message });
+    }
+  };
+
+  // Auto-Scanner: Load upcoming South Indian and Bollywood releases
+  const loadUpcomingMovies = async () => {
+    setScannerLoading(true);
+    try {
+      const movies = await fetchUpcomingIndianMovies();
+      setUpcomingMovies(movies || []);
+    } catch (err) {
+      console.warn('Failed to load upcoming movies:', err.message);
+    } finally {
+      setScannerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeView === 'scanner' && upcomingMovies.length === 0) {
+      loadUpcomingMovies();
+    }
+  }, [activeView]);
+
+  const handleAutoScheduleMovie = async (movie) => {
+    if (!movie) return;
+    setSchedulingMovieId(movie.id);
+    setActionStatus({ type: '', message: '' });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Admin session required.');
+
+      const releaseDate = movie.release_date || new Date().toISOString().split('T')[0];
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isTodayOrPast = releaseDate <= todayStr;
+
+      let scheduledForIso = null;
+      if (!isTodayOrPast) {
+        const scheduleDate = new Date(`${releaseDate}T09:00:00`);
+        scheduledForIso = Number.isNaN(scheduleDate.getTime()) ? null : scheduleDate.toISOString();
+      }
+
+      const langInfo = INDIAN_LANGUAGES.find((l) => l.code === movie.original_lang_code);
+      const langLabel = langInfo ? `${langInfo.label} (${langInfo.sub})` : 'Movie';
+
+      const campaignPayload = {
+        title: `🎬 ${movie.title} - Releasing ${isTodayOrPast ? 'Today!' : 'Soon'}`,
+        body: `Big screen alert! ${movie.title} (${langLabel}) is scheduled for release on ${releaseDate}. Add it to your watchlist now to verify and watch instantly!`,
+        category: 'movie_release',
+        target_criteria: {
+          type: 'all',
+          movie_id: String(movie.id),
+          tmdb_id: String(movie.id),
+        },
+        url: '/',
+        image_url: movie.backdrop_path
+          ? `https://image.tmdb.org/t/p/w780${movie.backdrop_path}`
+          : movie.poster_path
+          ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+          : null,
+        scheduled_for: scheduledForIso,
+        is_draft: false,
+      };
+
+      const res = await fetch('/api/notifications/campaigns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(campaignPayload),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.message || resData.error || 'Failed to auto-schedule campaign');
+      }
+
+      setActionStatus({
+        type: 'success',
+        message: `Auto-scheduled "${movie.title}" release notification for ${releaseDate}!`,
+      });
+      fetchCampaigns();
+    } catch (err) {
+      setActionStatus({ type: 'error', message: err.message });
+    } finally {
+      setSchedulingMovieId(null);
+    }
+  };
+
+  const handleBatchScheduleTop = async (count = 5) => {
+    if (batchScheduling) return;
+    setBatchScheduling(true);
+    setActionStatus({ type: '', message: '' });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Admin session required.');
+
+      const unscheduled = upcomingMovies.filter(
+        (m) =>
+          !campaigns.some(
+            (c) =>
+              c.target_criteria?.movie_id === String(m.id) ||
+              c.title?.toLowerCase().includes(m.title.toLowerCase())
+          )
+      );
+
+      const targetList = unscheduled.slice(0, count);
+      if (targetList.length === 0) {
+        setActionStatus({ type: 'success', message: 'All upcoming releases in this view are already scheduled!' });
+        setBatchScheduling(false);
+        return;
+      }
+
+      let scheduledCount = 0;
+      for (const movie of targetList) {
+        const releaseDate = movie.release_date || new Date().toISOString().split('T')[0];
+        const todayStr = new Date().toISOString().split('T')[0];
+        const isTodayOrPast = releaseDate <= todayStr;
+        let scheduledForIso = null;
+        if (!isTodayOrPast) {
+          const scheduleDate = new Date(`${releaseDate}T09:00:00`);
+          scheduledForIso = Number.isNaN(scheduleDate.getTime()) ? null : scheduleDate.toISOString();
+        }
+
+        const langInfo = INDIAN_LANGUAGES.find((l) => l.code === movie.original_lang_code);
+        const langLabel = langInfo ? `${langInfo.label} (${langInfo.sub})` : 'Movie';
+
+        const campaignPayload = {
+          title: `🎬 ${movie.title} - Releasing ${isTodayOrPast ? 'Today!' : 'Soon'}`,
+          body: `Big screen alert! ${movie.title} (${langLabel}) is scheduled for release on ${releaseDate}. Add it to your watchlist now to verify and watch instantly!`,
+          category: 'movie_release',
+          target_criteria: {
+            type: 'all',
+            movie_id: String(movie.id),
+            tmdb_id: String(movie.id),
+          },
+          url: '/',
+          image_url: movie.backdrop_path
+            ? `https://image.tmdb.org/t/p/w780${movie.backdrop_path}`
+            : movie.poster_path
+            ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+            : null,
+          scheduled_for: scheduledForIso,
+          is_draft: false,
+        };
+
+        const res = await fetch('/api/notifications/campaigns', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify(campaignPayload),
+        });
+
+        if (res.ok) {
+          scheduledCount++;
+        }
+      }
+
+      setActionStatus({
+        type: 'success',
+        message: `Batch schedule completed! ${scheduledCount} upcoming South & Indian release notification(s) scheduled.`,
+      });
+      fetchCampaigns();
+    } catch (err) {
+      setActionStatus({ type: 'error', message: err.message });
+    } finally {
+      setBatchScheduling(false);
     }
   };
 
@@ -405,6 +608,18 @@ export default function CampaignManager({ initialView = 'form' }) {
     return type;
   };
 
+  const getMovieReleaseCountdown = (releaseDateStr) => {
+    if (!releaseDateStr) return null;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const relDate = new Date(releaseDateStr + 'T00:00:00');
+    const diffDays = Math.ceil((relDate - today) / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) return { text: 'Releases Today!', isUrgent: true };
+    if (diffDays === 1) return { text: 'Releases Tomorrow!', isUrgent: true };
+    return { text: `In ${diffDays} days`, isUrgent: false };
+  };
+
   // Compute stats across categories and dates
   const stats = useMemo(() => {
     const now = new Date();
@@ -427,14 +642,15 @@ export default function CampaignManager({ initialView = 'form' }) {
     let totalSent = 0;
 
     campaigns.forEach((c) => {
-      const isQueued = c.status === 'scheduled' || c.status === 'processing';
-      const isSent = c.status === 'completed';
+      const isQueued = isCampaignQueued(c);
+      const isSent = isCampaignCompleted(c);
 
       if (isQueued) {
         totalQueued += 1;
-        if (c.scheduled_for) {
-          if (isSameCalendarDay(c.scheduled_for, today)) dueToday += 1;
-          if (isSameCalendarDay(c.scheduled_for, tomorrow)) dueTomorrow += 1;
+        const schedTime = c.scheduled_for ? new Date(c.scheduled_for) : null;
+        if (schedTime) {
+          if (isSameCalendarDay(schedTime, today)) dueToday += 1;
+          if (isSameCalendarDay(schedTime, tomorrow)) dueTomorrow += 1;
         }
       }
       if (isSent) totalSent += 1;
@@ -473,21 +689,20 @@ export default function CampaignManager({ initialView = 'form' }) {
       }
 
       // 2. Status Filter
-      const isQueued = c.status === 'scheduled' || c.status === 'processing';
-      const isSent = c.status === 'completed';
+      const isQueued = isCampaignQueued(c);
+      const isSent = isCampaignCompleted(c);
       if (statusFilter === 'queue' && !isQueued) return false;
       if (statusFilter === 'sent' && !isSent) return false;
 
       // 3. Day / Date Filter
-      const campaignDate =
-        c.status === 'scheduled' && c.scheduled_for ? new Date(c.scheduled_for) : new Date(c.created_at);
+      const campaignDate = c.scheduled_for ? new Date(c.scheduled_for) : new Date(c.created_at);
 
       if (dayFilter === 'today') {
         if (!isSameCalendarDay(campaignDate, today)) return false;
       } else if (dayFilter === 'tomorrow') {
         if (!isSameCalendarDay(campaignDate, tomorrow)) return false;
       } else if (dayFilter === 'upcoming') {
-        if (c.status !== 'scheduled') return false;
+        if (!isCampaignQueued(c)) return false;
         if (campaignDate < today) return false;
       } else if (dayFilter === 'custom' && customDate) {
         const customObj = new Date(customDate + 'T00:00:00');
@@ -507,11 +722,37 @@ export default function CampaignManager({ initialView = 'form' }) {
     });
   }, [campaigns, categoryFilter, dayFilter, customDate, statusFilter, trackerSearch]);
 
+  // Filtered upcoming Indian and South movies
+  const filteredUpcomingMovies = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    return upcomingMovies.filter((m) => {
+      if (scannerLangFilter !== 'all' && m.original_lang_code !== scannerLangFilter) {
+        return false;
+      }
+
+      if (m.release_date) {
+        const relDate = new Date(m.release_date + 'T00:00:00');
+        const diffDays = Math.ceil((relDate - today) / (1000 * 60 * 60 * 24));
+        if (scannerHorizonFilter === '7' && (diffDays < 0 || diffDays > 7)) return false;
+        if (scannerHorizonFilter === '30' && (diffDays < 0 || diffDays > 30)) return false;
+      }
+
+      if (scannerSearch.trim()) {
+        const q = scannerSearch.toLowerCase();
+        if (!m.title?.toLowerCase().includes(q)) return false;
+      }
+
+      return true;
+    });
+  }, [upcomingMovies, scannerLangFilter, scannerHorizonFilter, scannerSearch]);
+
   return (
     <div className="space-y-6">
       {/* Top View Mode Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-black/40 backdrop-blur-xl p-2 rounded-2xl border border-white/[0.12] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15),0_8px_20px_rgba(0,0,0,0.5)]">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => setActiveView('form')}
@@ -541,6 +782,22 @@ export default function CampaignManager({ initialView = 'form' }) {
                 {stats.totalQueued}
               </span>
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView('scanner')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeView === 'scanner'
+                ? 'bg-rose-600 text-white shadow-[0_0_15px_rgba(225,29,72,0.45),inset_0_1px_0_rgba(255,255,255,0.25)] scale-[1.02]'
+                : 'text-gray-400 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/10'
+            }`}
+          >
+            <Film className="w-3.5 h-3.5 text-rose-400" />
+            <span>🎬 South & Indian Release Scanner</span>
+            <span className="bg-rose-500/30 text-rose-300 px-2 py-0.2 rounded-full text-[10px] font-black border border-rose-500/40">
+              Live Radar
+            </span>
           </button>
         </div>
 
@@ -587,7 +844,7 @@ export default function CampaignManager({ initialView = 'form' }) {
                 <Clock className="w-4 h-4" />
               </div>
               <div className="text-2xl font-black text-white">{stats.totalQueued}</div>
-              <div className="text-[11px] text-gray-400 mt-0.5">Scheduled to be sent</div>
+              <div className="text-[11px] text-gray-400 mt-0.5">Ready or scheduled to be sent</div>
             </div>
 
             <div className="glass-card rounded-2xl p-4 shadow-lg border border-blue-500/25 hover:border-blue-500/40 transition-all hover:-translate-y-0.5">
@@ -616,6 +873,33 @@ export default function CampaignManager({ initialView = 'form' }) {
               <div className="text-2xl font-black text-white">{stats.totalSent}</div>
               <div className="text-[11px] text-gray-400 mt-0.5">Delivered to devices</div>
             </div>
+          </div>
+
+          {/* Quick Action Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.03] border border-white/10 rounded-2xl p-3 shadow-lg">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 font-semibold">Queue Actions:</span>
+              <button
+                type="button"
+                onClick={handleTriggerDispatch}
+                disabled={isDispatching}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-500 hover:to-red-500 text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer disabled:opacity-50"
+                title="Dispatch all pending and due notifications right now to user devices"
+              >
+                <Zap className={`w-3.5 h-3.5 ${isDispatching ? 'animate-spin' : ''}`} />
+                <span>{isDispatching ? 'Dispatching...' : '⚡ Dispatch All Queued / Due Now'}</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveView('scanner')}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold transition cursor-pointer"
+            >
+              <Film className="w-3.5 h-3.5 text-rose-400" />
+              <span>🎬 Auto-Scan Upcoming South & Indian Releases</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           {/* Category Selector Pills */}
@@ -769,20 +1053,20 @@ export default function CampaignManager({ initialView = 'form' }) {
                 <button
                   type="button"
                   onClick={() => setStatusFilter('queue')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  className={`px-2.5 py-1 rounded-lg font-medium transition cursor-pointer ${
                     statusFilter === 'queue' ? 'bg-amber-600/30 text-amber-300 font-bold' : 'text-gray-400 hover:text-white'
                   }`}
                 >
-                  ⏳ Queue ({campaigns.filter((c) => c.status === 'scheduled').length})
+                  ⏳ Queue ({campaigns.filter(isCampaignQueued).length})
                 </button>
                 <button
                   type="button"
                   onClick={() => setStatusFilter('sent')}
-                  className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  className={`px-2.5 py-1 rounded-lg font-medium transition cursor-pointer ${
                     statusFilter === 'sent' ? 'bg-emerald-600/30 text-emerald-300 font-bold' : 'text-gray-400 hover:text-white'
                   }`}
                 >
-                  ✅ Sent ({campaigns.filter((c) => c.status === 'completed').length})
+                  ✅ Sent ({campaigns.filter(isCampaignCompleted).length})
                 </button>
               </div>
 
@@ -839,8 +1123,8 @@ export default function CampaignManager({ initialView = 'form' }) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredCampaigns.map((c) => {
-                  const isQueued = c.status === 'scheduled' || c.status === 'processing';
-                  const isCompleted = c.status === 'completed';
+                  const isQueued = isCampaignQueued(c);
+                  const isCompleted = isCampaignCompleted(c);
                   const isDueNow =
                     c.status === 'scheduled' && c.scheduled_for && new Date(c.scheduled_for) <= new Date();
 
@@ -875,10 +1159,12 @@ export default function CampaignManager({ initialView = 'form' }) {
 
                             <span
                               className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                isQueued
-                                  ? isDueNow
-                                    ? 'bg-amber-400 text-black font-black animate-pulse'
-                                    : 'bg-amber-500/20 text-amber-300'
+                                isDueNow
+                                  ? 'bg-amber-400 text-black font-black animate-pulse'
+                                  : isQueued
+                                  ? c.status === 'scheduled'
+                                    ? 'bg-amber-500/20 text-amber-300'
+                                    : 'bg-orange-500/20 text-orange-300 ring-1 ring-orange-500/30'
                                   : isCompleted
                                   ? 'bg-emerald-500/20 text-emerald-300'
                                   : c.status === 'cancelled'
@@ -886,7 +1172,15 @@ export default function CampaignManager({ initialView = 'form' }) {
                                   : 'bg-gray-500/20 text-gray-300'
                               }`}
                             >
-                              {isDueNow ? '⚡ Due Now' : isQueued ? '⏳ In Queue' : c.status}
+                              {isDueNow
+                                ? '⚡ Due Now'
+                                : isQueued
+                                ? c.status === 'scheduled'
+                                  ? '⏳ Scheduled'
+                                  : '⏳ In Queue'
+                                : isCompleted
+                                ? '✅ Sent'
+                                : c.status}
                             </span>
                           </div>
 
@@ -935,8 +1229,9 @@ export default function CampaignManager({ initialView = 'form' }) {
                       <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
                         {isQueued ? (
                           <>
-                            <div className="text-[11px] text-amber-300/90 font-medium">
-                              {c.scheduled_for ? getTimeRemainingText(c.scheduled_for) : 'Waiting'}
+                            <div className="text-[11px] text-amber-300/90 font-medium flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-400" />
+                              <span>{c.scheduled_for ? getTimeRemainingText(c.scheduled_for) : (c.status === 'queued' ? 'Ready to Dispatch' : 'In Queue')}</span>
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -944,8 +1239,8 @@ export default function CampaignManager({ initialView = 'form' }) {
                                 type="button"
                                 onClick={() => handleDispatchSpecificCampaign(c.id)}
                                 disabled={isDispatching}
-                                className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-500 hover:to-red-500 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1 disabled:opacity-50"
-                                title="Send this scheduled notification immediately to users"
+                                className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-500 hover:to-red-500 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                title="Send this notification immediately to users"
                               >
                                 <Zap className="w-3 h-3" />
                                 <span>Send Now</span>
@@ -954,7 +1249,7 @@ export default function CampaignManager({ initialView = 'form' }) {
                               <button
                                 type="button"
                                 onClick={() => handleCancelCampaign(c.id)}
-                                className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-600/20 rounded-lg transition"
+                                className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-600/20 rounded-lg transition cursor-pointer"
                                 title="Cancel and remove from queue"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -963,11 +1258,12 @@ export default function CampaignManager({ initialView = 'form' }) {
                           </>
                         ) : isCompleted ? (
                           <div className="flex items-center justify-between w-full text-[11px] text-emerald-300/80">
-                            <span>
-                              📱 Push Sent: <strong>{c.sent_deliveries || 0} / {c.total_deliveries || 0}</strong>
+                            <span className="flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Push Sent: <strong>{c.sent_count || c.sent_deliveries || 0} / {c.total_recipients || c.total_deliveries || 1}</strong></span>
                             </span>
                             <span>
-                              👥 Recipients: <strong>{c.total_recipients || 0}</strong>
+                              👥 Recipients: <strong>{c.total_recipients || c.total_deliveries || 1}</strong>
                             </span>
                           </div>
                         ) : (
@@ -1372,18 +1668,22 @@ export default function CampaignManager({ initialView = 'form' }) {
                           <div className="flex flex-col gap-0.5">
                             <span
                               className={`px-2 py-0.5 rounded-full text-[10px] font-bold w-fit ${
-                                c.status === 'completed'
+                                isCampaignCompleted(c)
                                   ? 'bg-emerald-500/20 text-emerald-300'
-                                  : c.status === 'processing'
-                                  ? 'bg-amber-500/20 text-amber-300'
+                                  : isCampaignQueued(c)
+                                  ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30'
                                   : c.status === 'cancelled'
                                   ? 'bg-rose-500/20 text-rose-300'
-                                  : c.status === 'scheduled'
-                                  ? 'bg-blue-500/20 text-blue-300'
                                   : 'bg-gray-500/20 text-gray-300'
                               }`}
                             >
-                              {c.status}
+                              {isCampaignCompleted(c)
+                                ? 'completed'
+                                : isCampaignQueued(c)
+                                ? c.status === 'scheduled'
+                                  ? 'scheduled'
+                                  : 'queued'
+                                : c.status}
                             </span>
                             {c.status === 'scheduled' && c.scheduled_for && (
                               <span className="text-[10px] text-gray-400 whitespace-nowrap">
@@ -1396,7 +1696,7 @@ export default function CampaignManager({ initialView = 'form' }) {
                         </td>
                         <td className="py-3">{c.total_recipients || 0}</td>
                         <td className="py-3">
-                          {c.sent_deliveries || 0} / {c.total_deliveries || 0}
+                          {c.sent_count || c.sent_deliveries || 0} / {c.total_recipients || c.total_deliveries || 0}
                         </td>
                         <td className="py-3 text-gray-500">
                           {new Date(c.scheduled_for || c.created_at).toLocaleDateString([], {
@@ -1408,11 +1708,11 @@ export default function CampaignManager({ initialView = 'form' }) {
                         </td>
                         <td className="py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            {c.status === 'scheduled' && (
+                            {isCampaignQueued(c) && (
                               <button
                                 onClick={() => handleDispatchSpecificCampaign(c.id)}
                                 disabled={isDispatching}
-                                className="text-amber-400 hover:text-amber-300 p-1 rounded hover:bg-amber-950/30 transition"
+                                className="text-amber-400 hover:text-amber-300 p-1 rounded hover:bg-amber-950/30 transition cursor-pointer"
                                 title="Dispatch This Campaign Now"
                               >
                                 <Zap className="w-3.5 h-3.5" />
@@ -1421,7 +1721,7 @@ export default function CampaignManager({ initialView = 'form' }) {
                             {c.status !== 'completed' && c.status !== 'cancelled' && (
                               <button
                                 onClick={() => handleCancelCampaign(c.id)}
-                                className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-950/30 transition"
+                                className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-950/30 transition cursor-pointer"
                                 title="Cancel Campaign"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1436,6 +1736,276 @@ export default function CampaignManager({ initialView = 'form' }) {
               </div>
             )}
           </div>
+        </div>
+      ) : null}
+
+      {/* ========================================================================= */}
+      {/* VIEW C: AUTO-SCAN UPCOMING SOUTH & BOLLYWOOD RELEASES                     */}
+      {/* ========================================================================= */}
+      {activeView === 'scanner' ? (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Header Banner */}
+          <div className="glass-card rounded-2xl p-6 shadow-xl border border-rose-500/25 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-rose-600/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-rose-400 text-xs font-bold uppercase tracking-wider mb-1">
+                  <Film className="w-4 h-4" />
+                  <span>TMDB Live Release Radar</span>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px]">
+                    South & Bollywood
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-white">Upcoming Movie Release Auto-Scanner</h3>
+                <p className="text-xs text-gray-300 mt-1 max-w-xl">
+                  Automatically scans upcoming Telugu, Tamil, Malayalam, Kannada, and Hindi cinema releases.
+                  One-click auto-schedule push notifications for user devices on their exact release dates.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleBatchScheduleTop(5)}
+                  disabled={batchScheduling || scannerLoading}
+                  className="px-4 py-2 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  title="Automatically schedule release notifications for the top 5 unscheduled upcoming movies"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${batchScheduling ? 'animate-spin' : ''}`} />
+                  <span>{batchScheduling ? 'Scheduling Top 5...' : '⚡ Auto-Schedule Top 5 Releases'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={loadUpcomingMovies}
+                  disabled={scannerLoading}
+                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold border border-white/10 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Rescan TMDB for newest upcoming releases"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${scannerLoading ? 'animate-spin' : ''}`} />
+                  <span>{scannerLoading ? 'Scanning...' : 'Rescan'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters Bar */}
+          <div className="glass-card rounded-2xl p-5 shadow-xl space-y-4">
+            {/* Language Selection */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                Filter By Language / Cinema Industry:
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                {INDIAN_LANGUAGES.map((l) => (
+                  <button
+                    key={l.code}
+                    type="button"
+                    onClick={() => setScannerLangFilter(l.code)}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      scannerLangFilter === l.code
+                        ? 'bg-white/15 border-white/40 text-white shadow-lg ring-1 ring-white/30 scale-[1.02]'
+                        : 'bg-[#141414] border-white/5 text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="text-xs font-bold leading-tight">{l.label}</div>
+                    <div className="text-[10px] text-gray-500">{l.sub}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Timeframe & Keyword Search */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/5">
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-gray-400 font-semibold mr-1">Time Horizon:</span>
+                {[
+                  { value: 'all', label: 'All (90 Days)' },
+                  { value: '7', label: 'This Week (7 Days)' },
+                  { value: '30', label: 'This Month (30 Days)' },
+                ].map((hz) => (
+                  <button
+                    key={hz.value}
+                    type="button"
+                    onClick={() => setScannerHorizonFilter(hz.value)}
+                    className={`px-3 py-1 rounded-lg font-medium transition cursor-pointer ${
+                      scannerHorizonFilter === hz.value
+                        ? 'bg-rose-600/30 text-rose-300 font-bold border border-rose-500/40'
+                        : 'text-gray-400 hover:text-white bg-white/5'
+                    }`}
+                  >
+                    {hz.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search upcoming movie..."
+                  value={scannerSearch}
+                  onChange={(e) => setScannerSearch(e.target.value)}
+                  className="bg-[#141414] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-rose-500 w-48 sm:w-60"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Results Grid */}
+          {scannerLoading ? (
+            <div className="glass-card rounded-2xl p-16 text-center space-y-3">
+              <Loader2 className="w-10 h-10 text-rose-500 animate-spin mx-auto" />
+              <h4 className="text-white font-bold text-sm">Scanning Upcoming Indian & South Movie Releases...</h4>
+              <p className="text-xs text-gray-400">Querying TMDB for latest Telugu, Tamil, Malayalam, Kannada & Hindi release dates.</p>
+            </div>
+          ) : filteredUpcomingMovies.length === 0 ? (
+            <div className="glass-card rounded-2xl p-12 text-center space-y-3">
+              <Film className="w-10 h-10 text-gray-600 mx-auto" />
+              <h4 className="text-white font-bold text-sm">No Upcoming Movies Found</h4>
+              <p className="text-xs text-gray-400 max-w-md mx-auto">
+                No upcoming releases match your selected filters. Try switching the language filter or resetting search.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setScannerLangFilter('all');
+                  setScannerHorizonFilter('all');
+                  setScannerSearch('');
+                }}
+                className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredUpcomingMovies.map((movie) => {
+                const langInfo = INDIAN_LANGUAGES.find((l) => l.code === movie.original_lang_code);
+                const countdown = getMovieReleaseCountdown(movie.release_date);
+                const existingCampaign = campaigns.find(
+                  (c) =>
+                    c.target_criteria?.movie_id === String(movie.id) ||
+                    c.title?.toLowerCase().includes(movie.title.toLowerCase())
+                );
+                const isAlreadyScheduled = Boolean(existingCampaign);
+                const isAlreadySent = existingCampaign && isCampaignCompleted(existingCampaign);
+
+                return (
+                  <div
+                    key={movie.id}
+                    className="glass-card rounded-2xl overflow-hidden border border-white/10 hover:border-white/25 transition-all flex flex-col justify-between group hover:-translate-y-1 shadow-xl"
+                  >
+                    <div>
+                      {/* Movie Backdrop / Poster Image */}
+                      <div className="relative aspect-video bg-black/50 overflow-hidden">
+                        {movie.backdrop_path || movie.poster_path ? (
+                          <img
+                            src={
+                              movie.backdrop_path
+                                ? `https://image.tmdb.org/t/p/w500${movie.backdrop_path}`
+                                : `https://image.tmdb.org/t/p/w300${movie.poster_path}`
+                            }
+                            alt={movie.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-600">
+                            <Film className="w-8 h-8" />
+                          </div>
+                        )}
+
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
+
+                        {/* Top Badges */}
+                        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md border ${
+                              langInfo?.color || 'text-gray-300 bg-white/10 border-white/20'
+                            }`}
+                          >
+                            {langInfo ? `${langInfo.label}` : movie.original_lang_code}
+                          </span>
+
+                          {countdown && (
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md ${
+                                countdown.isUrgent
+                                  ? 'bg-rose-500/80 text-white animate-pulse font-black'
+                                  : 'bg-black/60 text-amber-300 border border-amber-500/30'
+                              }`}
+                            >
+                              {countdown.text}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Release Date Banner */}
+                        <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-white text-[11px] font-medium">
+                          <span className="flex items-center gap-1 font-mono">
+                            <Calendar className="w-3 h-3 text-amber-400" />
+                            {movie.release_date}
+                          </span>
+                          {movie.vote_average > 0 && (
+                            <span className="text-amber-400 font-bold">
+                              ★ {Number(movie.vote_average).toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Content Body */}
+                      <div className="p-4 space-y-2">
+                        <h4 className="text-white font-bold text-sm leading-snug line-clamp-1 group-hover:text-rose-400 transition">
+                          {movie.title}
+                        </h4>
+                        <p className="text-gray-400 text-xs line-clamp-2 leading-relaxed">
+                          {movie.overview || 'Upcoming South Indian theatrical / OTT release.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action Footer */}
+                    <div className="p-4 pt-0">
+                      {isAlreadySent ? (
+                        <div className="w-full py-2 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Notification Sent</span>
+                        </div>
+                      ) : isAlreadyScheduled ? (
+                        <div className="w-full py-2 px-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-between">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-amber-400" />
+                            <span>In Queue</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setActiveView('queue')}
+                            className="text-[10px] text-amber-400 underline hover:text-white cursor-pointer"
+                          >
+                            View
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleAutoScheduleMovie(movie)}
+                          disabled={schedulingMovieId === movie.id}
+                          className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <Zap className={`w-3.5 h-3.5 ${schedulingMovieId === movie.id ? 'animate-spin' : ''}`} />
+                          <span>
+                            {schedulingMovieId === movie.id ? 'Scheduling...' : '⚡ Auto-Schedule Release Alert'}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       ) : null}
     </div>
