@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { fetchUpcomingReleases, fetchUpcomingIndianMovies } from '../hooks/useTMDB';
-import MovieDetailsModal from './MovieDetailsModal';
+import UpcomingReleaseModal from './UpcomingReleaseModal';
 
 export const isCampaignCompleted = (c) => {
   if (!c) return false;
@@ -473,6 +473,37 @@ export default function CampaignManager({ initialView = 'form' }) {
     } finally {
       setSchedulingMovieId(null);
     }
+  };
+
+  const handleCustomizeCampaignFromRelease = (item) => {
+    if (!item) return;
+    const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
+    const catInfo = RELEASE_CATEGORIES.find((c) => c.id === item.release_category);
+    const catLabel = catInfo ? catInfo.label : (isTv ? 'Web Series' : 'Movie');
+
+    setTitle(`🎬 ${item.title} Release Alert!`);
+    setBody(
+      `Don't miss the upcoming ${catLabel} premiere of ${item.title} on ${item.release_date}. Get ready to watch and verify links now!`
+    );
+    setCategory(isTv ? 'content_update' : 'movie_release');
+    setUrl(isTv ? `/series/${item.id}` : `/movie/${item.id}`);
+    setTargetType(isTv ? 'series' : 'movie');
+    setTargetId(String(item.id));
+    setIsDraft(false);
+    setIsScheduled(true);
+
+    const scheduleDate = new Date(`${item.release_date}T09:00:00`);
+    if (!Number.isNaN(scheduleDate.getTime()) && scheduleDate > new Date()) {
+      const localIso = new Date(scheduleDate.getTime() - scheduleDate.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
+      setScheduledFor(localIso);
+    } else {
+      setScheduledFor('');
+    }
+
+    setPreviewMovie(null);
+    setActiveView('form');
   };
 
   const handleBatchScheduleTop = async (count = 5) => {
@@ -2078,12 +2109,24 @@ export default function CampaignManager({ initialView = 'form' }) {
         </div>
       ) : null}
 
-      {/* Movie Details Modal for upcoming releases */}
-      <MovieDetailsModal
-        movie={previewMovie}
+      {/* Dedicated Upcoming Release Admin Preview Modal */}
+      <UpcomingReleaseModal
+        item={previewMovie}
         isOpen={Boolean(previewMovie)}
         onClose={() => setPreviewMovie(null)}
-        onSelectMovie={(m) => setPreviewMovie(m)}
+        onAutoSchedule={handleAutoScheduleMovie}
+        onCustomize={handleCustomizeCampaignFromRelease}
+        existingCampaign={
+          previewMovie
+            ? campaigns.find(
+                (c) =>
+                  c.status !== 'cancelled' &&
+                  (c.target_criteria?.movie_id === String(previewMovie.id) ||
+                    c.target_criteria?.series_id === String(previewMovie.id))
+              )
+            : null
+        }
+        isScheduling={schedulingMovieId === previewMovie?.id}
       />
     </div>
   );
