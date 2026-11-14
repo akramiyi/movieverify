@@ -21,6 +21,7 @@ import Toast from './components/Toast';
 import { useLatestIndiaRelease } from './hooks/useLatestIndiaRelease';
 import InstallPWA from './components/InstallPWA';
 import NotificationPrompt from './components/NotificationPrompt';
+import NewUserGuide from './components/NewUserGuide';
 import TodayReleasesView from './components/TodayReleasesView';
 import ActorsRow from './components/ActorsRow';
 import { actors } from './data/actors';
@@ -71,6 +72,13 @@ function App() {
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const [hasNotificationPrompt, setHasNotificationPrompt] = useState(false);
+  const [showNewUserGuide, setShowNewUserGuide] = useState(() => {
+    try {
+      return localStorage.getItem('movieverify_new_user_guide_completed') !== 'true';
+    } catch {
+      return false;
+    }
+  });
 
   const inFlightNotificationCheck = useRef(null);
 
@@ -1224,16 +1232,28 @@ function App() {
           <AdminPanel onClose={handleCloseAdmin} />
         </Suspense>
       )}
-      <InstallPWA hasNotificationPrompt={hasNotificationPrompt} />
+      <InstallPWA hasNotificationPrompt={hasNotificationPrompt || showNewUserGuide} />
       {!showIntro && !siteLocked && !showAdmin && location.pathname !== '/admin' && (
-        <NotificationPrompt
-          onVisibilityChange={setHasNotificationPrompt}
-          onSubscribeSuccess={() => {
-            setHasNotificationPrompt(false);
-            setToastMessage('Notifications enabled! You will receive new release alerts.');
-            setShowToast(true);
-          }}
-        />
+        <>
+          <NewUserGuide
+            isOpen={showNewUserGuide}
+            onClose={() => setShowNewUserGuide(false)}
+            onNotificationSubscribeSuccess={() => {
+              setToastMessage('Release alerts enabled! You will receive updates.');
+              setShowToast(true);
+            }}
+          />
+          {!showNewUserGuide && (
+            <NotificationPrompt
+              onVisibilityChange={setHasNotificationPrompt}
+              onSubscribeSuccess={() => {
+                setHasNotificationPrompt(false);
+                setToastMessage('Notifications enabled! You will receive new release alerts.');
+                setShowToast(true);
+              }}
+            />
+          )}
+        </>
       )}
       {foregroundPushAlert && (
         <div
