@@ -1114,10 +1114,10 @@ const AdminPanel = ({ onClose }) => {
                   ? 'bg-rose-600 text-white border-rose-400/60 shadow-[0_0_20px_rgba(225,29,72,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
                   : 'bg-white/[0.05] hover:bg-white/[0.12] text-rose-300 hover:text-white border-white/[0.10] hover:border-rose-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0'
               }`}
-              title="Auto-scan upcoming South Indian and Bollywood releases and schedule notifications"
+              title="Auto-scan upcoming South, Bollywood, Hollywood movies and Hindi & Hollywood web series releases"
             >
               <Film className="w-3.5 h-3.5 text-rose-400" />
-              {activeTab === 'scanner' ? 'Back to Manager' : '🎬 South Releases'}
+              {activeTab === 'scanner' ? 'Back to Manager' : '🎬 Upcoming Releases'}
             </button>
             <button 
               onClick={() => setActiveTab(activeTab === 'schedule' ? 'manager' : 'schedule')}

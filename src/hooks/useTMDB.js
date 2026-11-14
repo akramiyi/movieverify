@@ -891,47 +891,122 @@ export const fetchMovieOrTVById = async (id, requestedType = null) => {
   };
 };
 
-// Auto-Scanner: Fetch upcoming South Indian and Bollywood releases from TMDB
-export const fetchUpcomingIndianMovies = async () => {
+// Auto-Scanner: Fetch upcoming South, Bollywood, Hollywood movies, and Web Series releases from TMDB
+export const fetchUpcomingReleases = async () => {
   const today = new Date().toISOString().split('T')[0];
   const ninetyDaysFromNow = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const languages = ['te', 'ta', 'hi', 'kn', 'ml'];
+
+  const queries = [
+    // 1. South Indian Movies (Telugu, Tamil, Malayalam, Kannada)
+    {
+      category: 'south_movie',
+      industry: 'South Indian',
+      mediaType: 'movie',
+      languages: ['te', 'ta', 'ml', 'kn'],
+      region: 'IN',
+      isTv: false,
+    },
+    // 2. Bollywood Movies (Hindi)
+    {
+      category: 'bollywood_movie',
+      industry: 'Bollywood',
+      mediaType: 'movie',
+      languages: ['hi'],
+      region: 'IN',
+      isTv: false,
+    },
+    // 3. Hollywood Movies (English)
+    {
+      category: 'hollywood_movie',
+      industry: 'Hollywood',
+      mediaType: 'movie',
+      languages: ['en'],
+      region: 'US',
+      isTv: false,
+    },
+    // 4. Hindi Web Series (Indian OTT)
+    {
+      category: 'hindi_series',
+      industry: 'Hindi Web Series',
+      mediaType: 'tv',
+      languages: ['hi'],
+      isTv: true,
+    },
+    // 5. Hollywood Web Series (Global OTT)
+    {
+      category: 'hollywood_series',
+      industry: 'Hollywood Series',
+      mediaType: 'tv',
+      languages: ['en'],
+      isTv: true,
+    },
+  ];
 
   try {
-    const requests = languages.map(async (lang) => {
-      try {
-        const endpoint = `/discover/movie?with_original_language=${lang}&region=IN&primary_release_date.gte=${today}&primary_release_date.lte=${ninetyDaysFromNow}&sort_by=popularity.desc&page=1`;
-        const data = await fetchTMDB(endpoint);
-        if (data && Array.isArray(data.results)) {
-          return data.results.map((m) => ({ ...m, original_lang_code: lang }));
-        }
-      } catch (e) {
-        console.warn(`TMDB upcoming fetch failed for ${lang}:`, e.message);
-      }
-      return [];
-    });
+    const promises = [];
 
-    const results = await Promise.all(requests);
-    const flat = results.flat();
+    for (const q of queries) {
+      for (const lang of q.languages) {
+        promises.push(
+          (async () => {
+            try {
+              let endpoint = '';
+              if (q.isTv) {
+                endpoint = `/discover/tv?with_original_language=${lang}&first_air_date.gte=${today}&first_air_date.lte=${ninetyDaysFromNow}&sort_by=popularity.desc&page=1`;
+              } else {
+                endpoint = `/discover/movie?with_original_language=${lang}${q.region ? `&region=${q.region}` : ''}&primary_release_date.gte=${today}&primary_release_date.lte=${ninetyDaysFromNow}&sort_by=popularity.desc&page=1`;
+              }
+              const data = await fetchTMDB(endpoint);
+              if (data && Array.isArray(data.results)) {
+                return data.results.map((item) => ({
+                  ...item,
+                  original_lang_code: lang,
+                  release_category: q.category,
+                  industry_name: q.industry,
+                  resolved_media_type: q.mediaType,
+                }));
+              }
+            } catch (err) {
+              console.warn(`TMDB fetch failed for ${q.category} [${lang}]:`, err.message);
+            }
+            return [];
+          })()
+        );
+      }
+    }
+
+    const settled = await Promise.all(promises);
+    const flat = settled.flat();
     const seen = new Set();
     const unique = [];
 
-    for (const m of flat) {
-      if (m && m.id && !seen.has(m.id) && m.title && m.release_date) {
-        seen.add(m.id);
-        const formatted = formatMovie(m);
+    for (const item of flat) {
+      const relDate = item.release_date || item.first_air_date;
+      const title = item.title || item.name;
+      const uniqueKey = `${item.resolved_media_type}_${item.id}`;
+
+      if (item && item.id && !seen.has(uniqueKey) && title && relDate) {
+        seen.add(uniqueKey);
+        const formatted = formatMovie(item);
         unique.push({
           ...formatted,
-          original_lang_code: m.original_lang_code,
-          release_date: m.release_date,
+          id: item.id,
+          title,
+          release_date: relDate,
+          original_lang_code: item.original_lang_code,
+          release_category: item.release_category,
+          industry_name: item.industry_name,
+          media_type: item.resolved_media_type,
         });
       }
     }
 
-    // Sort by release_date ascending (nearest release first)
+    // Sort by release date ascending (nearest release first)
     return unique.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
   } catch (err) {
-    console.error('fetchUpcomingIndianMovies error:', err);
+    console.error('fetchUpcomingReleases error:', err);
     return [];
   }
 };
+
+export const fetchUpcomingIndianMovies = fetchUpcomingReleases;

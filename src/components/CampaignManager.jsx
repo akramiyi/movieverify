@@ -25,7 +25,7 @@ import {
   ListFilter,
 } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
-import { fetchUpcomingIndianMovies } from '../hooks/useTMDB';
+import { fetchUpcomingReleases, fetchUpcomingIndianMovies } from '../hooks/useTMDB';
 
 export const isCampaignCompleted = (c) => {
   if (!c) return false;
@@ -40,6 +40,15 @@ export const isCampaignQueued = (c) => {
   if (isCampaignCompleted(c)) return false;
   return c.status === 'scheduled' || c.status === 'queued' || c.status === 'processing';
 };
+
+export const RELEASE_CATEGORIES = [
+  { id: 'all', label: 'All Releases', sub: 'Movies & Series', icon: '🌟' },
+  { id: 'south_movie', label: 'South Movies', sub: 'Telugu, Tamil, etc.', icon: '🎬', color: 'text-amber-400 bg-amber-500/15 border-amber-500/30' },
+  { id: 'bollywood_movie', label: 'Bollywood Movies', sub: 'Hindi Cinema', icon: '🎬', color: 'text-orange-400 bg-orange-500/15 border-orange-500/30' },
+  { id: 'hollywood_movie', label: 'Hollywood Movies', sub: 'English Cinema', icon: '🎬', color: 'text-blue-400 bg-blue-500/15 border-blue-500/30' },
+  { id: 'hindi_series', label: 'Hindi Web Series', sub: 'Indian OTT Series', icon: '📺', color: 'text-purple-400 bg-purple-500/15 border-purple-500/30' },
+  { id: 'hollywood_series', label: 'Hollywood Web Series', sub: 'Global OTT Series', icon: '📺', color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' },
+];
 
 export const INDIAN_LANGUAGES = [
   { code: 'all', label: 'All South & Bollywood', sub: 'Te, Ta, Ml, Kn, Hi' },
@@ -96,10 +105,10 @@ export default function CampaignManager({ initialView = 'form' }) {
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'queue' | 'sent'
   const [trackerSearch, setTrackerSearch] = useState('');
 
-  // Upcoming South & Indian Movie Scanner State
+  // Upcoming Movies & Series Scanner State
   const [upcomingMovies, setUpcomingMovies] = useState([]);
   const [scannerLoading, setScannerLoading] = useState(false);
-  const [scannerLangFilter, setScannerLangFilter] = useState('all');
+  const [scannerCategoryFilter, setScannerCategoryFilter] = useState('all');
   const [scannerHorizonFilter, setScannerHorizonFilter] = useState('all');
   const [scannerSearch, setScannerSearch] = useState('');
   const [schedulingMovieId, setSchedulingMovieId] = useState(null);
@@ -372,11 +381,11 @@ export default function CampaignManager({ initialView = 'form' }) {
     }
   };
 
-  // Auto-Scanner: Load upcoming South Indian and Bollywood releases
+  // Auto-Scanner: Load upcoming South, Bollywood, Hollywood movies & Web Series
   const loadUpcomingMovies = async () => {
     setScannerLoading(true);
     try {
-      const movies = await fetchUpcomingIndianMovies();
+      const movies = await fetchUpcomingReleases();
       setUpcomingMovies(movies || []);
     } catch (err) {
       console.warn('Failed to load upcoming movies:', err.message);
@@ -391,16 +400,16 @@ export default function CampaignManager({ initialView = 'form' }) {
     }
   }, [activeView]);
 
-  const handleAutoScheduleMovie = async (movie) => {
-    if (!movie) return;
-    setSchedulingMovieId(movie.id);
+  const handleAutoScheduleMovie = async (item) => {
+    if (!item) return;
+    setSchedulingMovieId(item.id);
     setActionStatus({ type: '', message: '' });
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Admin session required.');
 
-      const releaseDate = movie.release_date || new Date().toISOString().split('T')[0];
+      const releaseDate = item.release_date || new Date().toISOString().split('T')[0];
       const todayStr = new Date().toISOString().split('T')[0];
       const isTodayOrPast = releaseDate <= todayStr;
 
@@ -410,23 +419,28 @@ export default function CampaignManager({ initialView = 'form' }) {
         scheduledForIso = Number.isNaN(scheduleDate.getTime()) ? null : scheduleDate.toISOString();
       }
 
-      const langInfo = INDIAN_LANGUAGES.find((l) => l.code === movie.original_lang_code);
-      const langLabel = langInfo ? `${langInfo.label} (${langInfo.sub})` : 'Movie';
+      const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
+      const catInfo = RELEASE_CATEGORIES.find((c) => c.id === item.release_category);
+      const catLabel = catInfo ? catInfo.label : (isTv ? 'Web Series' : 'Movie');
+      const titleEmoji = isTv ? '📺' : '🎬';
+      const actionText = isTv ? 'Streaming' : 'Releasing';
+      const alertHeader = isTv ? 'New Web Series Alert' : 'Big Screen Alert';
 
       const campaignPayload = {
-        title: `🎬 ${movie.title} - Releasing ${isTodayOrPast ? 'Today!' : 'Soon'}`,
-        body: `Big screen alert! ${movie.title} (${langLabel}) is scheduled for release on ${releaseDate}. Add it to your watchlist now to verify and watch instantly!`,
-        category: 'movie_release',
+        title: `${titleEmoji} ${item.title} - ${actionText} ${isTodayOrPast ? 'Today!' : 'Soon'}`,
+        body: `${alertHeader}: ${item.title} (${catLabel}) is scheduled for ${isTv ? 'streaming' : 'theatrical release'} on ${releaseDate}. Add it to your watchlist now to verify and watch instantly!`,
+        category: isTv ? 'content_update' : 'movie_release',
         target_criteria: {
           type: 'all',
-          movie_id: String(movie.id),
-          tmdb_id: String(movie.id),
+          movie_id: String(item.id),
+          series_id: String(item.id),
+          tmdb_id: String(item.id),
         },
         url: '/',
-        image_url: movie.backdrop_path
-          ? `https://image.tmdb.org/t/p/w780${movie.backdrop_path}`
-          : movie.poster_path
-          ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+        image_url: item.backdrop_path
+          ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}`
+          : item.poster_path
+          ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
           : null,
         scheduled_for: scheduledForIso,
         is_draft: false,
@@ -448,7 +462,7 @@ export default function CampaignManager({ initialView = 'form' }) {
 
       setActionStatus({
         type: 'success',
-        message: `Auto-scheduled "${movie.title}" release notification for ${releaseDate}!`,
+        message: `Auto-scheduled "${item.title}" ${isTv ? 'web series' : 'movie'} alert for ${releaseDate}!`,
       });
       fetchCampaigns();
     } catch (err) {
@@ -472,6 +486,7 @@ export default function CampaignManager({ initialView = 'form' }) {
           !campaigns.some(
             (c) =>
               c.target_criteria?.movie_id === String(m.id) ||
+              c.target_criteria?.series_id === String(m.id) ||
               c.title?.toLowerCase().includes(m.title.toLowerCase())
           )
       );
@@ -484,8 +499,8 @@ export default function CampaignManager({ initialView = 'form' }) {
       }
 
       let scheduledCount = 0;
-      for (const movie of targetList) {
-        const releaseDate = movie.release_date || new Date().toISOString().split('T')[0];
+      for (const item of targetList) {
+        const releaseDate = item.release_date || new Date().toISOString().split('T')[0];
         const todayStr = new Date().toISOString().split('T')[0];
         const isTodayOrPast = releaseDate <= todayStr;
         let scheduledForIso = null;
@@ -494,23 +509,28 @@ export default function CampaignManager({ initialView = 'form' }) {
           scheduledForIso = Number.isNaN(scheduleDate.getTime()) ? null : scheduleDate.toISOString();
         }
 
-        const langInfo = INDIAN_LANGUAGES.find((l) => l.code === movie.original_lang_code);
-        const langLabel = langInfo ? `${langInfo.label} (${langInfo.sub})` : 'Movie';
+        const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
+        const catInfo = RELEASE_CATEGORIES.find((c) => c.id === item.release_category);
+        const catLabel = catInfo ? catInfo.label : (isTv ? 'Web Series' : 'Movie');
+        const titleEmoji = isTv ? '📺' : '🎬';
+        const actionText = isTv ? 'Streaming' : 'Releasing';
+        const alertHeader = isTv ? 'New Web Series Alert' : 'Big Screen Alert';
 
         const campaignPayload = {
-          title: `🎬 ${movie.title} - Releasing ${isTodayOrPast ? 'Today!' : 'Soon'}`,
-          body: `Big screen alert! ${movie.title} (${langLabel}) is scheduled for release on ${releaseDate}. Add it to your watchlist now to verify and watch instantly!`,
-          category: 'movie_release',
+          title: `${titleEmoji} ${item.title} - ${actionText} ${isTodayOrPast ? 'Today!' : 'Soon'}`,
+          body: `${alertHeader}: ${item.title} (${catLabel}) is scheduled for ${isTv ? 'streaming' : 'theatrical release'} on ${releaseDate}. Add it to your watchlist now to verify and watch instantly!`,
+          category: isTv ? 'content_update' : 'movie_release',
           target_criteria: {
             type: 'all',
-            movie_id: String(movie.id),
-            tmdb_id: String(movie.id),
+            movie_id: String(item.id),
+            series_id: String(item.id),
+            tmdb_id: String(item.id),
           },
           url: '/',
-          image_url: movie.backdrop_path
-            ? `https://image.tmdb.org/t/p/w780${movie.backdrop_path}`
-            : movie.poster_path
-            ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+          image_url: item.backdrop_path
+            ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}`
+            : item.poster_path
+            ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
             : null,
           scheduled_for: scheduledForIso,
           is_draft: false,
@@ -532,7 +552,7 @@ export default function CampaignManager({ initialView = 'form' }) {
 
       setActionStatus({
         type: 'success',
-        message: `Batch schedule completed! ${scheduledCount} upcoming South & Indian release notification(s) scheduled.`,
+        message: `Batch schedule completed! ${scheduledCount} upcoming release notification(s) scheduled.`,
       });
       fetchCampaigns();
     } catch (err) {
@@ -722,13 +742,13 @@ export default function CampaignManager({ initialView = 'form' }) {
     });
   }, [campaigns, categoryFilter, dayFilter, customDate, statusFilter, trackerSearch]);
 
-  // Filtered upcoming Indian and South movies
+  // Filtered upcoming Movies and Web Series
   const filteredUpcomingMovies = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     return upcomingMovies.filter((m) => {
-      if (scannerLangFilter !== 'all' && m.original_lang_code !== scannerLangFilter) {
+      if (scannerCategoryFilter !== 'all' && m.release_category !== scannerCategoryFilter) {
         return false;
       }
 
@@ -746,7 +766,7 @@ export default function CampaignManager({ initialView = 'form' }) {
 
       return true;
     });
-  }, [upcomingMovies, scannerLangFilter, scannerHorizonFilter, scannerSearch]);
+  }, [upcomingMovies, scannerCategoryFilter, scannerHorizonFilter, scannerSearch]);
 
   return (
     <div className="space-y-6">
@@ -794,9 +814,9 @@ export default function CampaignManager({ initialView = 'form' }) {
             }`}
           >
             <Film className="w-3.5 h-3.5 text-rose-400" />
-            <span>🎬 South & Indian Release Scanner</span>
+            <span>🎬 Upcoming Releases Radar</span>
             <span className="bg-rose-500/30 text-rose-300 px-2 py-0.2 rounded-full text-[10px] font-black border border-rose-500/40">
-              Live Radar
+              Live TMDB
             </span>
           </button>
         </div>
@@ -1740,7 +1760,7 @@ export default function CampaignManager({ initialView = 'form' }) {
       ) : null}
 
       {/* ========================================================================= */}
-      {/* VIEW C: AUTO-SCAN UPCOMING SOUTH & BOLLYWOOD RELEASES                     */}
+      {/* VIEW C: AUTO-SCAN UPCOMING MOVIES & WEB SERIES                            */}
       {/* ========================================================================= */}
       {activeView === 'scanner' ? (
         <div className="space-y-6 animate-in fade-in duration-300">
@@ -1753,12 +1773,12 @@ export default function CampaignManager({ initialView = 'form' }) {
                   <Film className="w-4 h-4" />
                   <span>TMDB Live Release Radar</span>
                   <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px]">
-                    South & Bollywood
+                    Movies & Web Series
                   </span>
                 </div>
-                <h3 className="text-xl font-black text-white">Upcoming Movie Release Auto-Scanner</h3>
+                <h3 className="text-xl font-black text-white">Upcoming Releases Auto-Scanner</h3>
                 <p className="text-xs text-gray-300 mt-1 max-w-xl">
-                  Automatically scans upcoming Telugu, Tamil, Malayalam, Kannada, and Hindi cinema releases.
+                  Automatically scans upcoming South Indian, Bollywood, Hollywood movies, and Hindi & Hollywood web series.
                   One-click auto-schedule push notifications for user devices on their exact release dates.
                 </p>
               </div>
@@ -1769,7 +1789,7 @@ export default function CampaignManager({ initialView = 'form' }) {
                   onClick={() => handleBatchScheduleTop(5)}
                   disabled={batchScheduling || scannerLoading}
                   className="px-4 py-2 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-                  title="Automatically schedule release notifications for the top 5 unscheduled upcoming movies"
+                  title="Automatically schedule release notifications for the top 5 unscheduled upcoming titles"
                 >
                   <Sparkles className={`w-3.5 h-3.5 ${batchScheduling ? 'animate-spin' : ''}`} />
                   <span>{batchScheduling ? 'Scheduling Top 5...' : '⚡ Auto-Schedule Top 5 Releases'}</span>
@@ -1791,25 +1811,28 @@ export default function CampaignManager({ initialView = 'form' }) {
 
           {/* Filters Bar */}
           <div className="glass-card rounded-2xl p-5 shadow-xl space-y-4">
-            {/* Language Selection */}
+            {/* Category / Industry Selection */}
             <div className="space-y-2">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                Filter By Language / Cinema Industry:
+                Filter By Industry / Release Category:
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                {INDIAN_LANGUAGES.map((l) => (
+                {RELEASE_CATEGORIES.map((cat) => (
                   <button
-                    key={l.code}
+                    key={cat.id}
                     type="button"
-                    onClick={() => setScannerLangFilter(l.code)}
+                    onClick={() => setScannerCategoryFilter(cat.id)}
                     className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      scannerLangFilter === l.code
+                      scannerCategoryFilter === cat.id
                         ? 'bg-white/15 border-white/40 text-white shadow-lg ring-1 ring-white/30 scale-[1.02]'
                         : 'bg-[#141414] border-white/5 text-gray-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    <div className="text-xs font-bold leading-tight">{l.label}</div>
-                    <div className="text-[10px] text-gray-500">{l.sub}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">{cat.icon}</span>
+                      <span className="text-xs font-bold leading-tight truncate">{cat.label}</span>
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5 truncate">{cat.sub}</div>
                   </button>
                 ))}
               </div>
@@ -1843,10 +1866,10 @@ export default function CampaignManager({ initialView = 'form' }) {
                 <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search upcoming movie..."
+                  placeholder="Search movie or web series..."
                   value={scannerSearch}
                   onChange={(e) => setScannerSearch(e.target.value)}
-                  className="bg-[#141414] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-rose-500 w-48 sm:w-60"
+                  className="bg-[#141414] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-rose-500 w-48 sm:w-64"
                 />
               </div>
             </div>
@@ -1856,20 +1879,20 @@ export default function CampaignManager({ initialView = 'form' }) {
           {scannerLoading ? (
             <div className="glass-card rounded-2xl p-16 text-center space-y-3">
               <Loader2 className="w-10 h-10 text-rose-500 animate-spin mx-auto" />
-              <h4 className="text-white font-bold text-sm">Scanning Upcoming Indian & South Movie Releases...</h4>
-              <p className="text-xs text-gray-400">Querying TMDB for latest Telugu, Tamil, Malayalam, Kannada & Hindi release dates.</p>
+              <h4 className="text-white font-bold text-sm">Scanning Upcoming Movies & Web Series Releases...</h4>
+              <p className="text-xs text-gray-400">Querying TMDB for South Indian, Bollywood, Hollywood & Web Series schedules.</p>
             </div>
           ) : filteredUpcomingMovies.length === 0 ? (
             <div className="glass-card rounded-2xl p-12 text-center space-y-3">
               <Film className="w-10 h-10 text-gray-600 mx-auto" />
-              <h4 className="text-white font-bold text-sm">No Upcoming Movies Found</h4>
+              <h4 className="text-white font-bold text-sm">No Upcoming Releases Found</h4>
               <p className="text-xs text-gray-400 max-w-md mx-auto">
-                No upcoming releases match your selected filters. Try switching the language filter or resetting search.
+                No upcoming releases match your selected category. Try switching the category filter or resetting search.
               </p>
               <button
                 type="button"
                 onClick={() => {
-                  setScannerLangFilter('all');
+                  setScannerCategoryFilter('all');
                   setScannerHorizonFilter('all');
                   setScannerSearch('');
                 }}
@@ -1880,33 +1903,35 @@ export default function CampaignManager({ initialView = 'form' }) {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredUpcomingMovies.map((movie) => {
-                const langInfo = INDIAN_LANGUAGES.find((l) => l.code === movie.original_lang_code);
-                const countdown = getMovieReleaseCountdown(movie.release_date);
+              {filteredUpcomingMovies.map((item) => {
+                const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
+                const catInfo = RELEASE_CATEGORIES.find((c) => c.id === item.release_category);
+                const countdown = getMovieReleaseCountdown(item.release_date);
                 const existingCampaign = campaigns.find(
                   (c) =>
-                    c.target_criteria?.movie_id === String(movie.id) ||
-                    c.title?.toLowerCase().includes(movie.title.toLowerCase())
+                    c.target_criteria?.movie_id === String(item.id) ||
+                    c.target_criteria?.series_id === String(item.id) ||
+                    c.title?.toLowerCase().includes(item.title.toLowerCase())
                 );
                 const isAlreadyScheduled = Boolean(existingCampaign);
                 const isAlreadySent = existingCampaign && isCampaignCompleted(existingCampaign);
 
                 return (
                   <div
-                    key={movie.id}
+                    key={`${item.media_type || 'movie'}_${item.id}`}
                     className="glass-card rounded-2xl overflow-hidden border border-white/10 hover:border-white/25 transition-all flex flex-col justify-between group hover:-translate-y-1 shadow-xl"
                   >
                     <div>
                       {/* Movie Backdrop / Poster Image */}
                       <div className="relative aspect-video bg-black/50 overflow-hidden">
-                        {movie.backdrop_path || movie.poster_path ? (
+                        {item.backdrop_path || item.poster_path ? (
                           <img
                             src={
-                              movie.backdrop_path
-                                ? `https://image.tmdb.org/t/p/w500${movie.backdrop_path}`
-                                : `https://image.tmdb.org/t/p/w300${movie.poster_path}`
+                              item.backdrop_path
+                                ? `https://image.tmdb.org/t/p/w500${item.backdrop_path}`
+                                : `https://image.tmdb.org/t/p/w300${item.poster_path}`
                             }
-                            alt={movie.title}
+                            alt={item.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                             loading="lazy"
                           />
@@ -1919,14 +1944,19 @@ export default function CampaignManager({ initialView = 'form' }) {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
 
                         {/* Top Badges */}
-                        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1">
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md border ${
-                              langInfo?.color || 'text-gray-300 bg-white/10 border-white/20'
-                            }`}
-                          >
-                            {langInfo ? `${langInfo.label}` : movie.original_lang_code}
-                          </span>
+                        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md border ${
+                                catInfo?.color || 'text-gray-300 bg-white/10 border-white/20'
+                              }`}
+                            >
+                              {catInfo ? catInfo.label : item.industry_name || 'Release'}
+                            </span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full backdrop-blur-md bg-black/60 text-gray-300 border border-white/10">
+                              {isTv ? '📺 Series' : '🎬 Movie'}
+                            </span>
+                          </div>
 
                           {countdown && (
                             <span
@@ -1945,11 +1975,11 @@ export default function CampaignManager({ initialView = 'form' }) {
                         <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-white text-[11px] font-medium">
                           <span className="flex items-center gap-1 font-mono">
                             <Calendar className="w-3 h-3 text-amber-400" />
-                            {movie.release_date}
+                            {item.release_date}
                           </span>
-                          {movie.vote_average > 0 && (
+                          {item.vote_average > 0 && (
                             <span className="text-amber-400 font-bold">
-                              ★ {Number(movie.vote_average).toFixed(1)}
+                              ★ {Number(item.vote_average).toFixed(1)}
                             </span>
                           )}
                         </div>
@@ -1958,10 +1988,10 @@ export default function CampaignManager({ initialView = 'form' }) {
                       {/* Content Body */}
                       <div className="p-4 space-y-2">
                         <h4 className="text-white font-bold text-sm leading-snug line-clamp-1 group-hover:text-rose-400 transition">
-                          {movie.title}
+                          {item.title}
                         </h4>
                         <p className="text-gray-400 text-xs line-clamp-2 leading-relaxed">
-                          {movie.overview || 'Upcoming South Indian theatrical / OTT release.'}
+                          {item.overview || `Upcoming ${catInfo ? catInfo.label : 'entertainment'} release.`}
                         </p>
                       </div>
                     </div>
@@ -1990,13 +2020,17 @@ export default function CampaignManager({ initialView = 'form' }) {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => handleAutoScheduleMovie(movie)}
-                          disabled={schedulingMovieId === movie.id}
+                          onClick={() => handleAutoScheduleMovie(item)}
+                          disabled={schedulingMovieId === item.id}
                           className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
-                          <Zap className={`w-3.5 h-3.5 ${schedulingMovieId === movie.id ? 'animate-spin' : ''}`} />
+                          <Zap className={`w-3.5 h-3.5 ${schedulingMovieId === item.id ? 'animate-spin' : ''}`} />
                           <span>
-                            {schedulingMovieId === movie.id ? 'Scheduling...' : '⚡ Auto-Schedule Release Alert'}
+                            {schedulingMovieId === item.id
+                              ? 'Scheduling...'
+                              : isTv
+                              ? '⚡ Auto-Schedule Series Alert'
+                              : '⚡ Auto-Schedule Movie Alert'}
                           </span>
                         </button>
                       )}
