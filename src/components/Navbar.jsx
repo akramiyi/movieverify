@@ -378,26 +378,32 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
           
           <LiveTime />
 
-          {/* Telegram Movie Bot Link */}
+          {/* Telegram Movie Bot Link (Matching Telegram QR Center Animated Badge) */}
           <a
             href="https://t.me/movieverify_bot"
             target="_blank"
             rel="noopener noreferrer"
-            className="relative group text-[#229ED9] hover:text-[#38bdf8] transition-all duration-300 p-1 rounded-full hover:bg-white/10 flex items-center justify-center cursor-pointer"
+            className="relative group flex items-center justify-center p-0.5 rounded-full cursor-pointer select-none transition-transform duration-300 hover:scale-105"
             title="Movie Find ⚡ Bot (@movieverify_bot)"
-            aria-label="Movie Find Telegram Bot"
+            aria-label="Open Telegram Movie Bot"
           >
-            {/* Active Cyan Radar Pulse */}
-            <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#229ED9] opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#229ED9]" />
-            </span>
-            <svg 
-              className="w-5 h-5 md:w-6 md:h-6 fill-current transition-transform duration-300 group-hover:scale-115 group-hover:-rotate-12 drop-shadow-[0_0_8px_rgba(34,158,217,0.6)]" 
-              viewBox="0 0 24 24"
-            >
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.75 3.98-1.73 6.64-2.87 7.97-3.44 3.8-1.58 4.59-1.86 5.11-1.87.11 0 .37.03.54.17.14.12.18.28.2.45-.02.07-.02.19-.04.34z"/>
-            </svg>
+            {/* Circular badge with rotating radar ray matching Telegram QR center */}
+            <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#0a0a0c] overflow-hidden flex items-center justify-center border border-white/20 shadow-[0_0_12px_rgba(0,0,0,0.85)] group-hover:border-[#229ED9] group-hover:shadow-[0_0_18px_rgba(34,158,217,0.7)] transition-all duration-300">
+              {/* Rotating Luminous Beam */}
+              <div 
+                className="absolute inset-[-100%] pointer-events-none animate-[spin_3s_linear_infinite]"
+                style={{
+                  background: 'conic-gradient(from 0deg, transparent 0deg, transparent 150deg, rgba(255,255,255,0.18) 175deg, rgba(255,255,255,0.85) 180deg, rgba(255,255,255,0.18) 185deg, transparent 210deg, transparent 330deg, rgba(34,158,217,0.4) 355deg, rgba(255,255,255,0.85) 360deg)'
+                }}
+              />
+              {/* Telegram Paper Plane Icon */}
+              <svg 
+                className="relative z-10 w-3.5 h-3.5 sm:w-4 sm:h-4 text-white fill-current transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" 
+                viewBox="0 0 24 24"
+              >
+                <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+              </svg>
+            </div>
           </a>
 
           <button 
@@ -624,12 +630,20 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#229ED9] border border-[#229ED9]/30 transition group mt-1"
+            className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-[#229ED9]/15 text-gray-200 hover:text-white border border-white/10 hover:border-[#229ED9]/40 transition group mt-1"
           >
             <div className="flex items-center gap-2.5">
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.75 3.98-1.73 6.64-2.87 7.97-3.44 3.8-1.58 4.59-1.86 5.11-1.87.11 0 .37.03.54.17.14.12.18.28.2.45-.02.07-.02.19-.04.34z"/>
-              </svg>
+              <div className="relative w-6 h-6 rounded-full bg-[#0a0a0c] overflow-hidden flex items-center justify-center border border-white/20 shadow-md">
+                <div 
+                  className="absolute inset-[-100%] pointer-events-none animate-[spin_3s_linear_infinite]"
+                  style={{
+                    background: 'conic-gradient(from 0deg, transparent 0deg, transparent 150deg, rgba(255,255,255,0.18) 175deg, rgba(255,255,255,0.85) 180deg, rgba(255,255,255,0.18) 185deg, transparent 210deg, transparent 330deg, rgba(34,158,217,0.4) 355deg, rgba(255,255,255,0.85) 360deg)'
+                  }}
+                />
+                <svg className="relative z-10 w-3 h-3 text-white fill-current" viewBox="0 0 24 24">
+                  <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+                </svg>
+              </div>
               <span className="font-bold text-white text-xs">Movie Find ⚡ Bot</span>
             </div>
             <span className="text-[10px] font-bold text-[#229ED9] group-hover:translate-x-0.5 transition">
