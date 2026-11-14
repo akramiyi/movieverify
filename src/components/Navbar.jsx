@@ -378,27 +378,20 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
           
           <LiveTime />
 
-          {/* Telegram Movie Bot Link (Matching Telegram QR Center Animated Badge) */}
+          {/* Telegram Movie Bot Link (Circular White Badge with Looping Scale-Pulse Heartbeat Animation) */}
           <a
             href="https://t.me/movieverify_bot"
             target="_blank"
             rel="noopener noreferrer"
-            className="relative group flex items-center justify-center p-0.5 rounded-full cursor-pointer select-none transition-transform duration-300 hover:scale-105"
+            className="relative group flex items-center justify-center p-0.5 cursor-pointer select-none"
             title="Movie Find ⚡ Bot (@movieverify_bot)"
             aria-label="Open Telegram Movie Bot"
           >
-            {/* Circular badge with rotating radar ray matching Telegram QR center */}
-            <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#0a0a0c] overflow-hidden flex items-center justify-center border border-white/20 shadow-[0_0_12px_rgba(0,0,0,0.85)] group-hover:border-[#229ED9] group-hover:shadow-[0_0_18px_rgba(34,158,217,0.7)] transition-all duration-300">
-              {/* Rotating Luminous Beam */}
-              <div 
-                className="absolute inset-[-100%] pointer-events-none animate-[spin_3s_linear_infinite]"
-                style={{
-                  background: 'conic-gradient(from 0deg, transparent 0deg, transparent 150deg, rgba(255,255,255,0.18) 175deg, rgba(255,255,255,0.85) 180deg, rgba(255,255,255,0.18) 185deg, transparent 210deg, transparent 330deg, rgba(34,158,217,0.4) 355deg, rgba(255,255,255,0.85) 360deg)'
-                }}
-              />
-              {/* Telegram Paper Plane Icon */}
+            {/* Clean Centered Circular White Background Badge with Looping Scale-Pulse */}
+            <div className="animate-telegram-scale-pulse relative w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white flex items-center justify-center shadow-[0_0_12px_rgba(255,255,255,0.45)] group-hover:shadow-[0_0_20px_rgba(255,255,255,0.85)] transition-shadow">
+              {/* Black Telegram Paper-Airplane Vector SVG */}
               <svg 
-                className="relative z-10 w-3.5 h-3.5 sm:w-4 sm:h-4 text-white fill-current transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" 
+                className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-black fill-current -translate-x-[0.5px] translate-y-[0.5px] transition-transform duration-200 group-hover:scale-110" 
                 viewBox="0 0 24 24"
               >
                 <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
@@ -630,23 +623,17 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-[#229ED9]/15 text-gray-200 hover:text-white border border-white/10 hover:border-[#229ED9]/40 transition group mt-1"
+            className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/10 text-gray-200 hover:text-white border border-white/10 transition group mt-1"
           >
             <div className="flex items-center gap-2.5">
-              <div className="relative w-6 h-6 rounded-full bg-[#0a0a0c] overflow-hidden flex items-center justify-center border border-white/20 shadow-md">
-                <div 
-                  className="absolute inset-[-100%] pointer-events-none animate-[spin_3s_linear_infinite]"
-                  style={{
-                    background: 'conic-gradient(from 0deg, transparent 0deg, transparent 150deg, rgba(255,255,255,0.18) 175deg, rgba(255,255,255,0.85) 180deg, rgba(255,255,255,0.18) 185deg, transparent 210deg, transparent 330deg, rgba(34,158,217,0.4) 355deg, rgba(255,255,255,0.85) 360deg)'
-                  }}
-                />
-                <svg className="relative z-10 w-3 h-3 text-white fill-current" viewBox="0 0 24 24">
+              <div className="animate-telegram-scale-pulse relative w-6 h-6 rounded-full bg-white flex items-center justify-center shadow-md">
+                <svg className="w-3.5 h-3.5 text-black fill-current -translate-x-[0.5px] translate-y-[0.5px]" viewBox="0 0 24 24">
                   <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
                 </svg>
               </div>
               <span className="font-bold text-white text-xs">Movie Find ⚡ Bot</span>
             </div>
-            <span className="text-[10px] font-bold text-[#229ED9] group-hover:translate-x-0.5 transition">
+            <span className="text-[10px] font-bold text-gray-300 group-hover:text-white group-hover:translate-x-0.5 transition">
               @movieverify_bot →
             </span>
           </a>
