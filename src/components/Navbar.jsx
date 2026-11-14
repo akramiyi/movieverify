@@ -304,6 +304,13 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
               Movies
             </button>
             <button 
+              onClick={() => { setActiveTab('releases'); onSearch(''); }}
+              className={`transition flex items-center gap-1.5 ${activeTab === 'releases' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              <span>Today Releases</span>
+            </button>
+            <button 
               onClick={() => { setActiveTab('popular'); onSearch(''); }}
               className={`transition ${activeTab === 'popular' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
             >
@@ -536,6 +543,13 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
             className={`text-left transition ${activeTab === 'movies' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
           >
             Movies
+          </button>
+          <button 
+            onClick={() => { setActiveTab('releases'); onSearch(''); setIsMobileMenuOpen(false); }}
+            className={`text-left transition flex items-center gap-2 ${activeTab === 'releases' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+          >
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+            <span>Today Releases</span>
           </button>
           <button 
             onClick={() => { setActiveTab('popular'); onSearch(''); setIsMobileMenuOpen(false); }}

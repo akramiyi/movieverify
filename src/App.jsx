@@ -21,6 +21,7 @@ import Toast from './components/Toast';
 import { useLatestIndiaRelease } from './hooks/useLatestIndiaRelease';
 import InstallPWA from './components/InstallPWA';
 import NotificationPrompt from './components/NotificationPrompt';
+import TodayReleasesView from './components/TodayReleasesView';
 import ActorsRow from './components/ActorsRow';
 import { actors } from './data/actors';
 import { useRecentlyViewed } from './hooks/useRecentlyViewed';
@@ -825,6 +826,10 @@ function App() {
                 ))}
               </div>
             </div>
+          ) : activeTab === 'releases' ? (
+            <TodayReleasesView
+              onRequireAuth={() => setShowAuthModal(true)}
+            />
           ) : (
             <>
               <FeaturedCarousel

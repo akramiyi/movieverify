@@ -14,8 +14,11 @@ import {
   Video,
   ExternalLink,
   ChevronRight,
+  Bell,
+  Share2,
 } from 'lucide-react';
 import { fetchTMDBDetails } from '../hooks/useTMDB';
+import { useSubscriptions } from '../hooks/useSubscriptions';
 
 const getYouTubeKey = (url) => {
   if (!url) return null;
@@ -27,8 +30,8 @@ export default function UpcomingReleaseModal({
   item,
   isOpen,
   onClose,
-  onAutoSchedule,
-  onCustomize,
+  onAutoSchedule = null,
+  onCustomize = null,
   existingCampaign = null,
   isScheduling = false,
 }) {
@@ -42,6 +45,41 @@ export default function UpcomingReleaseModal({
   });
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isPlayingTrailer, setIsPlayingTrailer] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
+
+  const { isMovieNotifying, toggleMovieNotify } = useSubscriptions();
+  const isNotifying = item ? isMovieNotifying(item) : false;
+
+  const handleToggleNotify = async () => {
+    if (!item) return;
+    setSubscribing(true);
+    try {
+      await toggleMovieNotify(item);
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!item) return;
+    const shareUrl = `${window.location.origin}/?type=${isTv ? 'tv' : 'movie'}&id=${item.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: item.title,
+          text: `Check out ${item.title} releasing on ${item.release_date}!`,
+          url: shareUrl,
+        });
+        return;
+      } catch {}
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2000);
+    } catch {}
+  };
 
   useEffect(() => {
     if (!isOpen || !item) {
@@ -290,73 +328,135 @@ export default function UpcomingReleaseModal({
             </div>
           )}
 
-          {/* Admin Campaign Actions Card */}
-          <div className="bg-gradient-to-br from-rose-950/30 via-black/40 to-amber-950/30 border border-rose-500/25 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xl">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Admin Notification Dispatcher
-                </h4>
+          {/* Conditional Action Card: Admin Dispatcher OR User Subscription Card */}
+          {onAutoSchedule ? (
+            <div className="bg-gradient-to-br from-rose-950/30 via-black/40 to-amber-950/30 border border-rose-500/25 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xl">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Admin Notification Dispatcher
+                  </h4>
+                </div>
+                {isAlreadyScheduled && (
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    ⏳ In Queue
+                  </span>
+                )}
+                {isAlreadySent && (
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    ✅ Sent
+                  </span>
+                )}
               </div>
-              {isAlreadyScheduled && (
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  ⏳ In Queue
-                </span>
-              )}
-              {isAlreadySent && (
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  ✅ Sent
-                </span>
-              )}
+
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Dispatch a push notification to subscribers for this release. You can schedule it with 1-click for release day at 09:00 AM, or customize the title and target audience.
+              </p>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
+                {isAlreadySent ? (
+                  <div className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Notification Already Dispatched to Users</span>
+                  </div>
+                ) : isAlreadyScheduled ? (
+                  <div className="flex-1 py-2.5 px-4 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-amber-400" />
+                      <span>Scheduled in Queue for Release Day</span>
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-normal font-mono">
+                      9:00 AM
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onAutoSchedule(item)}
+                    disabled={isScheduling}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold shadow-lg shadow-rose-600/20 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Zap className={`w-4 h-4 ${isScheduling ? 'animate-spin' : ''}`} />
+                    <span>
+                      {isScheduling ? 'Scheduling Notification...' : '⚡ 1-Click Auto-Schedule Alert'}
+                    </span>
+                  </button>
+                )}
+
+                {onCustomize && (
+                  <button
+                    type="button"
+                    onClick={() => onCustomize(item)}
+                    className="py-2.5 px-4 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-white text-xs font-bold border border-white/15 transition flex items-center justify-center gap-2 cursor-pointer"
+                    title="Open Campaign Dispatcher with this movie pre-filled"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Customize & Send</span>
+                  </button>
+                )}
+              </div>
             </div>
-
-            <p className="text-xs text-gray-400 leading-relaxed">
-              Dispatch a push notification to subscribers for this release. You can schedule it with 1-click for release day at 09:00 AM, or customize the title and target audience.
-            </p>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
-              {isAlreadySent ? (
-                <div className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Notification Already Dispatched to Users</span>
-                </div>
-              ) : isAlreadyScheduled ? (
-                <div className="flex-1 py-2.5 px-4 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-amber-400" />
-                    <span>Scheduled in Queue for Release Day</span>
+          ) : (
+            <div className="bg-gradient-to-br from-rose-950/20 via-black/40 to-amber-950/20 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xl">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Bell className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Get Release Notifications</span>
+                </span>
+                {countdown && (
+                  <span className="text-[11px] font-bold text-amber-400 font-mono">
+                    {countdown.text}
                   </span>
-                  <span className="text-[10px] text-gray-400 font-normal font-mono">
-                    9:00 AM
-                  </span>
-                </div>
-              ) : (
+                )}
+              </div>
+
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Never miss this premiere! Subscribe to get instant push notifications on your device as soon as verified links and streams go live.
+              </p>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => onAutoSchedule(item)}
-                  disabled={isScheduling}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold shadow-lg shadow-rose-600/20 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  onClick={handleToggleNotify}
+                  disabled={subscribing}
+                  className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs shadow-lg transition flex items-center justify-center gap-2 cursor-pointer ${
+                    isNotifying
+                      ? 'bg-rose-600 text-white shadow-rose-600/30 border border-rose-500'
+                      : 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
+                  }`}
                 >
-                  <Zap className={`w-4 h-4 ${isScheduling ? 'animate-spin' : ''}`} />
+                  <Bell className={`w-4 h-4 ${isNotifying ? 'fill-white text-white' : ''}`} />
                   <span>
-                    {isScheduling ? 'Scheduling Notification...' : '⚡ 1-Click Auto-Schedule Alert'}
+                    {subscribing
+                      ? 'Updating...'
+                      : isNotifying
+                      ? 'Subscribed! We will alert you'
+                      : '🔔 Notify Me on Release'}
                   </span>
                 </button>
-              )}
 
-              <button
-                type="button"
-                onClick={() => onCustomize(item)}
-                className="py-2.5 px-4 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-white text-xs font-bold border border-white/15 transition flex items-center justify-center gap-2 cursor-pointer"
-                title="Open Campaign Dispatcher with this movie pre-filled"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-                <span>Customize & Send</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="py-2.5 px-4 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-white text-xs font-bold border border-white/15 transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {copiedShare ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-300">Link Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Share Release</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Modal Footer */}
@@ -376,3 +476,4 @@ export default function UpcomingReleaseModal({
     </div>
   );
 }
+
