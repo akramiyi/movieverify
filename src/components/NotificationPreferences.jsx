@@ -613,12 +613,12 @@ export default function NotificationPreferences({ onClose }) {
             <div className="flex items-center justify-between pt-2 border-t border-white/10">
               <span className="text-xs text-gray-300 font-medium">Max daily push alerts</span>
               <select
-                value={preferences.max_daily_push || 5}
+                value={preferences.max_daily_push || 50}
                 disabled={updatingField === 'max_daily_push'}
                 onChange={(e) =>
                   updateCanonicalPreferences({ max_daily_push: Number(e.target.value) }, 'max_daily_push')
                 }
-                className="bg-[#141414] border border-white/15 rounded-lg px-2.5 py-1 text-white text-xs"
+                className="bg-[#141414] border border-white/15 rounded-lg px-2.5 py-1 text-white text-xs cursor-pointer"
               >
                 {[1, 3, 5, 10, 20, 50].map((val) => (
                   <option key={val} value={val}>

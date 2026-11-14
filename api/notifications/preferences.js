@@ -54,7 +54,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   quiet_hours_start: null,
   quiet_hours_end: null,
   quiet_hours_tz: 'UTC',
-  max_daily_push: 5,
+  max_daily_push: 50,
 });
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;

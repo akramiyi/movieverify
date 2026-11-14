@@ -225,7 +225,7 @@ export default function CampaignManager({ initialView = 'form' }) {
           msg += ` • ${inAppCount} inbox alert(s).`;
         }
         if (suppressedCount > 0) {
-          msg += ` ⚠️ ${suppressedCount} device(s) reached daily limit (5/day). Increase limit in Preferences to receive more.`;
+          msg += ` ⚠️ ${suppressedCount} device(s) reached daily limit (50/day). Increase limit in Preferences to receive more.`;
         }
         if (pushCount === 0 && suppressedCount === 0) {
           msg += ` ⚠️ No active push devices found for this target. Verify push is enabled in browser.`;

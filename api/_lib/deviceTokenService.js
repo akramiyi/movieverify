@@ -79,7 +79,7 @@ async function seedUserPreferencesSafely(supabase, userId) {
             notify_system: true,
             channel_in_app: true,
             channel_push: true,
-            max_daily_push: 20,
+            max_daily_push: 50,
           },
           { onConflict: 'user_id', ignoreDuplicates: true }
         );
