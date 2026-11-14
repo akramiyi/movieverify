@@ -378,6 +378,28 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
           
           <LiveTime />
 
+          {/* Telegram Movie Bot Link */}
+          <a
+            href="https://t.me/movieverify_bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="relative group text-[#229ED9] hover:text-[#38bdf8] transition-all duration-300 p-1 rounded-full hover:bg-white/10 flex items-center justify-center cursor-pointer"
+            title="Movie Find ⚡ Bot (@movieverify_bot)"
+            aria-label="Movie Find Telegram Bot"
+          >
+            {/* Active Cyan Radar Pulse */}
+            <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#229ED9] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#229ED9]" />
+            </span>
+            <svg 
+              className="w-5 h-5 md:w-6 md:h-6 fill-current transition-transform duration-300 group-hover:scale-115 group-hover:-rotate-12 drop-shadow-[0_0_8px_rgba(34,158,217,0.6)]" 
+              viewBox="0 0 24 24"
+            >
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.75 3.98-1.73 6.64-2.87 7.97-3.44 3.8-1.58 4.59-1.86 5.11-1.87.11 0 .37.03.54.17.14.12.18.28.2.45-.02.07-.02.19-.04.34z"/>
+            </svg>
+          </a>
+
           <button 
             onClick={onHistoryClick}
             className="text-white hidden sm:block hover:text-[#E50914] transition"
@@ -595,6 +617,25 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
           >
             My List
           </button>
+
+          {/* Mobile Telegram Bot Row */}
+          <a
+            href="https://t.me/movieverify_bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#229ED9] border border-[#229ED9]/30 transition group mt-1"
+          >
+            <div className="flex items-center gap-2.5">
+              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.75 3.98-1.73 6.64-2.87 7.97-3.44 3.8-1.58 4.59-1.86 5.11-1.87.11 0 .37.03.54.17.14.12.18.28.2.45-.02.07-.02.19-.04.34z"/>
+              </svg>
+              <span className="font-bold text-white text-xs">Movie Find ⚡ Bot</span>
+            </div>
+            <span className="text-[10px] font-bold text-[#229ED9] group-hover:translate-x-0.5 transition">
+              @movieverify_bot →
+            </span>
+          </a>
 
           {/* Mobile Auth Quick Row */}
           <div className="pt-3 mt-1 border-t border-white/10 flex items-center justify-between">
