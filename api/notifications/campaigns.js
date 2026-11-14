@@ -30,6 +30,7 @@ import {
   promoteDueScheduledCampaigns,
   promoteDueScheduledCampaignsFallback,
 } from '../_lib/scheduledCampaignService.js';
+import { getSupabaseServerClient } from '../_lib/supabaseServer.js';
 
 const MAX_BODY_BYTES = 64 * 1024; // 64 KB
 
@@ -139,6 +140,23 @@ export default async function handler(req, res, customDependencies = {}) {
   // Allows authorized admins to immediately promote due scheduled campaigns and trigger
   // a dispatch cycle without having to wait hours for background cron queues.
   if (method === 'POST' && (body.action === 'dispatch_due' || body.action === 'dispatch_now')) {
+    if (body.campaign_id) {
+      try {
+        const supabaseServer = customSupabase || getSupabaseServerClient();
+        if (typeof supabaseServer?.from === 'function') {
+          await supabaseServer
+            .from('notification_campaigns')
+            .update({
+              scheduled_for: new Date().toISOString(),
+              status: 'scheduled',
+            })
+            .eq('id', body.campaign_id);
+        }
+      } catch (updErr) {
+        console.warn('[Campaigns] Server advance scheduled_for error:', updErr.message);
+      }
+    }
+
     let promoResult = { promoted_count: 0, campaigns: [] };
     let promoError = null;
     try {

@@ -130,6 +130,21 @@ export async function promoteDueScheduledCampaignsFallback(customSupabase = null
         if (!insertErr) {
           deliveryCount = deliveryRows.length;
         }
+
+        // Also populate in-app user notifications for registered recipients
+        const userEndpoints = endpoints.filter((ep) => ep.user_id);
+        if (userEndpoints.length > 0) {
+          const userRows = userEndpoints.map((ep) => ({
+            user_id: ep.user_id,
+            campaign_id: campaign.id,
+            title: campaign.title,
+            body: campaign.body,
+            category: campaign.category || 'movie_release',
+            url: campaign.url || '/',
+            is_read: false,
+          }));
+          await supabase.from('user_notifications').insert(userRows).catch(() => {});
+        }
       }
 
       await supabase
