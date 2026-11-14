@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight, Calendar } from 'lucide-react';
+import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight, Calendar, RotateCcw } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, fetchMovieOrTVById, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
@@ -341,6 +341,92 @@ const AdminPanel = ({ onClose }) => {
       setLockMessage({
         type: 'error',
         text: `Network error saving access key: ${e.message}`
+      });
+    } finally {
+      setLockKeyUpdating(false);
+    }
+  };
+
+  const handleResetLockKey = async () => {
+    if (!window.confirm('Are you sure you want to reset the access key? The old password will be erased, the site will be unlocked, and you can set a brand new password.')) {
+      return;
+    }
+
+    setLockKeyUpdating(true);
+    setLockMessage(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      let handled = false;
+
+      if (token) {
+        try {
+          const res = await fetch('/api/site-lock/verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ action: 'reset' })
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.success) {
+            setHasLockKey(false);
+            setSiteLockStatus(false);
+            setLockKeyInput('');
+            handled = true;
+            setLockMessage({
+              type: 'success',
+              text: '🔄 Purana password reset ho gaya! Ab aap yahan naya password daal kar save kar sakte hain.'
+            });
+            sessionStorage.removeItem('movieverify_unlocked');
+            localStorage.removeItem('movieverify_site_unlocked');
+            const inputEl = document.getElementById('site-lock-key-input');
+            if (inputEl) inputEl.focus();
+          } else {
+            setLockMessage({
+              type: 'error',
+              text: data.error || 'Failed to reset access key.'
+            });
+            handled = true;
+          }
+        } catch (fetchErr) {
+          console.warn('[SiteLock] Reset network error:', fetchErr.message);
+        }
+      }
+
+      // Fallback
+      if (!handled) {
+        const { error } = await supabase
+          .from('site_settings')
+          .update({ lock_password: '', is_locked: false, updated_at: new Date().toISOString() })
+          .eq('id', 1);
+
+        if (!error) {
+          setHasLockKey(false);
+          setSiteLockStatus(false);
+          setLockKeyInput('');
+          setLockMessage({
+            type: 'success',
+            text: '🔄 Purana password reset ho gaya! Ab aap yahan naya password daal kar save kar sakte hain.'
+          });
+          sessionStorage.removeItem('movieverify_unlocked');
+          localStorage.removeItem('movieverify_site_unlocked');
+          const inputEl = document.getElementById('site-lock-key-input');
+          if (inputEl) inputEl.focus();
+        } else {
+          setLockMessage({
+            type: 'error',
+            text: `Failed to reset key: ${error.message}`
+          });
+        }
+      }
+    } catch (e) {
+      setLockMessage({
+        type: 'error',
+        text: `Error resetting key: ${e.message}`
       });
     } finally {
       setLockKeyUpdating(false);
@@ -1358,13 +1444,27 @@ const AdminPanel = ({ onClose }) => {
                   )}
                 </button>
               </div>
-              <p className="text-gray-500 text-[11px]">
-                {siteLockStatus 
-                  ? 'Visitors will need to enter this key to unlock and browse the catalog.' 
-                  : hasLockKey
-                    ? 'Access key is configured. You can toggle lock anytime, or type a new key above to update it.'
-                    : '⚠️ Site lock lagane ke liye pehle yahan access key type karke "Save Key" karein ya seedhe "Lock Site" dabayein.'}
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                <p className="text-gray-500 text-[11px] flex-1">
+                  {siteLockStatus 
+                    ? 'Visitors will need to enter this key to unlock and browse the catalog.' 
+                    : hasLockKey
+                      ? 'Access key is configured. Type a new key above to update, or reset if forgotten.'
+                      : '⚠️ Site lock lagane ke liye pehle yahan access key type karke "Save Key" karein ya seedhe "Lock Site" dabayein.'}
+                </p>
+                {hasLockKey && (
+                  <button
+                    type="button"
+                    onClick={handleResetLockKey}
+                    disabled={lockKeyUpdating || lockToggling}
+                    className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-300 border border-red-800/50 hover:border-red-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer shadow-sm disabled:opacity-50"
+                    title="Password bhool gaye? Yahan se reset karke naya password banayein"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Password</span>
+                  </button>
+                )}
+              </div>
 
               {lockMessage && (
                 <div className={`flex items-center gap-2 p-2.5 rounded text-xs border mt-2 transition ${

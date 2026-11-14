@@ -373,6 +373,30 @@ describe('Site-Lock Verification Suite', () => {
       assert.equal(jsonBody.success, true);
       assert.equal(jsonBody.is_locked, true);
     });
+
+    test('Admin reset action clears access key and unlocks site', async () => {
+      const req = {
+        method: 'POST',
+        headers: { authorization: 'Bearer valid_admin_token' },
+        body: { action: 'reset' }
+      };
+      let status = 0;
+      let jsonBody = null;
+      const res = {
+        setHeader: () => {},
+        end: (data) => { jsonBody = JSON.parse(data); },
+        set statusCode(val) { status = val; }
+      };
+
+      const mockSupabase = createMockSupabaseForAdmin({
+        initialSettings: { is_locked: true, lock_password: 'forgotten_secret' }
+      });
+      await handler(req, res, mockSupabase);
+      assert.equal(status, 200);
+      assert.equal(jsonBody.success, true);
+      assert.equal(jsonBody.is_locked, false);
+      assert.equal(jsonBody.has_password, false);
+    });
   });
 });
 

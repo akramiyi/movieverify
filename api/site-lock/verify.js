@@ -110,8 +110,8 @@ export default async function handler(req, res, customSupabase = null) {
 
   const body = await parseJsonBody(req);
 
-  // 1. Admin Management Action (Lock / Unlock / Set Key via service_role)
-  if (body?.action === 'toggle' || body?.action === 'update' || body?.action === 'status') {
+  // 1. Admin Management Action (Lock / Unlock / Set Key / Reset via service_role)
+  if (body?.action === 'toggle' || body?.action === 'update' || body?.action === 'status' || body?.action === 'reset') {
     const auth = await authenticateRequest(req, customSupabase);
     if (!auth.authenticated || !auth.user) {
       return sendJson(res, 401, { error: auth.error || 'Administrator authentication required.' });
@@ -123,6 +123,37 @@ export default async function handler(req, res, customSupabase = null) {
     }
 
     const supabase = getSupabaseServerClient(customSupabase);
+
+    if (body.action === 'reset') {
+      const resetPayload = {
+        lock_password: '',
+        is_locked: false,
+        updated_at: new Date().toISOString()
+      };
+
+      if (body.lock_password && typeof body.lock_password === 'string' && body.lock_password.trim()) {
+        resetPayload.lock_password = body.lock_password.trim();
+      }
+
+      const { error: resetErr } = await supabase
+        .from('site_settings')
+        .update(resetPayload)
+        .eq('id', 1);
+
+      if (resetErr) {
+        console.error('[SiteLock] Admin reset error:', resetErr.message);
+        return sendJson(res, 500, { error: 'Database reset failed: ' + resetErr.message });
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        is_locked: false,
+        has_password: Boolean(resetPayload.lock_password),
+        message: resetPayload.lock_password
+          ? 'Access key reset and new password set successfully.'
+          : 'Access key reset successfully. Site has been unlocked.'
+      });
+    }
 
     if (body.action === 'status') {
       const { data, error: fetchErr } = await supabase
