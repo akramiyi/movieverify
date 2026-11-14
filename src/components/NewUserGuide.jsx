@@ -1,47 +1,85 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Bell, 
-  Film, 
-  Sparkles, 
-  ChevronRight, 
-  ChevronLeft, 
-  Check, 
-  ExternalLink,
-  Flame,
-  Calendar
-} from 'lucide-react';
-import { usePushNotifications } from '../hooks/usePushNotifications';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { X, ChevronRight, ChevronLeft, Check, Sparkles } from 'lucide-react';
 
 const STORAGE_GUIDE_SEEN_KEY = 'movieverify_new_user_guide_completed';
-const STORAGE_PUSH_DISMISSED_KEY = 'movieverify_push_prompt_dismissed';
 
-export const NewUserGuide = ({ 
-  isOpen = false, 
-  onClose, 
-  onNotificationSubscribeSuccess 
-}) => {
-  const [step, setStep] = useState(1);
-  const { isSupported, permission, isSubscribed, isLoading, subscribe } = usePushNotifications();
-  const [subscribeStatus, setSubscribeStatus] = useState(null); // 'success' | 'error' | null
+const TOUR_STEPS = [
+  {
+    id: 'telegram',
+    selector: '#tour-telegram-bot',
+    badge: '1 of 3 • Telegram Bot',
+    title: 'Movie Find ⚡ on Telegram',
+    description: 'Telegram par direct movies search karne, download links paane aur updates ke liye is icon par tap karein (@movieverify_bot).',
+    actionText: 'Next →',
+    color: '#229ED9',
+  },
+  {
+    id: 'notification',
+    selector: '#tour-notification-bell',
+    badge: '2 of 3 • Release Alerts',
+    title: 'Release Alerts Turn On Karein 🔔',
+    description: 'Nayi Bollywood, South aur Hollywood OTT movies aate hi sabse pehle alert paane ke liye is Bell icon par tap karein.',
+    actionText: 'Next →',
+    color: '#E50914',
+  },
+  {
+    id: 'today-releases',
+    selector: '#tour-today-releases',
+    badge: '3 of 3 • Live Releases',
+    title: 'Today Releases Tracker 🎬',
+    description: 'Aaj release hone wali movies & web series ke live trailers aur verified 1080p download links yahan se dekhein.',
+    actionText: 'Got It ✓',
+    color: '#f43f5e',
+  },
+];
 
-  // Keyboard navigation & escape listener
+export const NewUserGuide = ({ isOpen = false, onClose }) => {
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [targetRect, setTargetRect] = useState(null);
+  const resizeRaf = useRef(null);
+
+  const step = TOUR_STEPS[currentStepIndex];
+
+  const updatePosition = useCallback(() => {
+    if (!step) return;
+    const el = document.querySelector(step.selector);
+    if (el && el.offsetParent !== null) {
+      const rect = el.getBoundingClientRect();
+      setTargetRect({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+        bottom: rect.bottom,
+        centerX: rect.left + rect.width / 2,
+      });
+    } else {
+      // If target element is not in DOM or hidden on small screen, skip to next or fallback
+      setTargetRect(null);
+    }
+  }, [step]);
+
   useEffect(() => {
     if (!isOpen) return;
 
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        handleDismiss();
-      } else if (e.key === 'ArrowRight' && step < 3) {
-        setStep(prev => Math.min(3, prev + 1));
-      } else if (e.key === 'ArrowLeft' && step > 1) {
-        setStep(prev => Math.max(1, prev - 1));
-      }
+    // Small delay to ensure DOM and navbar are fully painted
+    const timer = setTimeout(updatePosition, 100);
+
+    const onScrollOrResize = () => {
+      cancelAnimationFrame(resizeRaf.current);
+      resizeRaf.current = requestAnimationFrame(updatePosition);
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, step]);
+    window.addEventListener('resize', onScrollOrResize, { passive: true });
+    window.addEventListener('scroll', onScrollOrResize, { passive: true });
+
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(resizeRaf.current);
+      window.removeEventListener('resize', onScrollOrResize);
+      window.removeEventListener('scroll', onScrollOrResize);
+    };
+  }, [isOpen, updatePosition, currentStepIndex]);
 
   if (!isOpen) return null;
 
@@ -54,291 +92,155 @@ export const NewUserGuide = ({
     }
   };
 
-  const handleEnableAlerts = async () => {
-    try {
-      const res = await subscribe();
-      if (res?.success) {
-        setSubscribeStatus('success');
-        try {
-          localStorage.setItem(STORAGE_PUSH_DISMISSED_KEY, 'true');
-        } catch {}
-        if (typeof onNotificationSubscribeSuccess === 'function') {
-          onNotificationSubscribeSuccess();
-        }
-      } else {
-        setSubscribeStatus('error');
-      }
-    } catch {
-      setSubscribeStatus('error');
+  const handleNext = () => {
+    if (currentStepIndex < TOUR_STEPS.length - 1) {
+      setCurrentStepIndex((prev) => prev + 1);
+    } else {
+      handleDismiss();
     }
   };
 
+  const handleBack = () => {
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex((prev) => prev - 1);
+    }
+  };
+
+  // Calculate safe horizontal alignment for tooltip card
+  const tooltipWidth = 300;
+  let tooltipLeft = targetRect ? targetRect.centerX - tooltipWidth / 2 : window.innerWidth / 2 - tooltipWidth / 2;
+  const padding = 16;
+  if (tooltipLeft < padding) tooltipLeft = padding;
+  if (tooltipLeft + tooltipWidth > window.innerWidth - padding) {
+    tooltipLeft = window.innerWidth - tooltipWidth - padding;
+  }
+
+  // Calculate arrow horizontal position relative to tooltip card
+  const arrowLeft = targetRect
+    ? Math.max(20, Math.min(tooltipWidth - 20, targetRect.centerX - tooltipLeft))
+    : tooltipWidth / 2;
+
+  const tooltipTop = targetRect ? targetRect.bottom + 18 : 100;
+
   return (
-    <div 
-      className="fixed inset-0 z-[150] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in duration-200"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) handleDismiss();
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="guide-title"
+    <aside 
+      aria-label="Interactive Feature Tour"
+      className="fixed inset-0 z-[150] pointer-events-auto"
     >
-      {/* Modal Card */}
-      <div className="relative w-full max-w-md bg-[#111116] border border-white/10 rounded-3xl p-6 sm:p-7 shadow-[0_0_50px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-        
-        {/* Ambient Top Glows */}
-        <div className="absolute -top-16 -left-16 w-36 h-36 bg-red-600/25 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -top-16 -right-16 w-36 h-36 bg-[#229ED9]/25 rounded-full blur-3xl pointer-events-none" />
+      {/* Dimmed Background Overlay */}
+      <div 
+        onClick={handleDismiss}
+        className="absolute inset-0 bg-black/55 backdrop-blur-[2px] transition-opacity duration-300" 
+      />
 
-        {/* Top Header: Badge, Step Indicator & Close */}
-        <div className="flex items-center justify-between pb-3.5 border-b border-white/5 relative z-10">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-[#E50914] text-[11px] font-bold uppercase tracking-wider">
-              <Sparkles className="w-3 h-3" /> Quick Guide
-            </span>
-            <span className="text-xs font-semibold text-gray-400">
-              Step {step} of 3
-            </span>
-          </div>
+      {/* Target Highlight Spotlight Ring */}
+      {targetRect && (
+        <div
+          style={{
+            top: `${targetRect.top - 5}px`,
+            left: `${targetRect.left - 5}px`,
+            width: `${targetRect.width + 10}px`,
+            height: `${targetRect.height + 10}px`,
+            borderColor: step.color,
+            boxShadow: `0 0 25px ${step.color}99`,
+          }}
+          className="fixed rounded-full border-2 pointer-events-none z-[155] animate-pulse transition-all duration-300"
+        />
+      )}
 
-          <div className="flex items-center gap-2">
+      {/* Tooltip Card with Upward Arrow */}
+      <div
+        style={{
+          top: `${tooltipTop}px`,
+          left: `${tooltipLeft}px`,
+          width: `${tooltipWidth}px`,
+        }}
+        className="fixed z-[160] bg-[#121217]/95 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-[0_12px_40px_rgba(0,0,0,0.95)] animate-in fade-in zoom-in-95 duration-200 select-none"
+      >
+        {/* Animated Bouncing Pointer Arrow pointing directly UP to target element */}
+        <div
+          style={{ left: `${arrowLeft}px` }}
+          className="absolute -top-3 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce"
+        >
+          <div 
+            style={{ borderBottomColor: step.color }}
+            className="w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-b-[12px] filter drop-shadow-[0_-3px_6px_rgba(0,0,0,0.9)]"
+          />
+        </div>
+
+        {/* Card Header */}
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+          <span 
+            style={{ color: step.color, backgroundColor: `${step.color}15`, borderColor: `${step.color}35` }}
+            className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-black uppercase tracking-wider"
+          >
+            <Sparkles className="w-2.5 h-2.5" />
+            {step.badge}
+          </span>
+          <button
+            onClick={handleDismiss}
+            aria-label="Skip tour"
+            className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Card Content */}
+        <div className="space-y-1.5">
+          <h4 className="text-sm font-black text-white leading-snug">
+            {step.title}
+          </h4>
+          <p className="text-xs text-gray-300 leading-relaxed">
+            {step.description}
+          </p>
+        </div>
+
+        {/* Card Footer Controls */}
+        <div className="mt-3.5 pt-2.5 border-t border-white/10 flex items-center justify-between">
+          {currentStepIndex > 0 ? (
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-1 text-[11px] font-bold text-gray-400 hover:text-white py-1 px-2 rounded-lg hover:bg-white/5 transition cursor-pointer"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" /> Back
+            </button>
+          ) : (
             <button
               onClick={handleDismiss}
-              className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded-lg hover:bg-white/5 transition cursor-pointer"
+              className="text-[11px] text-gray-400 hover:text-gray-200 py-1 px-2 cursor-pointer"
             >
               Skip
             </button>
-            <button
-              onClick={handleDismiss}
-              aria-label="Close guide"
-              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* 3-Step Interactive Progress Tabs */}
-        <div className="grid grid-cols-3 gap-1.5 my-4 relative z-10">
-          {[
-            { id: 1, label: '1. Features' },
-            { id: 2, label: '2. Alerts' },
-            { id: 3, label: '3. Telegram' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStep(tab.id)}
-              className={`py-1.5 px-2 rounded-xl text-[11px] font-bold text-center transition-all cursor-pointer ${
-                step === tab.id
-                  ? 'bg-gradient-to-r from-[#E50914] to-red-600 text-white shadow-[0_0_12px_rgba(229,9,20,0.5)]'
-                  : 'bg-white/5 text-gray-400 hover:text-gray-200 hover:bg-white/10'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Step Content */}
-        <div className="min-h-[260px] flex flex-col justify-between relative z-10">
-          
-          {/* STEP 1: Features & Today Releases */}
-          {step === 1 && (
-            <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-right-4 duration-200">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600/30 to-amber-600/20 border border-red-500/30 flex items-center justify-center text-[#E50914] shrink-0">
-                  <Film className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 id="guide-title" className="text-base sm:text-lg font-black text-white leading-tight">
-                    Welcome to MovieVerify 🎬
-                  </h3>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Your hub for fast, verified OTT movies & series.
-                  </p>
-                </div>
-              </div>
-
-              {/* Feature Highlights */}
-              <div className="space-y-2 mt-1 bg-white/[0.03] border border-white/5 rounded-2xl p-3.5">
-                <div className="flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-md bg-red-500/20 text-[#E50914] flex items-center justify-center shrink-0 mt-0.5">
-                    <Calendar className="w-3 h-3" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-white">Today Releases Tracker</p>
-                    <p className="text-[11px] text-gray-400">
-                      Check out the <span className="text-red-400 font-semibold">Today Releases</span> tab in the navbar to catch movies streaming today.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-3 h-3" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-white">1080p & 720p Verified Links</p>
-                    <p className="text-[11px] text-gray-400">
-                      Fast, direct download links tested and verified daily with zero broken links.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-                    <Flame className="w-3 h-3" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-white">Official Trailers & Cast Details</p>
-                    <p className="text-[11px] text-gray-400">
-                      Watch YouTube trailers directly before downloading and browse films by your favorite actors.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
           )}
 
-          {/* STEP 2: Release Alerts & Notifications */}
-          {step === 2 && (
-            <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-right-4 duration-200">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600/30 to-purple-600/20 border border-red-500/30 flex items-center justify-center text-[#E50914] shrink-0">
-                  <Bell className="w-6 h-6 animate-bounce" />
-                </div>
-                <div>
-                  <h3 id="guide-title" className="text-base sm:text-lg font-black text-white leading-tight">
-                    Never Miss a Release 🔔
-                  </h3>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Instant alerts for OTT drops & trending titles.
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3.5 space-y-2 mt-1">
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  Turn on <span className="text-white font-bold">Release Alerts</span> to receive instant browser notifications when new Bollywood, South, or Hollywood films arrive.
-                </p>
-                <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                  <span>100% free • Zero spam • Easily managed in Notification Center</span>
-                </div>
-              </div>
-
-              {/* In-Guide Subscribe Action */}
-              <div className="mt-1">
-                {isSubscribed || subscribeStatus === 'success' ? (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
-                    <Check className="w-4 h-4 text-emerald-400" />
-                    <span>Release alerts are active on this device!</span>
-                  </div>
-                ) : permission === 'denied' ? (
-                  <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs leading-relaxed">
-                    Browser notifications are currently blocked. You can still check alerts anytime using the <span className="font-bold text-white">Bell (🔔)</span> icon in the navbar.
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleEnableAlerts}
-                    disabled={isLoading}
-                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#E50914] to-red-700 hover:from-red-600 hover:to-[#E50914] text-white text-xs font-bold shadow-[0_0_15px_rgba(229,9,20,0.4)] flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
-                  >
-                    <Bell className="w-4 h-4 text-white" />
-                    <span>{isLoading ? 'Enabling Alerts...' : 'Allow Release Alerts'}</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: Telegram Movie Bot */}
-          {step === 3 && (
-            <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-right-4 duration-200">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#229ED9]/20 border border-[#229ED9]/30 flex items-center justify-center text-[#229ED9] shrink-0">
-                  {/* Telegram paper plane with subtle pulse */}
-                  <svg className="w-6 h-6 animate-telegram-scale-pulse fill-current text-[#229ED9]" viewBox="0 0 24 24">
-                    <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
-                  </svg>
-                </div>
-                <div>
-                  <h3 id="guide-title" className="text-base sm:text-lg font-black text-white leading-tight">
-                    Movie Find ⚡ on Telegram
-                  </h3>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Official Bot: <span className="text-[#229ED9] font-bold">@movieverify_bot</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3.5 space-y-2 mt-1">
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  Search movies, get fast download links, and receive upcoming release updates directly inside your Telegram app!
-                </p>
-                <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#229ED9]"></span>
-                  <span>Direct links • Always online • Also accessible via the navbar icon</span>
-                </div>
-              </div>
-
-              {/* Telegram Button */}
-              <a
-                href="https://t.me/movieverify_bot"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#229ED9] to-[#1d82b4] hover:from-[#2bb0f0] hover:to-[#229ED9] text-white text-xs font-bold shadow-[0_0_15px_rgba(34,158,217,0.4)] flex items-center justify-center gap-2 transition group mt-1"
-              >
-                <svg className="w-4 h-4 fill-current text-white" viewBox="0 0 24 24">
-                  <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
-                </svg>
-                <span>Open Telegram Bot (@movieverify_bot)</span>
-                <ExternalLink className="w-3.5 h-3.5 opacity-80 group-hover:translate-x-0.5 transition" />
-              </a>
-            </div>
-          )}
-
-          {/* Bottom Navigation Buttons */}
-          <div className="pt-4 mt-4 border-t border-white/10 flex items-center justify-between">
-            {step > 1 ? (
-              <button
-                onClick={() => setStep(prev => prev - 1)}
-                className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/5 transition cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" /> Back
-              </button>
-            ) : (
-              <button
-                onClick={handleDismiss}
-                className="text-xs text-gray-400 hover:text-gray-200 px-3 py-1.5 cursor-pointer"
-              >
-                Skip Tour
-              </button>
-            )}
-
-            {step < 3 ? (
-              <button
-                onClick={() => setStep(prev => prev + 1)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-gray-100 text-black text-xs font-bold rounded-xl transition shadow-md cursor-pointer"
-              >
-                Next <ChevronRight className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                onClick={handleDismiss}
-                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#E50914] to-red-600 hover:from-red-600 hover:to-[#E50914] text-white text-xs font-bold rounded-xl transition shadow-[0_0_15px_rgba(229,9,20,0.5)] cursor-pointer"
-              >
-                Start Exploring ✓
-              </button>
-            )}
+          {/* Dots Indicator */}
+          <div className="flex items-center gap-1">
+            {TOUR_STEPS.map((_, idx) => (
+              <span
+                key={idx}
+                className={`w-1.5 h-1.5 rounded-full transition-all ${
+                  idx === currentStepIndex ? 'w-4 bg-white' : 'bg-white/20'
+                }`}
+              />
+            ))}
           </div>
 
+          <button
+            onClick={handleNext}
+            style={{
+              background: currentStepIndex === TOUR_STEPS.length - 1
+                ? 'linear-gradient(to right, #E50914, #b80710)'
+                : step.color,
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-white text-[11px] font-bold shadow-md hover:brightness-110 active:scale-95 transition cursor-pointer"
+          >
+            <span>{step.actionText}</span>
+          </button>
         </div>
-
       </div>
-    </div>
+    </aside>
   );
 };
 
 export default NewUserGuide;
-

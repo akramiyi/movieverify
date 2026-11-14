@@ -314,6 +314,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
               Movies
             </button>
             <button 
+              id="tour-today-releases"
               type="button"
               onClick={() => handleTabSelect('releases')}
               className={`transition-all duration-300 flex items-center gap-1.5 px-3 py-1 rounded-full group cursor-pointer ${
@@ -380,6 +381,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
 
           {/* Telegram Movie Bot Link (Pure Telegram Logo with Floating + Scaling Pulse Animation) */}
           <a
+            id="tour-telegram-bot"
             href="https://t.me/movieverify_bot"
             target="_blank"
             rel="noopener noreferrer"
@@ -404,6 +406,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
           </button>
 
           <button
+            id="tour-notification-bell"
             type="button"
             onClick={() => onNotificationClick && onNotificationClick()}
             aria-label="Open notifications"
