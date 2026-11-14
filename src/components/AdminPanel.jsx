@@ -30,8 +30,8 @@ const AdminLiveClock = () => {
   const epochSec = Math.floor(epochMs / 1000);
 
   return (
-    <div className="flex items-center gap-2 bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-1.5 shadow-sm">
-      <div className="w-7 h-7 rounded-full bg-[#E50914]/15 border border-[#E50914]/30 flex items-center justify-center shrink-0">
+    <div className="flex items-center gap-2.5 bg-black/40 backdrop-blur-xl border border-white/[0.12] rounded-2xl px-3.5 py-1.5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.18),0_4px_12px_rgba(0,0,0,0.5)]">
+      <div className="w-7 h-7 rounded-full bg-[#E50914]/20 border border-[#E50914]/40 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(229,9,20,0.35)]">
         <Clock className="w-3.5 h-3.5 text-[#E50914]" />
       </div>
       <div className="flex flex-col min-w-[135px]">
@@ -60,7 +60,7 @@ const AdminLiveClock = () => {
       <button
         type="button"
         onClick={() => setShowEpoch((prev) => !prev)}
-        className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition border border-white/5 active:scale-95 cursor-pointer ml-1"
+        className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition border border-white/10 active:scale-95 cursor-pointer ml-1 shadow-sm"
         title={showEpoch ? 'Switch to Standard Time' : 'Switch to Epoch Time'}
       >
         <ArrowLeftRight className="w-3.5 h-3.5 text-gray-300 hover:text-[#E50914]" />
@@ -1071,56 +1071,81 @@ const AdminPanel = ({ onClose }) => {
   const lastUpdated = latestUpdatedMovie ? new Date(latestUpdatedMovie.updated_at || latestUpdatedMovie.created_at || 0).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A';
 
   return (
-    <div className="fixed inset-0 z-[150] bg-black/95 flex flex-col p-4 md:p-8 overflow-y-auto backdrop-blur-md">
-      <div className="w-full max-w-4xl mx-auto bg-[#181818] border border-white/10 rounded-lg p-6 md:p-8 shadow-2xl relative mt-12 flex flex-col">
-        
+    <div className="fixed inset-0 z-[150] bg-black/90 flex flex-col p-4 md:p-8 overflow-y-auto backdrop-blur-xl">
+      {/* 3D Glass Ambient Background Lights */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#E50914]/20 rounded-full blur-[140px] animate-pulse" style={{ animationDuration: '6s' }} />
+        <div className="absolute top-1/4 -right-32 w-96 h-96 bg-purple-600/20 rounded-full blur-[140px] animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute -bottom-32 left-1/3 w-96 h-96 bg-amber-500/15 rounded-full blur-[140px] animate-pulse" style={{ animationDuration: '7s' }} />
+      </div>
+
+      <div className="w-full max-w-5xl mx-auto glass-3d rounded-3xl p-6 md:p-8 relative mt-8 md:mt-12 flex flex-col z-10 transition-all">
+        {/* Specular Top Glare */}
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/[0.08] via-white/[0.02] to-transparent rounded-t-3xl pointer-events-none" />
+
         {/* Header Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-6 px-4 md:px-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6 px-2 md:px-0 relative z-10">
           <AdminLiveClock />
           <div className="flex flex-wrap items-center gap-2">
-          <button 
-            onClick={() => setActiveTab(activeTab === 'analytics' ? 'manager' : 'analytics')}
-            className="bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
-          >
-            {activeTab === 'analytics' ? 'Back to Manager' : 'View Analytics'}
-          </button>
-          <button 
-            onClick={() => setActiveTab(activeTab === 'campaigns' ? 'manager' : 'campaigns')}
-            className="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
-          >
-            {activeTab === 'campaigns' ? 'Back to Manager' : 'Campaigns'}
-          </button>
-          <button 
-            onClick={() => setActiveTab(activeTab === 'schedule' ? 'manager' : 'schedule')}
-            className="bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1.5 focus:outline-none"
-            title="View scheduled queue & notification timeline by category and date"
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            {activeTab === 'schedule' ? 'Back to Manager' : 'Schedule Queue'}
-          </button>
-          <button 
-            onClick={() => setActiveTab(activeTab === 'reports' ? 'manager' : 'reports')}
-            className="bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
-          >
-            {activeTab === 'reports' ? 'Back to Manager' : 'View Reports'}
-          </button>
-          <button 
-            onClick={handleLogout}
-            className="bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
-          >
-            <LogOut className="w-3.5 h-3.5" /> Logout
-          </button>
-          <button 
-            onClick={onClose}
-            className="bg-white/10 hover:bg-white/20 text-white transition text-xs font-bold px-4 py-2 rounded-full focus:outline-none"
-          >
-            Close Manager
-          </button>
+            <button 
+              onClick={() => setActiveTab(activeTab === 'analytics' ? 'manager' : 'analytics')}
+              className={`transition-all duration-300 text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border ${
+                activeTab === 'analytics'
+                  ? 'bg-purple-600 text-white border-purple-400/60 shadow-[0_0_20px_rgba(147,51,234,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                  : 'bg-white/[0.05] hover:bg-white/[0.12] text-purple-300 hover:text-white border-white/[0.10] hover:border-purple-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0'
+              }`}
+            >
+              {activeTab === 'analytics' ? 'Back to Manager' : 'View Analytics'}
+            </button>
+            <button 
+              onClick={() => setActiveTab(activeTab === 'campaigns' ? 'manager' : 'campaigns')}
+              className={`transition-all duration-300 text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border ${
+                activeTab === 'campaigns'
+                  ? 'bg-rose-600 text-white border-rose-400/60 shadow-[0_0_20px_rgba(225,29,72,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                  : 'bg-white/[0.05] hover:bg-white/[0.12] text-rose-300 hover:text-white border-white/[0.10] hover:border-rose-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0'
+              }`}
+            >
+              {activeTab === 'campaigns' ? 'Back to Manager' : 'Campaigns'}
+            </button>
+            <button 
+              onClick={() => setActiveTab(activeTab === 'schedule' ? 'manager' : 'schedule')}
+              className={`transition-all duration-300 text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border ${
+                activeTab === 'schedule'
+                  ? 'bg-amber-600 text-white border-amber-400/60 shadow-[0_0_20px_rgba(217,119,6,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                  : 'bg-white/[0.05] hover:bg-white/[0.12] text-amber-300 hover:text-white border-white/[0.10] hover:border-amber-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0'
+              }`}
+              title="View scheduled queue & notification timeline by category and date"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              {activeTab === 'schedule' ? 'Back to Manager' : 'Schedule Queue'}
+            </button>
+            <button 
+              onClick={() => setActiveTab(activeTab === 'reports' ? 'manager' : 'reports')}
+              className={`transition-all duration-300 text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border ${
+                activeTab === 'reports'
+                  ? 'bg-blue-600 text-white border-blue-400/60 shadow-[0_0_20px_rgba(37,99,235,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                  : 'bg-white/[0.05] hover:bg-white/[0.12] text-blue-300 hover:text-white border-white/[0.10] hover:border-blue-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0'
+              }`}
+            >
+              {activeTab === 'reports' ? 'Back to Manager' : 'View Reports'}
+            </button>
+            <button 
+              onClick={handleLogout}
+              className="bg-white/[0.05] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-all text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md border border-white/[0.10] shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Logout
+            </button>
+            <button 
+              onClick={onClose}
+              className="bg-white/10 hover:bg-white/20 text-white transition-all text-xs font-bold px-4 py-2 rounded-full focus:outline-none backdrop-blur-md border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.25)] hover:scale-105 active:scale-95"
+            >
+              Close Manager
+            </button>
           </div>
         </div>
 
         {/* Main Content Area */}
-        <div className="flex flex-col md:flex-row gap-8 w-full">
+        <div className="flex flex-col md:flex-row gap-8 w-full relative z-10">
           {activeTab === 'campaigns' ? (
             <div className="w-full flex-1">
               <CampaignManager initialView="form" />
@@ -1142,26 +1167,26 @@ const AdminPanel = ({ onClose }) => {
               {/* Left Form Panel */}
               <div className="flex-1 space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 text-center">
+            <div className="glass-card rounded-2xl p-4 text-center hover:border-white/20 transition-all hover:-translate-y-0.5">
               <div className="text-3xl font-black text-white">{totalMovies}</div>
-              <div className="text-xs text-gray-400 mt-1">Total Movies</div>
+              <div className="text-xs text-gray-400 mt-1 font-medium">Total Movies</div>
             </div>
-            <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 text-center">
+            <div className="glass-card rounded-2xl p-4 text-center hover:border-red-500/30 transition-all hover:-translate-y-0.5">
               <div className="text-3xl font-black text-[#E50914]">{missing1080p}</div>
-              <div className="text-xs text-gray-400 mt-1">Missing 1080p</div>
+              <div className="text-xs text-gray-400 mt-1 font-medium">Missing 1080p</div>
             </div>
-            <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 text-center">
+            <div className="glass-card rounded-2xl p-4 text-center hover:border-yellow-500/30 transition-all hover:-translate-y-0.5">
               <div className="text-3xl font-black text-yellow-400">{missing720p}</div>
-              <div className="text-xs text-gray-400 mt-1">Missing 720p</div>
+              <div className="text-xs text-gray-400 mt-1 font-medium">Missing 720p</div>
             </div>
-            <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 text-center flex flex-col justify-center">
+            <div className="glass-card rounded-2xl p-4 text-center hover:border-green-500/30 transition-all hover:-translate-y-0.5 flex flex-col justify-center">
               <div className="text-xl font-black text-green-400">{lastUpdated}</div>
-              <div className="text-xs text-gray-400 mt-1">Last Updated</div>
+              <div className="text-xs text-gray-400 mt-1 font-medium">Last Updated</div>
             </div>
           </div>
 
-          <div className={`bg-[#1a1a1a] border rounded-xl p-4 mb-6 transition-all duration-300 ${
-            siteLockStatus ? 'border-red-500/40 bg-gradient-to-r from-red-950/20 via-[#1a1a1a] to-[#1a1a1a]' : 'border-white/5'
+          <div className={`backdrop-blur-xl border rounded-2xl p-4 mb-6 transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${
+            siteLockStatus ? 'border-red-500/50 bg-gradient-to-r from-red-950/40 via-black/40 to-black/40 shadow-[0_0_30px_rgba(239,68,68,0.2)]' : 'border-white/[0.08] bg-white/[0.03]'
           }`}>
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -1228,13 +1253,13 @@ const AdminPanel = ({ onClose }) => {
                       handleSaveLockKey();
                     }
                   }}
-                  className="flex-1 bg-black/50 border border-white/10 rounded px-3 py-2 text-white text-sm outline-none focus:border-[#E50914] transition"
+                  className="flex-1 bg-black/40 backdrop-blur-md border border-white/[0.12] rounded-xl px-3.5 py-2 text-white text-sm outline-none focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]/40 transition shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]"
                 />
                 <button
                   type="button"
                   onClick={handleSaveLockKey}
                   disabled={lockKeyUpdating || lockToggling || !lockKeyInput.trim()}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 text-white rounded text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap"
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap backdrop-blur-md border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] hover:scale-[1.02] active:scale-95 cursor-pointer"
                 >
                   {lockKeyUpdating ? (
                     <>
@@ -1293,13 +1318,13 @@ const AdminPanel = ({ onClose }) => {
                 placeholder="Type movie name to search TMDB..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full bg-black/50 border border-white/10 rounded p-3 pl-10 text-white focus:border-[#E50914] outline-none transition text-sm"
+                className="w-full bg-black/40 backdrop-blur-md border border-white/[0.12] rounded-xl p-3 pl-10 text-white focus:border-[#E50914] focus:ring-2 focus:ring-[#E50914]/20 outline-none transition text-sm shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]"
               />
             </div>
 
             {/* Results Dropdown */}
             {searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 bg-[#222] border border-white/10 rounded-b shadow-2xl z-50 max-h-60 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 bg-[#18181c]/95 backdrop-blur-2xl border border-white/[0.15] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] z-50 max-h-60 overflow-y-auto mt-1 p-1">
                 {searchResults.map(item => (
                   <div 
                     key={item.id}
@@ -1482,44 +1507,44 @@ const AdminPanel = ({ onClose }) => {
             placeholder="Search movies..."
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
-            className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-[#E50914] transition mb-3"
+            className="w-full bg-black/40 backdrop-blur-md border border-white/[0.12] rounded-xl px-4 py-2 text-white text-sm outline-none focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]/40 transition mb-3 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]"
           />
 
           <div className="flex gap-2 mb-3 flex-wrap">
             <button
               onClick={() => setQualityFilter('all')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition ${qualityFilter === 'all' ? 'bg-[#E50914] text-white' : 'bg-[#2a2a2a] text-gray-400 hover:text-white'}`}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer ${qualityFilter === 'all' ? 'bg-[#E50914] text-white shadow-[0_0_12px_rgba(229,9,20,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
             >
               All Movies
             </button>
             <button
               onClick={() => setQualityFilter('missing1080p')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition ${qualityFilter === 'missing1080p' ? 'bg-[#E50914] text-white' : 'bg-[#2a2a2a] text-gray-400 hover:text-white'}`}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer ${qualityFilter === 'missing1080p' ? 'bg-[#E50914] text-white shadow-[0_0_12px_rgba(229,9,20,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
             >
               Missing 1080p
             </button>
             <button
               onClick={() => setQualityFilter('missing720p')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition ${qualityFilter === 'missing720p' ? 'bg-[#E50914] text-white' : 'bg-[#2a2a2a] text-gray-400 hover:text-white'}`}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer ${qualityFilter === 'missing720p' ? 'bg-[#E50914] text-white shadow-[0_0_12px_rgba(229,9,20,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
             >
               Missing 720p
             </button>
             <button
               onClick={() => setQualityFilter('complete')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition ${qualityFilter === 'complete' ? 'bg-green-600 text-white' : 'bg-[#2a2a2a] text-gray-400 hover:text-white'}`}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer ${qualityFilter === 'complete' ? 'bg-emerald-600 text-white shadow-[0_0_12px_rgba(16,185,129,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
             >
               ✓ Complete
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto max-h-[350px] md:max-h-[500px] space-y-3 pr-2">
+          <div className="flex-1 overflow-y-auto max-h-[350px] md:max-h-[500px] space-y-2 pr-2">
             {isLoadingList ? (
               <p className="text-gray-500 text-xs">Loading downloads database...</p>
             ) : filteredSavedMovies.length === 0 ? (
               <p className="text-gray-500 text-xs">No movies match your filters.</p>
             ) : (
               filteredSavedMovies.map(item => (
-                <div key={item.id} className="flex items-center justify-between bg-[#1a1a1a] rounded-lg px-3 py-2 mb-2 group hover:bg-[#242424] transition border border-white/5">
+                <div key={item.id} className="flex items-center justify-between bg-white/[0.03] backdrop-blur-md rounded-xl px-3.5 py-2.5 mb-2 group hover:bg-white/[0.08] transition border border-white/[0.06] hover:border-white/[0.15] shadow-sm">
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium truncate" title={item.title}>
                       {item.title}

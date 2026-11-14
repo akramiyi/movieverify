@@ -510,15 +510,15 @@ export default function CampaignManager({ initialView = 'form' }) {
   return (
     <div className="space-y-6">
       {/* Top View Mode Switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#141414] p-2 rounded-2xl border border-white/10 shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-black/40 backdrop-blur-xl p-2 rounded-2xl border border-white/[0.12] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15),0_8px_20px_rgba(0,0,0,0.5)]">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setActiveView('form')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeView === 'form'
-                ? 'bg-[#E50914] text-white shadow-lg shadow-[#E50914]/30'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                ? 'bg-[#E50914] text-white shadow-[0_0_15px_rgba(229,9,20,0.45),inset_0_1px_0_rgba(255,255,255,0.25)] scale-[1.02]'
+                : 'text-gray-400 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/10'
             }`}
           >
             <Send className="w-3.5 h-3.5" />
@@ -528,16 +528,16 @@ export default function CampaignManager({ initialView = 'form' }) {
           <button
             type="button"
             onClick={() => setActiveView('queue')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeView === 'queue'
-                ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                ? 'bg-amber-600 text-white shadow-[0_0_15px_rgba(217,119,6,0.45),inset_0_1px_0_rgba(255,255,255,0.25)] scale-[1.02]'
+                : 'text-gray-400 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/10'
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
             <span>Scheduled Queue & Category Tracker</span>
             {stats.totalQueued > 0 && (
-              <span className="bg-amber-400 text-black px-2 py-0.2 rounded-full text-[10px] font-black animate-pulse">
+              <span className="bg-amber-400 text-black px-2 py-0.2 rounded-full text-[10px] font-black animate-pulse shadow-sm">
                 {stats.totalQueued}
               </span>
             )}
@@ -548,7 +548,7 @@ export default function CampaignManager({ initialView = 'form' }) {
           type="button"
           onClick={fetchCampaigns}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-xl hover:bg-white/10 border border-white/5 transition"
           title="Refresh campaigns data"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -559,10 +559,10 @@ export default function CampaignManager({ initialView = 'form' }) {
       {/* Global Status Banner */}
       {actionStatus.message && (
         <div
-          className={`p-4 rounded-xl flex items-center gap-3 border shadow-lg ${
+          className={`p-4 rounded-2xl flex items-center gap-3 border shadow-lg backdrop-blur-xl ${
             actionStatus.type === 'success'
-              ? 'bg-emerald-950/50 border-emerald-500/30 text-emerald-200'
-              : 'bg-rose-950/50 border-rose-500/30 text-rose-200'
+              ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
+              : 'bg-rose-950/60 border-rose-500/40 text-rose-200 shadow-[0_0_20px_rgba(244,63,94,0.15)]'
           }`}
         >
           {actionStatus.type === 'success' ? (
@@ -581,7 +581,7 @@ export default function CampaignManager({ initialView = 'form' }) {
         <div className="space-y-6 animate-in fade-in duration-300">
           {/* Header Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-[#1a1a1a] border border-amber-500/20 rounded-2xl p-4 shadow-lg">
+            <div className="glass-card rounded-2xl p-4 shadow-lg border border-amber-500/25 hover:border-amber-500/40 transition-all hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-amber-400 mb-1">
                 <span className="text-xs font-bold uppercase tracking-wider">In Queue</span>
                 <Clock className="w-4 h-4" />
@@ -590,7 +590,7 @@ export default function CampaignManager({ initialView = 'form' }) {
               <div className="text-[11px] text-gray-400 mt-0.5">Scheduled to be sent</div>
             </div>
 
-            <div className="bg-[#1a1a1a] border border-blue-500/20 rounded-2xl p-4 shadow-lg">
+            <div className="glass-card rounded-2xl p-4 shadow-lg border border-blue-500/25 hover:border-blue-500/40 transition-all hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-blue-400 mb-1">
                 <span className="text-xs font-bold uppercase tracking-wider">Due Today</span>
                 <Calendar className="w-4 h-4" />
@@ -599,7 +599,7 @@ export default function CampaignManager({ initialView = 'form' }) {
               <div className="text-[11px] text-gray-400 mt-0.5">Scheduled for today</div>
             </div>
 
-            <div className="bg-[#1a1a1a] border border-purple-500/20 rounded-2xl p-4 shadow-lg">
+            <div className="glass-card rounded-2xl p-4 shadow-lg border border-purple-500/25 hover:border-purple-500/40 transition-all hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-purple-400 mb-1">
                 <span className="text-xs font-bold uppercase tracking-wider">Due Tomorrow</span>
                 <Clock className="w-4 h-4" />
@@ -608,7 +608,7 @@ export default function CampaignManager({ initialView = 'form' }) {
               <div className="text-[11px] text-gray-400 mt-0.5">Scheduled for tomorrow</div>
             </div>
 
-            <div className="bg-[#1a1a1a] border border-emerald-500/20 rounded-2xl p-4 shadow-lg">
+            <div className="glass-card rounded-2xl p-4 shadow-lg border border-emerald-500/25 hover:border-emerald-500/40 transition-all hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-emerald-400 mb-1">
                 <span className="text-xs font-bold uppercase tracking-wider">Dispatched</span>
                 <CheckCircle2 className="w-4 h-4" />
@@ -619,7 +619,7 @@ export default function CampaignManager({ initialView = 'form' }) {
           </div>
 
           {/* Category Selector Pills */}
-          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-5 shadow-xl space-y-3">
+          <div className="glass-card rounded-2xl p-5 shadow-xl space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5 text-[#E50914]" />
@@ -993,7 +993,7 @@ export default function CampaignManager({ initialView = 'form' }) {
           {/* Main Grid: Form & Preview */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Creation Form */}
-            <div className="lg:col-span-2 bg-[#1a1a1a] border border-white/10 rounded-2xl p-6">
+            <div className="lg:col-span-2 glass-card rounded-2xl p-6 shadow-xl">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
                   <Send className="w-5 h-5 text-[#E50914]" />
@@ -1260,14 +1260,14 @@ export default function CampaignManager({ initialView = 'form' }) {
             </div>
 
             {/* Live Preview Card */}
-            <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 flex flex-col justify-between">
+            <div className="glass-card rounded-2xl p-6 flex flex-col justify-between shadow-xl">
               <div>
                 <div className="flex items-center gap-2 text-white font-bold text-sm mb-4">
                   <Eye className="w-4 h-4 text-[#E50914]" />
                   FCM Device Notification Preview
                 </div>
 
-                <div className="bg-[#242424] rounded-2xl p-4 border border-white/10 shadow-xl space-y-3">
+                <div className="bg-black/50 backdrop-blur-md rounded-2xl p-4 border border-white/10 shadow-xl space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-5 h-5 rounded bg-[#E50914] flex items-center justify-center text-white text-[10px] font-black">
@@ -1301,7 +1301,7 @@ export default function CampaignManager({ initialView = 'form' }) {
           </div>
 
           {/* Campaigns History Table */}
-          <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6">
+          <div className="glass-card rounded-2xl p-6 shadow-xl">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Clock className="w-5 h-5 text-[#E50914]" />
