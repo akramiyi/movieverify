@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { Bell, X, Download, Sparkles, Check } from 'lucide-react';
+import { Bell, X, Download, Sparkles, Check, Bookmark } from 'lucide-react';
 import SiteLockScreen from './components/SiteLockScreen';
 import { supabase, getCachedAuthUser } from './data/supabaseClient';
 
@@ -767,6 +767,13 @@ function App() {
     });
   };
 
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+    setSeeAllSection(null);
+    setSearchQuery('');
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, []);
+
   if (showIntro) {
     return <IntroAnimation onComplete={() => setShowIntro(false)} />;
   }
@@ -785,7 +792,7 @@ function App() {
               onSearch={setSearchQuery}
               searchQuery={searchQuery}
               activeTab={activeTab}
-              setActiveTab={setActiveTab}
+              setActiveTab={handleTabChange}
               onProfileClick={handleOpenAuthModal}
               onAdminClick={handleOpenAdmin}
               onHistoryClick={() => setIsHistoryModalOpen(true)}
@@ -826,6 +833,76 @@ function App() {
                 ))}
               </div>
             </div>
+          ) : activeTab === 'mylist' ? (
+            <div className="pt-32 px-4 md:px-12 min-h-[70vh]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-4 border-b border-white/10">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-black text-white flex items-center gap-3">
+                    <span>My List</span>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/10 text-rose-400 border border-white/15">
+                      {myList.length} {myList.length === 1 ? 'title' : 'titles'}
+                    </span>
+                  </h2>
+                  <p className="text-gray-400 text-xs md:text-sm mt-1">
+                    Your personal collection of saved movies, web series, and shows.
+                  </p>
+                </div>
+                {myList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to clear your list?')) {
+                        setMyList([]);
+                        localStorage.removeItem('movieverify_mylist');
+                      }
+                    }}
+                    className="text-xs text-gray-400 hover:text-rose-400 transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+
+              {myList.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center bg-[#18181d]/50 border border-white/10 rounded-3xl p-8 max-w-xl mx-auto shadow-2xl">
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-rose-500 mb-4 shadow-lg">
+                    <Bookmark className="w-8 h-8 opacity-80" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2">Your List is Empty</h3>
+                  <p className="text-gray-400 text-sm max-w-sm mb-6 leading-relaxed">
+                    You haven't added any movies or TV shows to your list yet. Tap the bookmark or plus button on any title to save it here.
+                  </p>
+                  <div className="flex items-center gap-3 flex-wrap justify-center">
+                    <button
+                      type="button"
+                      onClick={() => handleTabChange('home')}
+                      className="px-6 py-2.5 rounded-full bg-[#E50914] hover:bg-rose-700 text-white text-xs font-bold transition shadow-lg cursor-pointer"
+                    >
+                      Browse Movies
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleTabChange('releases')}
+                      className="px-6 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition border border-white/15 cursor-pointer"
+                    >
+                      View Today Releases
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                  {myList.map((movie) => (
+                    <MovieCard
+                      key={movie.id}
+                      movie={movie}
+                      onClick={() => handleMovieSelect(movie)}
+                      myList={myList}
+                      onToggleMyList={toggleMyList}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           ) : activeTab === 'releases' ? (
             <TodayReleasesView
               onRequireAuth={() => setShowAuthModal(true)}
@@ -833,25 +910,38 @@ function App() {
           ) : (
             <>
               <FeaturedCarousel
-                movies={displayFeatured}
+                movies={activeTab === 'tv' && displayWebSeries.length > 0 ? displayWebSeries : displayFeatured}
                 onPlayTrailer={handleMovieSelect}
               />
 
               <div className="relative z-20 pb-10">
-                {/* Render My List row if user has saved items */}
-                {myList.length > 0 && (activeTab === 'home' || activeTab === 'mylist') && (
-                  <MovieRow
-                    title="My List"
-                    movies={myList}
-                    onMovieClick={handleMovieSelect}
-                    isLoading={appLoading}
-                    myList={myList}
-                    onToggleMyList={toggleMyList}
-                    onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })}
-                  />
+                {/* Active Tab Category Pill Header */}
+                {activeTab === 'tv' && (
+                  <div className="px-4 md:px-12 pt-6 pb-2">
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-950/70 border border-purple-500/40 text-purple-300 text-xs font-bold shadow-md">
+                      <span>📺</span>
+                      <span>TV Shows & Web Series</span>
+                    </div>
+                  </div>
+                )}
+                {activeTab === 'movies' && (
+                  <div className="px-4 md:px-12 pt-6 pb-2">
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-950/70 border border-blue-500/40 text-blue-300 text-xs font-bold shadow-md">
+                      <span>🎬</span>
+                      <span>Movies Collection</span>
+                    </div>
+                  </div>
+                )}
+                {activeTab === 'popular' && (
+                  <div className="px-4 md:px-12 pt-6 pb-2">
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-950/70 border border-amber-500/40 text-amber-300 text-xs font-bold shadow-md">
+                      <span>🔥</span>
+                      <span>New & Popular Releases</span>
+                    </div>
+                  </div>
                 )}
 
-                {/* Continue Browsing */}
+                {/* Continue Browsing (all non-empty tabs) */}
                 {recentlyViewed.length > 0 && (
                   <MovieRow
                     title="Continue Browsing"
@@ -863,34 +953,8 @@ function App() {
                   />
                 )}
 
-                {/* Browse by Genre */}
-                <div className="px-4 md:px-12 mb-8 mt-4">
-                  <h2 className="text-sm font-semibold text-[#e5e5e5]
-                                 md:text-2xl mb-4">
-                    Browse by Genre
-                  </h2>
-                  <div className="flex flex-wrap gap-3">
-                    {Object.entries({
-                      action: 'Action', comedy: 'Comedy', drama: 'Drama',
-                      horror: 'Horror', romance: 'Romance', scifi: 'Sci-Fi',
-                      thriller: 'Thriller', animation: 'Animation',
-                      crime: 'Crime', fantasy: 'Fantasy',
-                    }).map(([slug, label]) => (
-                      <button
-                        key={slug}
-                        onClick={() => navigate(`/genre/${slug}`)}
-                        className="px-4 py-2 bg-[#242424] hover:bg-[#E50914]
-                                   text-white text-sm font-medium rounded-full
-                                   transition"
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Download Available Section */}
-                {(activeTab === 'home') && (
+                {/* Download Available Section (Home only) */}
+                {activeTab === 'home' && (
                   (displayDownloadAvailable.length === 0 && !appLoading) ? (
                     <div className="space-y-2 md:space-y-4 mb-8">
                       <h2 className="text-sm font-semibold text-[#e5e5e5] md:text-2xl px-4 md:px-12 flex items-center gap-2">
@@ -925,12 +989,47 @@ function App() {
                   )
                 )}
 
-                {/* Trending Now */}
-                {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
-                  <MovieRow title="Trending Now" movies={displayTrending} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                {/* Web Series Row (TV Shows gets this on top; Home also has it) */}
+                {(activeTab === 'home' || activeTab === 'tv') && (
+                  <MovieRow
+                    title={activeTab === 'tv' ? 'Trending Web Series & TV Shows' : 'Web Series'}
+                    movies={displayWebSeries}
+                    onMovieClick={handleMovieSelect}
+                    isLoading={appLoading}
+                    myList={myList}
+                    onToggleMyList={toggleMyList}
+                    onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })}
+                  />
                 )}
 
-                {latestIndiaPool.length > 0 && (
+                {/* Extra TV Web Series Row for TV tab */}
+                {activeTab === 'tv' && displayWebSeries.length > 3 && (
+                  <MovieRow
+                    title="Popular OTT & Drama Series"
+                    movies={[...displayWebSeries].reverse()}
+                    onMovieClick={handleMovieSelect}
+                    isLoading={appLoading}
+                    myList={myList}
+                    onToggleMyList={toggleMyList}
+                    onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })}
+                  />
+                )}
+
+                {/* Trending Now (Home, Movies, Popular) */}
+                {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
+                  <MovieRow
+                    title={activeTab === 'popular' ? 'Top 10 Trending Now' : 'Trending Now'}
+                    movies={displayTrending}
+                    onMovieClick={handleMovieSelect}
+                    isLoading={appLoading}
+                    myList={myList}
+                    onToggleMyList={toggleMyList}
+                    onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })}
+                  />
+                )}
+
+                {/* India's Latest Releases (Home, Movies, Popular) */}
+                {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && latestIndiaPool.length > 0 && (
                   <MovieRow
                     title="India's Latest Releases (This Week's Pick First)"
                     movies={latestIndiaMovie ? [latestIndiaMovie, ...latestIndiaPool.filter(m => m.id !== latestIndiaMovie.id)] : latestIndiaPool}
@@ -941,6 +1040,29 @@ function App() {
                     onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })}
                   />
                 )}
+
+                {/* Browse by Genre */}
+                <div className="px-4 md:px-12 mb-8 mt-4">
+                  <h2 className="text-sm font-semibold text-[#e5e5e5] md:text-2xl mb-4">
+                    Browse by Genre
+                  </h2>
+                  <div className="flex flex-wrap gap-3">
+                    {Object.entries({
+                      action: 'Action', comedy: 'Comedy', drama: 'Drama',
+                      horror: 'Horror', romance: 'Romance', scifi: 'Sci-Fi',
+                      thriller: 'Thriller', animation: 'Animation',
+                      crime: 'Crime', fantasy: 'Fantasy',
+                    }).map(([slug, label]) => (
+                      <button
+                        key={slug}
+                        onClick={() => navigate(`/genre/${slug}`)}
+                        className="px-4 py-2 bg-[#242424] hover:bg-[#E50914] text-white text-sm font-medium rounded-full transition cursor-pointer"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Popular Actors */}
                 <ActorsRow
@@ -958,24 +1080,24 @@ function App() {
                   onSeeAll={() => navigate('/actresses')}
                 />
 
-                {/* Bollywood Hits */}
+                {/* Bollywood Hits (Home, Movies) */}
                 {(activeTab === 'home' || activeTab === 'movies') && (
                   <MovieRow title="Bollywood Hits" movies={displayBollywood} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
                 )}
 
-                {/* South Indian Action */}
+                {/* South Indian Action (Home, Movies) */}
                 {(activeTab === 'home' || activeTab === 'movies') && (
                   <MovieRow title="South Indian Action" movies={displaySouthIndian} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
                 )}
 
-                {/* Web Series / TV Shows */}
-                {(activeTab === 'home' || activeTab === 'tv') && (
-                  <MovieRow title="Web Series" movies={displayWebSeries} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
-                )}
-
-                {/* Popular Movies */}
+                {/* Popular Movies (Home, Movies, Popular) */}
                 {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
                   <MovieRow title="Popular Movies" movies={displayPopular} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
+                )}
+
+                {/* Extra TV Web Series for Popular tab */}
+                {activeTab === 'popular' && (
+                  <MovieRow title="Top Rated Web Series" movies={displayWebSeries} onMovieClick={handleMovieSelect} isLoading={appLoading} myList={myList} onToggleMyList={toggleMyList} onSeeAll={(title, list) => setSeeAllSection({ title, movies: list })} />
                 )}
               </div>
             </>

@@ -68,6 +68,25 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
     }
   }, [isOpen, movie?.id]);
 
+  // Prevent background scroll bleed when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyOverflowY = document.body.style.overflowY;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.overflowY = 'hidden';
+
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.overflowY = prevBodyOverflowY;
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     setNotifyFeedback(null);
     setIsLiked(false);
@@ -239,7 +258,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[1050] flex items-center justify-center p-4 md:p-0 md:pt-10 overflow-y-auto"
+          className="fixed inset-0 z-[1050] flex items-center justify-center p-4 md:p-0 md:pt-10 overflow-y-auto overscroll-contain"
         >
           {/* Overlay */}
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -250,7 +269,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-4xl bg-[#181818] rounded-xl shadow-2xl z-10 my-8 max-h-[90vh] flex flex-col overflow-hidden"
+            className="relative w-full max-w-4xl bg-[#181818] rounded-xl shadow-2xl z-10 my-8 max-h-[90vh] flex flex-col overflow-hidden overscroll-contain"
           >
             {/* Close Button */}
             <button
@@ -261,7 +280,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
             </button>
 
             {/* Scrollable Content Wrapper */}
-            <div className="overflow-y-auto flex-1 hide-scrollbar">
+            <div className="overflow-y-auto overscroll-contain flex-1 hide-scrollbar">
               {/* Top Banner Area */}
               <div className="relative w-full aspect-video sm:h-[300px] md:h-[440px] flex-none overflow-hidden">
                 <ImageWithFallback

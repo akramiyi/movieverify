@@ -244,6 +244,13 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
     }
   };
 
+  const handleTabSelect = (tab) => {
+    if (setActiveTab) setActiveTab(tab);
+    if (onSearch) onSearch('');
+    setIsMobileMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
   return (
     <nav 
       className={`fixed top-0 w-full z-50 transition-colors duration-500 ease-in-out ${
@@ -263,7 +270,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
           </button>
 
           <div 
-            onClick={() => { setActiveTab('home'); onSearch(''); }}
+            onClick={() => handleTabSelect('home')}
             className="flex items-center gap-1.5 cursor-pointer select-none font-black text-lg md:text-2xl"
           >
             <motion.div 
@@ -284,41 +291,59 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
             </motion.span>
           </div>
           
-          <div className="hidden lg:flex items-center gap-5 text-sm font-medium text-gray-300">
+          <div className="hidden lg:flex items-center gap-4 text-sm font-medium text-gray-300">
             <button 
-              onClick={() => { setActiveTab('home'); onSearch(''); }}
-              className={`transition ${activeTab === 'home' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+              type="button"
+              onClick={() => handleTabSelect('home')}
+              className={`transition cursor-pointer ${activeTab === 'home' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
             >
               Home
             </button>
             <button 
-              onClick={() => { setActiveTab('tv'); onSearch(''); }}
-              className={`transition ${activeTab === 'tv' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+              type="button"
+              onClick={() => handleTabSelect('tv')}
+              className={`transition cursor-pointer ${activeTab === 'tv' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
             >
               TV Shows
             </button>
             <button 
-              onClick={() => { setActiveTab('movies'); onSearch(''); }}
-              className={`transition ${activeTab === 'movies' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+              type="button"
+              onClick={() => handleTabSelect('movies')}
+              className={`transition cursor-pointer ${activeTab === 'movies' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
             >
               Movies
             </button>
             <button 
-              onClick={() => { setActiveTab('releases'); onSearch(''); }}
-              className={`transition flex items-center gap-1.5 ${activeTab === 'releases' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+              type="button"
+              onClick={() => handleTabSelect('releases')}
+              className={`transition-all duration-300 flex items-center gap-2 px-3 py-1 rounded-full group cursor-pointer ${
+                activeTab === 'releases' 
+                  ? 'bg-rose-950/80 text-white font-extrabold border border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.45)]' 
+                  : 'bg-rose-950/30 hover:bg-rose-900/40 text-rose-200 hover:text-white border border-rose-500/40 hover:border-rose-500/70 shadow-[0_0_10px_rgba(244,63,94,0.2)]'
+              }`}
+              title="Today Releases & Release Radar"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-              <span>Today Releases</span>
+              {/* Eye-catching radar ping */}
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-80" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-gradient-to-r from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,1)]" />
+              </span>
+              <span className="tracking-wide">Today Releases</span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-sm animate-pulse">
+                Live
+              </span>
             </button>
             <button 
-              onClick={() => { setActiveTab('popular'); onSearch(''); }}
-              className={`transition ${activeTab === 'popular' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+              type="button"
+              onClick={() => handleTabSelect('popular')}
+              className={`transition cursor-pointer ${activeTab === 'popular' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
             >
               New & Popular
             </button>
             <button 
-              onClick={() => { setActiveTab('mylist'); onSearch(''); }}
-              className={`transition ${activeTab === 'mylist' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+              type="button"
+              onClick={() => handleTabSelect('mylist')}
+              className={`transition cursor-pointer ${activeTab === 'mylist' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
             >
               My List
             </button>
@@ -525,41 +550,59 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
 
       {/* Mobile Menu Dropdown Links */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden bg-[#141414] border-t border-white/10 px-6 py-4 flex flex-col gap-4 text-sm font-medium text-gray-300 transition-all duration-300">
+        <div className="lg:hidden bg-[#141414] border-t border-white/10 px-6 py-4 flex flex-col gap-3 text-sm font-medium text-gray-300 transition-all duration-300">
           <button 
-            onClick={() => { setActiveTab('home'); onSearch(''); setIsMobileMenuOpen(false); }}
-            className={`text-left transition ${activeTab === 'home' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            type="button"
+            onClick={() => handleTabSelect('home')}
+            className={`text-left py-1.5 transition ${activeTab === 'home' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
           >
             Home
           </button>
           <button 
-            onClick={() => { setActiveTab('tv'); onSearch(''); setIsMobileMenuOpen(false); }}
-            className={`text-left transition ${activeTab === 'tv' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            type="button"
+            onClick={() => handleTabSelect('tv')}
+            className={`text-left py-1.5 transition ${activeTab === 'tv' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
           >
             TV Shows
           </button>
           <button 
-            onClick={() => { setActiveTab('movies'); onSearch(''); setIsMobileMenuOpen(false); }}
-            className={`text-left transition ${activeTab === 'movies' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            type="button"
+            onClick={() => handleTabSelect('movies')}
+            className={`text-left py-1.5 transition ${activeTab === 'movies' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
           >
             Movies
           </button>
           <button 
-            onClick={() => { setActiveTab('releases'); onSearch(''); setIsMobileMenuOpen(false); }}
-            className={`text-left transition flex items-center gap-2 ${activeTab === 'releases' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            type="button"
+            onClick={() => handleTabSelect('releases')}
+            className={`text-left transition flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer ${
+              activeTab === 'releases' 
+                ? 'bg-rose-950/80 text-white font-extrabold border border-rose-500 shadow-md' 
+                : 'bg-rose-950/30 text-rose-200 hover:text-white border border-rose-500/35'
+            }`}
           >
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-            <span>Today Releases</span>
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-80" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-gradient-to-r from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,1)]" />
+              </span>
+              <span className="font-bold">Today Releases</span>
+            </div>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-rose-600 text-white animate-pulse">
+              Live
+            </span>
           </button>
           <button 
-            onClick={() => { setActiveTab('popular'); onSearch(''); setIsMobileMenuOpen(false); }}
-            className={`text-left transition ${activeTab === 'popular' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            type="button"
+            onClick={() => handleTabSelect('popular')}
+            className={`text-left py-1.5 transition ${activeTab === 'popular' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
           >
             New & Popular
           </button>
           <button 
-            onClick={() => { setActiveTab('mylist'); onSearch(''); setIsMobileMenuOpen(false); }}
-            className={`text-left transition ${activeTab === 'mylist' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
+            type="button"
+            onClick={() => handleTabSelect('mylist')}
+            className={`text-left py-1.5 transition ${activeTab === 'mylist' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
           >
             My List
           </button>

@@ -420,3 +420,4 @@ export default function TodayReleasesView({ onRequireAuth }) {
     </div>
   );
 }
+

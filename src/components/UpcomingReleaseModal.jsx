@@ -127,6 +127,25 @@ export default function UpcomingReleaseModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  // Prevent background scroll bleed when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyOverflowY = document.body.style.overflowY;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.overflowY = 'hidden';
+
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.overflowY = prevBodyOverflowY;
+    };
+  }, [isOpen]);
+
   if (!isOpen || !item) return null;
 
   const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
@@ -164,11 +183,11 @@ export default function UpcomingReleaseModal({
 
   return (
     <div
-      className="fixed inset-0 z-[250] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
+      className="fixed inset-0 z-[250] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto overscroll-contain animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-2xl bg-[#141419]/95 border border-white/15 rounded-3xl overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] my-auto max-h-[92vh] flex flex-col"
+        className="relative w-full max-w-2xl bg-[#141419]/95 border border-white/15 rounded-3xl overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] my-auto max-h-[92vh] flex flex-col overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Media Banner */}
@@ -258,7 +277,7 @@ export default function UpcomingReleaseModal({
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
+        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto overscroll-contain flex-1">
           {/* Title & Key Specs */}
           <div>
             <div className="flex items-start justify-between gap-3">
