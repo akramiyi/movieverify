@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight } from 'lucide-react';
+import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight, Calendar } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, fetchMovieOrTVById, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
@@ -1091,6 +1091,14 @@ const AdminPanel = ({ onClose }) => {
             {activeTab === 'campaigns' ? 'Back to Manager' : 'Campaigns'}
           </button>
           <button 
+            onClick={() => setActiveTab(activeTab === 'schedule' ? 'manager' : 'schedule')}
+            className="bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1.5 focus:outline-none"
+            title="View scheduled queue & notification timeline by category and date"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            {activeTab === 'schedule' ? 'Back to Manager' : 'Schedule Queue'}
+          </button>
+          <button 
             onClick={() => setActiveTab(activeTab === 'reports' ? 'manager' : 'reports')}
             className="bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white transition text-xs font-bold px-3 py-2 rounded-full flex items-center gap-1 focus:outline-none"
           >
@@ -1115,7 +1123,11 @@ const AdminPanel = ({ onClose }) => {
         <div className="flex flex-col md:flex-row gap-8 w-full">
           {activeTab === 'campaigns' ? (
             <div className="w-full flex-1">
-              <CampaignManager />
+              <CampaignManager initialView="form" />
+            </div>
+          ) : activeTab === 'schedule' ? (
+            <div className="w-full flex-1">
+              <CampaignManager initialView="queue" />
             </div>
           ) : activeTab === 'reports' ? (
             <div className="w-full flex-1">
