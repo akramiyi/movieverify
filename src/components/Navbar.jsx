@@ -316,20 +316,15 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
             <button 
               type="button"
               onClick={() => handleTabSelect('releases')}
-              className={`transition-all duration-300 flex items-center gap-2 px-3 py-1 rounded-full group cursor-pointer ${
+              className={`transition-all duration-300 flex items-center gap-1.5 px-3 py-1 rounded-full group cursor-pointer ${
                 activeTab === 'releases' 
                   ? 'bg-rose-950/80 text-white font-extrabold border border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.45)]' 
-                  : 'bg-rose-950/30 hover:bg-rose-900/40 text-rose-200 hover:text-white border border-rose-500/40 hover:border-rose-500/70 shadow-[0_0_10px_rgba(244,63,94,0.2)]'
+                  : 'bg-rose-950/30 hover:bg-rose-900/40 text-rose-200 hover:text-white border border-rose-500/40 hover:border-rose-500/70 shadow-[0_0_8px_rgba(244,63,94,0.15)]'
               }`}
               title="Today Releases & Release Radar"
             >
-              {/* Eye-catching radar ping */}
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-80" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-gradient-to-r from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,1)]" />
-              </span>
               <span className="tracking-wide">Today Releases</span>
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-sm animate-pulse">
+              <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-rose-600 text-white leading-none shadow-sm animate-pulse">
                 Live
               </span>
             </button>
@@ -581,14 +576,8 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
                 : 'bg-rose-950/30 text-rose-200 hover:text-white border border-rose-500/35'
             }`}
           >
-            <div className="flex items-center gap-2.5">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-80" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-gradient-to-r from-red-500 to-rose-600 shadow-[0_0_8px_rgba(244,63,94,1)]" />
-              </span>
-              <span className="font-bold">Today Releases</span>
-            </div>
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-rose-600 text-white animate-pulse">
+            <span className="font-bold">Today Releases</span>
+            <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-rose-600 text-white leading-none animate-pulse">
               Live
             </span>
           </button>
