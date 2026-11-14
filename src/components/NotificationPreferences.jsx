@@ -378,8 +378,9 @@ export default function NotificationPreferences({ onClose }) {
               <p className="font-semibold text-amber-400">Android Doze Mode / Background Freeze Fix:</p>
               <ol className="list-decimal list-inside space-y-1 text-gray-300 text-[11px]">
                 <li><strong>Chrome Notification:</strong> Chrome icon par long-press karein &gt; App Info &gt; Notifications &gt; Sites &gt; MovieVerify par click karke <em>"Pop on screen / Allow Sound"</em> on karein.</li>
+                <li><strong>Status Bar Icon (MIUI / HyperOS):</strong> Chrome App Info &gt; Notifications &gt; Sites &gt; MovieVerify &gt; <em>"Show in status bar / Badge"</em> ON karein taaki top status bar me icon dikhe.</li>
                 <li><strong>Battery Saver:</strong> App Info &gt; Battery / Battery Saver &gt; <em>"No restrictions" (Unrestricted)</em> select karein taaki Android Chrome ko freeze na kare.</li>
-                <li><strong>Install App (PWA):</strong> Chrome me 3 dots menu &gt; <em>"Add to Home screen" / "Install App"</em> karein. Isse phone background me instant alert deta hai.</li>
+                <li><strong>Install App (PWA):</strong> Niche <em>"Install App"</em> button se PWA install karein. Isse MovieVerify standalone Android app ban jati hai aur Flipkart/X ki tarah direct native status bar icon aata hai.</li>
               </ol>
             </div>
           )}

@@ -246,8 +246,8 @@ export function buildFcmPayload(delivery, campaign = null) {
         TTL: '86400',
       },
       notification: {
-        icon: '/logo192.png',
-        badge: '/badge.png',
+        icon: 'https://movieverify.vercel.app/logo192.png',
+        badge: 'https://movieverify.vercel.app/badge.png',
         vibrate: [200, 100, 200, 100, 200],
         silent: false,
         renotify: true,

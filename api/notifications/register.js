@@ -96,6 +96,7 @@ export default async function handler(req, res, customSupabase = null, customDep
         });
       }
 
+      const siteBase = (process.env.VITE_APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://movieverify.vercel.app').replace(/\/+$/, '');
       const fcmMessage = {
         token: targetToken,
         notification: {
@@ -121,8 +122,8 @@ export default async function handler(req, res, customSupabase = null, customDep
             TTL: '86400',
           },
           notification: {
-            icon: '/logo192.png',
-            badge: '/badge.png',
+            icon: `${siteBase}/logo192.png`,
+            badge: `${siteBase}/badge.png`,
             vibrate: [200, 100, 200, 100, 200],
             tag: `test-push-${Date.now()}`,
             renotify: true,
