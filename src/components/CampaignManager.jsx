@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, Calendar, Users, Film, User, Layers, AlertCircle, CheckCircle, Clock, Trash2, RefreshCw, Eye, Zap } from 'lucide-react';
+import { Send, Calendar, Users, Film, User, Layers, AlertCircle, CheckCircle, CheckCircle2, Clock, Trash2, RefreshCw, Eye, Zap, Loader2 } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 
 const TARGET_TYPES = [
@@ -37,6 +37,8 @@ export default function CampaignManager() {
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduledFor, setScheduledFor] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLaunchSuccess, setIsLaunchSuccess] = useState(false);
+  const [successInfo, setSuccessInfo] = useState(null);
 
   const fetchCampaigns = async () => {
     setLoading(true);
@@ -151,6 +153,26 @@ export default function CampaignManager() {
         message: msg,
       });
 
+      setIsLaunchSuccess(true);
+      setSuccessInfo({
+        status: resData.status,
+        pushCount,
+        immediateSent,
+        inAppCount,
+        suppressedCount,
+        message: msg,
+      });
+
+      // Keep success tick for 4.5 seconds
+      setTimeout(() => {
+        setIsLaunchSuccess(false);
+      }, 4500);
+
+      // Auto-hide success info card after 10 seconds
+      setTimeout(() => {
+        setSuccessInfo(null);
+      }, 10000);
+
       // Reset Form
       setTitle('');
       setBody('');
@@ -160,6 +182,8 @@ export default function CampaignManager() {
       setScheduledFor('');
       fetchCampaigns();
     } catch (err) {
+      setIsLaunchSuccess(false);
+      setSuccessInfo(null);
       setActionStatus({ type: 'error', message: err.message });
     } finally {
       setIsSubmitting(false);
@@ -415,14 +439,91 @@ export default function CampaignManager() {
               )}
             </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full bg-[#E50914] hover:bg-[#b80710] text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-[#E50914]/20 disabled:opacity-50"
-            >
-              <Send className="w-4 h-4" />
-              {isSubmitting ? 'Creating Campaign...' : isDraft ? 'Save Campaign Draft' : 'Launch Campaign'}
-            </button>
+            <div className="space-y-3">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`w-full font-bold py-3.5 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-2.5 shadow-lg disabled:opacity-70 cursor-pointer ${
+                  isLaunchSuccess
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 ring-2 ring-emerald-400/50 scale-[1.01]'
+                    : isSubmitting
+                    ? 'bg-[#E50914]/85 text-white shadow-[#E50914]/20 cursor-wait'
+                    : 'bg-[#E50914] hover:bg-[#b80710] text-white shadow-[#E50914]/25 hover:shadow-[#E50914]/40 active:scale-[0.99]'
+                }`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-white" />
+                    <span>
+                      {isDraft
+                        ? 'Saving Campaign Draft...'
+                        : isScheduled
+                        ? 'Scheduling Dispatch...'
+                        : 'Launching Campaign & Sending Push...'}
+                    </span>
+                  </>
+                ) : isLaunchSuccess ? (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 text-white animate-bounce" />
+                    <span>
+                      {isDraft
+                        ? 'Draft Saved Successfully!'
+                        : isScheduled
+                        ? 'Campaign Scheduled Successfully!'
+                        : 'Campaign Launched & Push Dispatched!'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>{isDraft ? 'Save Campaign Draft' : isScheduled ? 'Schedule Campaign' : 'Launch Campaign'}</span>
+                  </>
+                )}
+              </button>
+
+              {/* Direct Success Feedback Card */}
+              {successInfo && (
+                <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 shadow-xl transition-all animate-in fade-in duration-300">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-bold text-emerald-300 flex items-center gap-1.5">
+                          {successInfo.status === 'draft'
+                            ? 'Campaign Saved as Draft'
+                            : successInfo.status === 'scheduled'
+                            ? 'Campaign Scheduled'
+                            : 'Campaign Dispatched Successfully!'}
+                        </h4>
+                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          {successInfo.status || 'Sent'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-emerald-200/90 mt-1.5 leading-relaxed">
+                        {successInfo.message}
+                      </p>
+                      {successInfo.status !== 'draft' && (
+                        <div className="flex flex-wrap items-center gap-2 mt-2.5 pt-2 border-t border-emerald-500/20 text-[11px] text-emerald-300/90">
+                          <span className="bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-500/20">
+                            📱 Push Queued: <strong>{successInfo.pushCount || 0}</strong>
+                          </span>
+                          {successInfo.immediateSent !== undefined && (
+                            <span className="bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-500/20 text-emerald-200">
+                              ⚡ Instantly Sent: <strong>{successInfo.immediateSent}</strong>
+                            </span>
+                          )}
+                          <span className="bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-500/20">
+                            📬 Inbox: <strong>{successInfo.inAppCount || 0}</strong>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </form>
         </div>
 
