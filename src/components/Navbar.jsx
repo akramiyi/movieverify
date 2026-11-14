@@ -378,25 +378,21 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
           
           <LiveTime />
 
-          {/* Telegram Movie Bot Link (Circular White Badge with Looping Scale-Pulse Heartbeat Animation) */}
+          {/* Telegram Movie Bot Link (Pure Telegram Logo with Looping Scale-Pulse Animation) */}
           <a
             href="https://t.me/movieverify_bot"
             target="_blank"
             rel="noopener noreferrer"
-            className="relative group flex items-center justify-center p-0.5 cursor-pointer select-none"
+            className="relative group flex items-center justify-center p-1 cursor-pointer select-none"
             title="Movie Find ⚡ Bot (@movieverify_bot)"
             aria-label="Open Telegram Movie Bot"
           >
-            {/* Clean Centered Circular White Background Badge with Looping Scale-Pulse */}
-            <div className="animate-telegram-scale-pulse relative w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white flex items-center justify-center shadow-[0_0_12px_rgba(255,255,255,0.45)] group-hover:shadow-[0_0_20px_rgba(255,255,255,0.85)] transition-shadow">
-              {/* Black Telegram Paper-Airplane Vector SVG */}
-              <svg 
-                className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-black fill-current -translate-x-[0.5px] translate-y-[0.5px] transition-transform duration-200 group-hover:scale-110" 
-                viewBox="0 0 24 24"
-              >
-                <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
-              </svg>
-            </div>
+            <svg 
+              className="animate-telegram-scale-pulse w-5 h-5 sm:w-6 sm:h-6 md:w-6.5 md:h-6.5 text-[#229ED9] hover:text-[#38bdf8] fill-current transition-all duration-200 group-hover:scale-110" 
+              viewBox="0 0 24 24"
+            >
+              <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+            </svg>
           </a>
 
           <button 
@@ -623,17 +619,15 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/10 text-gray-200 hover:text-white border border-white/10 transition group mt-1"
+            className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-[#229ED9]/15 text-gray-200 hover:text-white border border-white/10 hover:border-[#229ED9]/40 transition group mt-1"
           >
             <div className="flex items-center gap-2.5">
-              <div className="animate-telegram-scale-pulse relative w-6 h-6 rounded-full bg-white flex items-center justify-center shadow-md">
-                <svg className="w-3.5 h-3.5 text-black fill-current -translate-x-[0.5px] translate-y-[0.5px]" viewBox="0 0 24 24">
-                  <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
-                </svg>
-              </div>
+              <svg className="animate-telegram-scale-pulse w-5 h-5 text-[#229ED9] fill-current" viewBox="0 0 24 24">
+                <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+              </svg>
               <span className="font-bold text-white text-xs">Movie Find ⚡ Bot</span>
             </div>
-            <span className="text-[10px] font-bold text-gray-300 group-hover:text-white group-hover:translate-x-0.5 transition">
+            <span className="text-[10px] font-bold text-[#229ED9] group-hover:translate-x-0.5 transition">
               @movieverify_bot →
             </span>
           </a>
