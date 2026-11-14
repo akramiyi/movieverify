@@ -66,7 +66,27 @@ function App() {
   const welcomeCheckedUsersRef = useRef(new Set());
   const handleLogOutResetRef = useRef(null);
   const [showIntro, setShowIntro] = useState(() => {
-    return !localStorage.getItem('introShown');
+    if (typeof window === 'undefined') return false;
+    
+    // Detect standalone installed PWA / mobile app mode
+    const isStandalone = (
+      window.matchMedia?.('(display-mode: standalone)')?.matches ||
+      window.navigator?.standalone === true ||
+      document.referrer?.includes('android-app://')
+    );
+
+    try {
+      const sessionShown = sessionStorage.getItem('movieverify_intro_shown');
+      if (sessionShown === 'true') return false;
+
+      // In standalone installed app mode: play beautiful opening animation on launch
+      if (isStandalone) return true;
+
+      // In browser mode: play if first visit
+      return !localStorage.getItem('introShown');
+    } catch {
+      return false;
+    }
   });
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [deepLinkLoading, setDeepLinkLoading] = useState(false);

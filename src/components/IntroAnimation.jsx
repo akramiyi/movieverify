@@ -10,6 +10,7 @@ const IntroAnimation = ({ onComplete }) => {
   const handleSkip = () => {
     try {
       localStorage.setItem('introShown', 'true');
+      sessionStorage.setItem('movieverify_intro_shown', 'true');
     } catch {}
     if (typeof onComplete === 'function') {
       onComplete();
@@ -17,13 +18,14 @@ const IntroAnimation = ({ onComplete }) => {
   };
 
   useEffect(() => {
-    // Immediately persist introShown so any page refresh or reload immediately loads the full site
+    // If intro was already shown in this session, skip immediately
     try {
-      if (localStorage.getItem('introShown')) {
+      if (sessionStorage.getItem('movieverify_intro_shown')) {
         onComplete();
         return;
       }
       localStorage.setItem('introShown', 'true');
+      sessionStorage.setItem('movieverify_intro_shown', 'true');
     } catch {
       onComplete();
       return;
@@ -294,6 +296,23 @@ const IntroAnimation = ({ onComplete }) => {
           )}
         </AnimatePresence>
 
+        {/* MovieVerify Brand Logo Badge */}
+        {phase >= 3 && (
+          <motion.div
+            initial={{ scale: 0, rotate: -180, opacity: 0 }}
+            animate={
+              phase >= 6
+                ? { scale: 3, opacity: 0, filter: 'blur(12px)' }
+                : { scale: 1, rotate: 0, opacity: 1, filter: 'blur(0px)' }
+            }
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-[#FF3445] to-[#E50914] rounded-2xl shadow-[0_0_35px_rgba(229,9,20,0.7)] text-white text-3xl md:text-4xl font-black mb-3 md:mb-4 border border-white/20 select-none relative overflow-hidden"
+          >
+            <span className="relative z-10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">M</span>
+            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent pointer-events-none" />
+          </motion.div>
+        )}
+
         {/* Logo Text Wrapper */}
         <div className="relative flex items-center justify-center overflow-visible select-none px-4 py-2">
           {/* Phase 3 & 4 & 5: Letters Formed from Film */}
@@ -384,6 +403,22 @@ const IntroAnimation = ({ onComplete }) => {
             </div>
           )}
         </div>
+
+        {/* Tagline */}
+        {phase >= 4 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={
+              phase >= 6
+                ? { opacity: 0, y: -10 }
+                : { opacity: 1, y: 0 }
+            }
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-[11px] md:text-xs font-bold tracking-[0.25em] text-gray-400 uppercase mt-2 text-center"
+          >
+            Stream &amp; Download <span className="text-[#E50914]">•</span> Verified HD
+          </motion.div>
+        )}
       </motion.div>
 
       {/* Optional cinematic sound effect anchor:
