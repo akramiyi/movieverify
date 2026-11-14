@@ -11,15 +11,16 @@ const LiveTime = () => {
   const [showEpoch, setShowEpoch] = useState(false);
   
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 100);
+    // 1-second interval eliminates 90% of timer churn on the main thread
+    const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Format: HH:MM:SS.mmm AM/PM
+  // Format: HH:MM:SS AM/PM
   const h = time.getHours();
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
-  const formattedTime = `${String(h12).padStart(2,'0')}:${String(time.getMinutes()).padStart(2,'0')}:${String(time.getSeconds()).padStart(2,'0')}.${String(time.getMilliseconds()).padStart(3,'0')} ${ampm}`;
+  const formattedTime = `${String(h12).padStart(2,'0')}:${String(time.getMinutes()).padStart(2,'0')}:${String(time.getSeconds()).padStart(2,'0')} ${ampm}`;
 
   return (
     <div className="hidden sm:flex items-center gap-1.5 text-gray-200 font-mono text-xs tracking-wider mr-2 font-bold">
@@ -229,16 +230,23 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
 
   const handleSignOut = async () => {
     setIsProfileMenuOpen(false);
+    setIsMobileMenuOpen(false);
+    // Instant optimistic state reset: clear session immediately so user sees zero lag
+    setCurrentUser(null);
+    setIsAdminUser(false);
+    setUnreadNotifications(0);
     try {
-      await revokePushTokenBeforeSignOut();
+      localStorage.removeItem('movieverify_auth_popup_dismissed');
+      sessionStorage.removeItem('movieverify_auth_popup_dismissed');
+    } catch {}
+
+    try {
+      // Bounded pre-signout revocation (max 800ms) so slow networks never freeze the logout action
+      await Promise.race([
+        revokePushTokenBeforeSignOut(),
+        new Promise((resolve) => setTimeout(resolve, 800))
+      ]);
       await supabase.auth.signOut();
-      setCurrentUser(null);
-      setIsAdminUser(false);
-      setUnreadNotifications(0);
-      try {
-        localStorage.removeItem('movieverify_auth_popup_dismissed');
-        sessionStorage.removeItem('movieverify_auth_popup_dismissed');
-      } catch {}
     } catch (err) {
       console.warn('Sign out error:', err?.message);
     }
@@ -551,10 +559,11 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
                   <button
                     type="button"
                     onClick={handleSignOut}
+                    title="Log Out"
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg hover:bg-red-950/30 text-gray-400 hover:text-red-400 transition cursor-pointer text-left"
                   >
                     <LogOut className="w-4 h-4 text-gray-400 hover:text-red-400" />
-                    <span>Sign Out</span>
+                    <span>Log Out</span>
                   </button>
                 </div>
               </div>
@@ -662,9 +671,9 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
                     setIsMobileMenuOpen(false);
                     handleSignOut();
                   }}
-                  className="text-xs text-red-400 hover:text-red-300 font-semibold"
+                  className="text-xs text-red-400 hover:text-red-300 font-semibold cursor-pointer"
                 >
-                  Sign Out
+                  Log Out
                 </button>
               </div>
             ) : (

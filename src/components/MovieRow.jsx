@@ -1,13 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import MovieCard from './MovieCard';
 import SkeletonCard from './SkeletonCard';
 
 const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyList, onSeeAll }) => {
   const [isPaused, setIsPaused] = useState(false);
-
   const [multiplier, setMultiplier] = useState(2);
+  const rowRef = useRef(null);
+  const [isInView, setIsInView] = useState(true);
 
-  React.useEffect(() => {
+  // Performance: Only run continuous marquee animation when row is visible in viewport
+  useEffect(() => {
+    if (!rowRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsInView(entry.isIntersecting);
+      },
+      { root: null, rootMargin: '300px 0px 300px 0px', threshold: 0 }
+    );
+    observer.observe(rowRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (!movies || movies.length === 0) return;
     const updateMultiplier = () => {
       const cardWidth = 240; // Approx max width of MovieCard
@@ -35,7 +49,7 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
   const scrollDuration = movies && movies.length > 0 ? `${movies.length * 6.5}s` : '50s';
 
   return (
-    <div className="movie-row-container space-y-2 md:space-y-4 mb-8 overflow-visible">
+    <div ref={rowRef} className="movie-row-container space-y-2 md:space-y-4 mb-8 overflow-visible">
       <div className="flex items-center justify-between px-4 md:px-12">
         <h2 className="whitespace-nowrap cursor-pointer text-sm font-semibold text-[#e5e5e5] transition duration-200 hover:text-white md:text-2xl">
           {title}
@@ -59,7 +73,7 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
           className={`${!isLoading ? 'animate-marquee' : 'flex'} flex items-center space-x-2 py-10 px-4 md:px-12`}
           style={{ 
             animationDuration: scrollDuration,
-            animationPlayState: isPaused ? 'paused' : 'running'
+            animationPlayState: isPaused || !isInView ? 'paused' : 'running'
           }}
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}

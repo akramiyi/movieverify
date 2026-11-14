@@ -65,19 +65,17 @@ export const NewUserGuide = ({ isOpen = false, onClose }) => {
     // Small delay to ensure DOM and navbar are fully painted
     const timer = setTimeout(updatePosition, 100);
 
-    const onScrollOrResize = () => {
+    const onResize = () => {
       cancelAnimationFrame(resizeRaf.current);
       resizeRaf.current = requestAnimationFrame(updatePosition);
     };
 
-    window.addEventListener('resize', onScrollOrResize, { passive: true });
-    window.addEventListener('scroll', onScrollOrResize, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
 
     return () => {
       clearTimeout(timer);
       cancelAnimationFrame(resizeRaf.current);
-      window.removeEventListener('resize', onScrollOrResize);
-      window.removeEventListener('scroll', onScrollOrResize);
+      window.removeEventListener('resize', onResize);
     };
   }, [isOpen, updatePosition, currentStepIndex]);
 
@@ -130,7 +128,7 @@ export const NewUserGuide = ({ isOpen = false, onClose }) => {
       {/* Dimmed Background Overlay */}
       <div 
         onClick={handleDismiss}
-        className="absolute inset-0 bg-black/55 backdrop-blur-[2px] transition-opacity duration-300" 
+        className="absolute inset-0 bg-black/60 transition-opacity duration-300" 
       />
 
       {/* Target Highlight Spotlight Ring */}
@@ -244,3 +242,4 @@ export const NewUserGuide = ({ isOpen = false, onClose }) => {
 };
 
 export default NewUserGuide;
+ 

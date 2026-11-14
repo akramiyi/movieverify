@@ -1,11 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import ActorMovieCard from './ActorMovieCard';
 
 const ActorsRow = ({ title, actors, onActorSelect, onSeeAll }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [multiplier, setMultiplier] = useState(2);
+  const rowRef = useRef(null);
+  const [isInView, setIsInView] = useState(true);
 
-  React.useEffect(() => {
+  // Performance: Only run marquee animation when row is visible in viewport
+  useEffect(() => {
+    if (!rowRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsInView(entry.isIntersecting);
+      },
+      { root: null, rootMargin: '300px 0px 300px 0px', threshold: 0 }
+    );
+    observer.observe(rowRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (!actors || actors.length === 0) return;
     const updateMultiplier = () => {
       const cardWidth = 150; // Max width of ActorMovieCard
@@ -27,7 +42,7 @@ const ActorsRow = ({ title, actors, onActorSelect, onSeeAll }) => {
   const scrollDuration = `${actors.length * 6.5}s`;
 
   return (
-    <div className="movie-row-container space-y-2 md:space-y-4 mb-8 overflow-visible">
+    <div ref={rowRef} className="movie-row-container space-y-2 md:space-y-4 mb-8 overflow-visible">
       <div className="flex items-center justify-between px-4 md:px-12">
         <h2 className="whitespace-nowrap cursor-pointer text-sm font-semibold text-[#e5e5e5] transition duration-200 hover:text-white md:text-2xl">
           {title}
@@ -49,7 +64,7 @@ const ActorsRow = ({ title, actors, onActorSelect, onSeeAll }) => {
           className="animate-marquee flex items-center space-x-2 py-4 px-4 md:px-12"
           style={{ 
             animationDuration: scrollDuration,
-            animationPlayState: isPaused ? 'paused' : 'running'
+            animationPlayState: isPaused || !isInView ? 'paused' : 'running'
           }}
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
