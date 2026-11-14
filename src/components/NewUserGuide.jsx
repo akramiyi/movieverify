@@ -341,3 +341,4 @@ export const NewUserGuide = ({
 };
 
 export default NewUserGuide;
+

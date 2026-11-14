@@ -378,7 +378,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
           
           <LiveTime />
 
-          {/* Telegram Movie Bot Link (Pure Telegram Logo with Looping Scale-Pulse Animation) */}
+          {/* Telegram Movie Bot Link (Pure Telegram Logo with Floating + Scaling Pulse Animation) */}
           <a
             href="https://t.me/movieverify_bot"
             target="_blank"
@@ -388,7 +388,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
             aria-label="Open Telegram Movie Bot"
           >
             <svg 
-              className="animate-telegram-scale-pulse w-5 h-5 sm:w-6 sm:h-6 md:w-6.5 md:h-6.5 text-[#229ED9] hover:text-[#38bdf8] fill-current transition-all duration-200 group-hover:scale-110" 
+              className="telegram-icon animate-telegram-scale-pulse w-5 h-5 sm:w-6 sm:h-6 md:w-6.5 md:h-6.5 text-[#229ED9] hover:text-[#38bdf8] fill-current transition-colors duration-200" 
               viewBox="0 0 24 24"
             >
               <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>

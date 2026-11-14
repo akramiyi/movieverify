@@ -164,21 +164,23 @@ body {
   will-change: transform;
 }
 
-/* Telegram Heartbeat / Scale-Pulse Animation matching reference */
-@keyframes telegramScalePulse {
+/* Telegram Floating + Scaling Pulse Animation (Combined Y-Translation Float + Heartbeat Scale) */
+@keyframes telegramFloatPulse {
   0%, 100% {
-    transform: scale(1);
-    filter: drop-shadow(0 0 3px rgba(34, 158, 217, 0.45));
+    transform: translateY(0px) scale(1);
+    filter: drop-shadow(0 0 3px rgba(34, 158, 217, 0.4));
   }
   50% {
-    transform: scale(1.15);
-    filter: drop-shadow(0 0 10px rgba(34, 158, 217, 0.85));
+    transform: translateY(-5px) scale(1.1);
+    filter: drop-shadow(0 0 12px rgba(34, 158, 217, 0.9));
   }
 }
 
-.animate-telegram-scale-pulse {
-  animation: telegramScalePulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+.animate-telegram-scale-pulse,
+.telegram-icon {
+  animation: telegramFloatPulse 2s ease-in-out infinite;
   will-change: transform, filter;
+  display: inline-block;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -186,7 +188,8 @@ body {
   .poster-scroll-col-2,
   .poster-scroll-col-3,
   .poster-scroll-col-4,
-  .animate-telegram-scale-pulse {
+  .animate-telegram-scale-pulse,
+  .telegram-icon {
     animation: none !important;
   }
 }
