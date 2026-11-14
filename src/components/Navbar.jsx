@@ -228,6 +228,17 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [isProfileMenuOpen]);
 
+  // Lock body scroll when mobile menu is open to prevent background bleed and scroll
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isMobileMenuOpen]);
+
   const handleSignOut = async () => {
     setIsProfileMenuOpen(false);
     setIsMobileMenuOpen(false);
@@ -288,7 +299,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
 
   return (
     <nav 
-      className={`fixed top-0 w-full z-50 transition-colors duration-500 ease-in-out ${
+      className={`fixed top-0 w-full z-[60] transition-colors duration-500 ease-in-out ${
         isScrolled || isMobileMenuOpen ? 'bg-[#141414]' : 'bg-gradient-to-b from-black/80 to-transparent'
       }`}
     >
@@ -599,96 +610,98 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
         </div>
       </div>
 
-      {/* Mobile Menu Dropdown Links */}
+      {/* Mobile Menu Full-Screen Drawer Overlay */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden bg-[#141414] border-t border-white/10 px-6 py-4 flex flex-col gap-3 text-sm font-medium text-gray-300 transition-all duration-300">
-          <button 
-            type="button"
-            onClick={() => handleTabSelect('home')}
-            className={`text-left py-1.5 transition ${activeTab === 'home' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
-          >
-            Home
-          </button>
-          <button 
-            type="button"
-            onClick={() => handleTabSelect('tv')}
-            className={`text-left py-1.5 transition ${activeTab === 'tv' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
-          >
-            TV Shows
-          </button>
-          <button 
-            type="button"
-            onClick={() => handleTabSelect('movies')}
-            className={`text-left py-1.5 transition ${activeTab === 'movies' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
-          >
-            Movies
-          </button>
-          <button 
-            type="button"
-            onClick={() => handleTabSelect('releases')}
-            className={`text-left transition flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer ${
-              activeTab === 'releases' 
-                ? 'bg-rose-950/80 text-white font-extrabold border border-rose-500 shadow-md' 
-                : 'bg-rose-950/30 text-rose-200 hover:text-white border border-rose-500/35'
-            }`}
-          >
-            <span className="font-bold">Today Releases</span>
-            <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-rose-600 text-white leading-none animate-pulse">
-              Live
-            </span>
-          </button>
-          <button 
-            type="button"
-            onClick={() => handleTabSelect('popular')}
-            className={`text-left py-1.5 transition ${activeTab === 'popular' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
-          >
-            New & Popular
-          </button>
-          <button 
-            type="button"
-            onClick={() => handleTabSelect('mylist')}
-            className={`text-left py-1.5 transition ${activeTab === 'mylist' ? 'text-white font-extrabold' : 'text-gray-400 hover:text-white'}`}
-          >
-            My List
-          </button>
+        <div className="lg:hidden fixed inset-x-0 top-[64px] bottom-0 h-[calc(100dvh-64px)] min-h-[calc(100dvh-64px)] bg-[#141414] border-t border-white/10 px-6 py-6 flex flex-col justify-between text-sm font-medium text-gray-300 transition-all duration-300 overflow-y-auto overscroll-contain z-[60]">
+          <div className="flex flex-col gap-3">
+            <button 
+              type="button"
+              onClick={() => handleTabSelect('home')}
+              className={`text-left py-2 transition ${activeTab === 'home' ? 'text-white font-extrabold text-base' : 'text-gray-400 hover:text-white'}`}
+            >
+              Home
+            </button>
+            <button 
+              type="button"
+              onClick={() => handleTabSelect('tv')}
+              className={`text-left py-2 transition ${activeTab === 'tv' ? 'text-white font-extrabold text-base' : 'text-gray-400 hover:text-white'}`}
+            >
+              TV Shows
+            </button>
+            <button 
+              type="button"
+              onClick={() => handleTabSelect('movies')}
+              className={`text-left py-2 transition ${activeTab === 'movies' ? 'text-white font-extrabold text-base' : 'text-gray-400 hover:text-white'}`}
+            >
+              Movies
+            </button>
+            <button 
+              type="button"
+              onClick={() => handleTabSelect('releases')}
+              className={`text-left transition flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer ${
+                activeTab === 'releases' 
+                  ? 'bg-rose-950/80 text-white font-extrabold border border-rose-500 shadow-md' 
+                  : 'bg-rose-950/30 text-rose-200 hover:text-white border border-rose-500/35'
+              }`}
+            >
+              <span className="font-bold">Today Releases</span>
+              <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-rose-600 text-white leading-none animate-pulse">
+                Live
+              </span>
+            </button>
+            <button 
+              type="button"
+              onClick={() => handleTabSelect('popular')}
+              className={`text-left py-2 transition ${activeTab === 'popular' ? 'text-white font-extrabold text-base' : 'text-gray-400 hover:text-white'}`}
+            >
+              New & Popular
+            </button>
+            <button 
+              type="button"
+              onClick={() => handleTabSelect('mylist')}
+              className={`text-left py-2 transition ${activeTab === 'mylist' ? 'text-white font-extrabold text-base' : 'text-gray-400 hover:text-white'}`}
+            >
+              My List
+            </button>
 
-          {/* Mobile Telegram Bot Row */}
-          <a
-            href="https://t.me/movieverify_bot"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => setIsMobileMenuOpen(false)}
-            className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-[#229ED9]/15 text-gray-200 hover:text-white border border-white/10 hover:border-[#229ED9]/40 transition group mt-1"
-          >
-            <div className="flex items-center gap-2.5">
-              <svg className="animate-telegram-scale-pulse w-5 h-5 text-[#229ED9] fill-current" viewBox="0 0 24 24">
-                <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
-              </svg>
-              <span className="font-bold text-white text-xs">Movie Find ⚡ Bot</span>
-            </div>
-            <span className="text-[10px] font-bold text-[#229ED9] group-hover:translate-x-0.5 transition">
-              @movieverify_bot →
-            </span>
-          </a>
+            {/* Mobile Telegram Bot Row */}
+            <a
+              href="https://t.me/movieverify_bot"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-[#229ED9]/15 text-gray-200 hover:text-white border border-white/10 hover:border-[#229ED9]/40 transition group mt-1"
+            >
+              <div className="flex items-center gap-2.5">
+                <svg className="animate-telegram-scale-pulse w-5 h-5 text-[#229ED9] fill-current" viewBox="0 0 24 24">
+                  <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+                </svg>
+                <span className="font-bold text-white text-xs">Movie Find ⚡ Bot</span>
+              </div>
+              <span className="text-[10px] font-bold text-[#229ED9] group-hover:translate-x-0.5 transition">
+                @movieverify_bot →
+              </span>
+            </a>
+          </div>
 
-          {/* Mobile Auth Quick Row */}
-          <div className="pt-3 mt-1 border-t border-white/10 flex items-center justify-between">
+          {/* Mobile Auth Quick Row at bottom */}
+          <div className="pt-4 pb-6 mt-4 border-t border-white/10 flex items-center justify-between">
             {currentUser ? (
               <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   {currentUser.user_metadata?.avatar_url ? (
                     <img
                       src={currentUser.user_metadata.avatar_url}
                       alt="Avatar"
                       referrerPolicy="no-referrer"
-                      className="w-7 h-7 rounded-full object-cover"
+                      className="w-8 h-8 rounded-full object-cover border border-white/10"
                     />
                   ) : (
-                    <div className="w-7 h-7 rounded-full bg-[#E50914] flex items-center justify-center text-xs font-bold text-white">
+                    <div className="w-8 h-8 rounded-full bg-[#E50914] flex items-center justify-center text-xs font-bold text-white">
                       {(currentUser.user_metadata?.full_name || currentUser.email || 'U')[0]}
                     </div>
                   )}
-                  <span className="text-xs text-gray-200 truncate max-w-[140px]">
+                  <span className="text-xs text-gray-200 truncate max-w-[150px] font-medium">
                     {currentUser.user_metadata?.full_name || currentUser.email}
                   </span>
                 </div>
@@ -698,7 +711,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
                     setIsMobileMenuOpen(false);
                     handleSignOut();
                   }}
-                  className="text-xs text-red-400 hover:text-red-300 font-semibold cursor-pointer"
+                  className="text-xs text-red-400 hover:text-red-300 font-semibold cursor-pointer px-3 py-1.5 rounded-lg bg-red-950/30 border border-red-900/40 hover:bg-red-900/40 transition"
                 >
                   Log Out
                 </button>
@@ -710,7 +723,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
                   setIsMobileMenuOpen(false);
                   if (onProfileClick) onProfileClick();
                 }}
-                className="w-full py-2 bg-[#E50914] hover:bg-[#b80710] text-white text-center rounded font-semibold text-xs"
+                className="w-full py-2.5 bg-[#E50914] hover:bg-[#b80710] text-white text-center rounded-xl font-bold text-xs shadow-lg transition"
               >
                 Sign In / Admin Login
               </button>

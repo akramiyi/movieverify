@@ -13,9 +13,22 @@ export const getCachedAuthUser = () => {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.user || null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.user) return parsed.user;
+    }
+    // Dynamic scan fallback: find any valid Supabase session token in storage
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        const item = window.localStorage.getItem(key);
+        if (item) {
+          const parsed = JSON.parse(item);
+          if (parsed?.user) return parsed.user;
+        }
+      }
+    }
+    return null;
   } catch {
     return null;
   }

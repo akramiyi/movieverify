@@ -7,8 +7,24 @@ const IntroAnimation = ({ onComplete }) => {
   const [reducedMotion, setReducedMotion] = useState(false);
   const containerRef = useRef(null);
 
+  const handleSkip = () => {
+    try {
+      localStorage.setItem('introShown', 'true');
+    } catch {}
+    if (typeof onComplete === 'function') {
+      onComplete();
+    }
+  };
+
   useEffect(() => {
-    if (localStorage.getItem('introShown')) {
+    // Immediately persist introShown so any page refresh or reload immediately loads the full site
+    try {
+      if (localStorage.getItem('introShown')) {
+        onComplete();
+        return;
+      }
+      localStorage.setItem('introShown', 'true');
+    } catch {
       onComplete();
       return;
     }
@@ -28,24 +44,29 @@ const IntroAnimation = ({ onComplete }) => {
 
     window.addEventListener('mousemove', handleMouse);
 
-    // Cinematic Timeline Timers
+    // Snappy Cinematic Timeline Timers (no long black screen delays)
     const timers = [
-      setTimeout(() => setPhase(1), 700),   // 0.7s - Projector Light Turns On
-      setTimeout(() => setPhase(2), 1400),  // 1.4s - Film Reel Spins & shoots film strip
-      setTimeout(() => setPhase(3), 2200),  // 2.2s - Film transforms into MOVIE VERFY letters
-      setTimeout(() => setPhase(4), 3000),  // 3.0s - Premium Glass & Light Sweep Lock-in
-      setTimeout(() => setPhase(5), 3600),  // 3.6s - Cinematic Impact & Sparks
-      setTimeout(() => setPhase(6), 4000),  // 4.0s - Exit Transition Begins
+      setTimeout(() => setPhase(1), 100),   // 0.1s - Projector Light Immediately Turns On
+      setTimeout(() => setPhase(2), 650),   // 0.65s - Film Reel Spins & shoots film strip
+      setTimeout(() => setPhase(3), 1200),  // 1.2s - Film transforms into MOVIE VERIFY letters
+      setTimeout(() => setPhase(4), 1700),  // 1.7s - Premium Glass & Light Sweep Lock-in
+      setTimeout(() => setPhase(5), 2100),  // 2.1s - Cinematic Impact & Sparks
+      setTimeout(() => setPhase(6), 2450),  // 2.45s - Exit Transition Begins
     ];
 
     const completeTimer = setTimeout(() => {
-      localStorage.setItem('introShown', 'true');
-      onComplete();
-    }, 4700); // 4.7s total duration
+      handleSkip();
+    }, 2850); // Total 2.85s duration
+
+    // Absolute fallback safety timeout
+    const safetyTimer = setTimeout(() => {
+      handleSkip();
+    }, 3200);
 
     return () => {
       timers.forEach(clearTimeout);
       clearTimeout(completeTimer);
+      clearTimeout(safetyTimer);
       window.removeEventListener('mousemove', handleMouse);
     };
   }, [onComplete]);
@@ -77,10 +98,22 @@ const IntroAnimation = ({ onComplete }) => {
   return (
     <motion.div
       ref={containerRef}
-      className="fixed inset-0 z-[9999] bg-[#030303] flex items-center justify-center overflow-hidden select-none"
+      onClick={handleSkip}
+      className="fixed inset-0 z-[9999] bg-[#030303] flex items-center justify-center overflow-hidden select-none cursor-pointer"
       animate={phase >= 6 ? { opacity: 0, scale: 1.05 } : { opacity: 1 }}
-      transition={{ duration: 0.7, ease: 'easeOut' }}
+      transition={{ duration: 0.5, ease: 'easeOut' }}
     >
+      {/* Skip Button */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleSkip();
+        }}
+        className="absolute top-6 right-6 z-[10000] text-[11px] font-bold text-gray-300 hover:text-white bg-black/60 hover:bg-black/90 px-3.5 py-1.5 rounded-full backdrop-blur-md border border-white/20 transition cursor-pointer shadow-lg tracking-wider uppercase"
+      >
+        Skip Intro ›
+      </button>
       {/* 1. Cinematic Film Grain Overlay & Vignette */}
       <div 
         className="absolute inset-0 pointer-events-none opacity-[0.03] z-50 bg-repeat bg-center" 
