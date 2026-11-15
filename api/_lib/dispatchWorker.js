@@ -31,6 +31,7 @@ import os from 'node:os';
 import { getSupabaseServerClient } from './supabaseServer.js';
 import { getFirebaseMessaging } from './firebaseAdmin.js';
 import { maskToken } from './deviceTokenService.js';
+import { isQuietHoursIST } from './scheduledCampaignService.js';
 
 /**
  * Generate a unique worker session identifier
@@ -310,13 +311,28 @@ export async function processDelivery(delivery, context) {
   if (delivery.campaign_id) {
     if (campaignCache.has(delivery.campaign_id)) {
       campaign = campaignCache.get(delivery.campaign_id);
+      if (campaign && (campaign.status === 'cancelled' || campaign.status === 'paused')) {
+        try {
+          await supabase
+            .from('notification_deliveries')
+            .update({ delivery_status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('id', deliveryId);
+        } catch {
+          // ignore
+        }
+        return {
+          status: 'rejected',
+          deliveryId,
+          reason: `CAMPAIGN_${campaign.status.toUpperCase()}`,
+        };
+      }
     } else {
       let campData = null;
       let campLookupError = null;
       try {
         const res = await supabase
           .from('notification_campaigns')
-          .select('id, title, body, category, action_url, image_url')
+          .select('id, title, body, category, action_url, image_url, status')
           .eq('id', delivery.campaign_id)
           .maybeSingle();
         campData = res?.data ?? null;
@@ -357,6 +373,25 @@ export async function processDelivery(delivery, context) {
       }
 
       if (campData) {
+        if (campData.status === 'cancelled' || campData.status === 'paused') {
+          console.warn(
+            `[DispatchWorker] Delivery ${deliveryId} skipped because campaign ${delivery.campaign_id} is ${campData.status}.`
+          );
+          try {
+            await supabase
+              .from('notification_deliveries')
+              .update({ delivery_status: 'cancelled', updated_at: new Date().toISOString() })
+              .eq('id', deliveryId);
+          } catch {
+            // ignore
+          }
+          return {
+            status: 'rejected',
+            deliveryId,
+            reason: `CAMPAIGN_${campData.status.toUpperCase()}`,
+          };
+        }
+
         campaign = campData;
         campaignCache.set(delivery.campaign_id, campData);
       }
@@ -501,6 +536,23 @@ export async function runDispatchCycle(options = {}) {
 
   if (!messaging) {
     throw new Error('Firebase Messaging is not initialized. Please verify service account credentials.');
+  }
+
+  // Quiet Hours Guard (10:00 PM - 08:00 AM IST)
+  // Suppress FCM push deliveries during night hours unless running in test harness or explicitly bypassed
+  const isTestHarness = Boolean(options.customSupabase);
+  const bypassQuietHours = options.bypassQuietHours === true;
+  if (!isTestHarness && !bypassQuietHours && isQuietHoursIST()) {
+    return {
+      workerId,
+      processed: 0,
+      sent: 0,
+      failed: 0,
+      rejected: 0,
+      quiet_hours: true,
+      message: 'Quiet hours active (10:00 PM - 08:00 AM IST). Push dispatch postponed.',
+      results: [],
+    };
   }
 
   // 1. Reserve Deliveries

@@ -131,17 +131,38 @@ export default async function handler(req, res, customDependencies = {}) {
     });
   }
 
-  // 2c. Quiet Hours Guard (10:00 PM - 08:00 AM IST)
-  // In production (when not running in test harness and not explicitly forced),
+  // 2c. Parse Query Parameters for GET requests
+  let query = req.query;
+  if (!query && typeof req.url === 'string' && req.url.includes('?')) {
+    try {
+      const parsedUrl = new URL(req.url, 'http://localhost');
+      query = Object.fromEntries(parsedUrl.searchParams.entries());
+    } catch {
+      query = {};
+    }
+  }
+  query = query || {};
+
+  // 2d. Quiet Hours Guard (10:00 PM - 08:00 AM IST)
+  // In production (when not running in test harness),
   // suppress automated push dispatch during night sleep hours to protect users from nighttime bursts.
   const isTestHarness = Boolean(customDependencies.supabase);
-  const isForced =
-    req.query?.force === 'true' ||
-    req.query?.force === true ||
+  const bypassQuietHours =
     customDependencies.bypassQuietHours === true ||
-    customDependencies.autoIngest === true;
+    (isTestHarness && customDependencies.autoIngest === true);
 
-  if (!isTestHarness && !isForced && isQuietHoursIST()) {
+  if (!isTestHarness && !bypassQuietHours && isQuietHoursIST()) {
+    // If auto-ingestion is requested, safely ingest upcoming releases into schedule calendar,
+    // but strictly REFUSE to promote or dispatch push notifications to users during sleep hours!
+    let autoIngestResult = { ingested_count: 0, skipped_count: 0, releases: [] };
+    if (query.auto_ingest === 'true' || customDependencies.autoIngest === true) {
+      try {
+        autoIngestResult = await autoIngestUpcomingReleases(customDependencies.supabase || null, customDependencies);
+      } catch (autoErr) {
+        console.warn('[DispatchEndpoint] Auto-ingest during quiet hours non-fatal error:', autoErr.message);
+      }
+    }
+
     return sendJson(res, 200, {
       success: true,
       quiet_hours: true,
@@ -149,6 +170,8 @@ export default async function handler(req, res, customDependencies = {}) {
       processed: 0,
       sent: 0,
       promoted_campaigns: 0,
+      auto_ingested_count: autoIngestResult.ingested_count,
+      auto_ingested_releases: autoIngestResult.releases,
     });
   }
 
@@ -158,18 +181,7 @@ export default async function handler(req, res, customDependencies = {}) {
   let sweepFirst = true;
 
   if (method === 'GET') {
-    // Vercel Cron and monitoring pings invoke via GET without request body
     // Safe defaults: batch_size=25, lease_seconds=60, sweep_expired=true
-    let query = req.query;
-    if (!query && typeof req.url === 'string' && req.url.includes('?')) {
-      try {
-        const parsedUrl = new URL(req.url, 'http://localhost');
-        query = Object.fromEntries(parsedUrl.searchParams.entries());
-      } catch {
-        query = {};
-      }
-    }
-    query = query || {};
 
     if (query.batch_size !== undefined) {
       const qBatch = parseInt(query.batch_size, 10);

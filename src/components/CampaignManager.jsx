@@ -217,16 +217,23 @@ export default function CampaignManager({ initialView = 'form' }) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
-      const res = await fetch('/api/notifications/dispatch?auto_ingest=true&sweep_expired=true&force=true', {
+      const res = await fetch('/api/notifications/dispatch?auto_ingest=true&sweep_expired=true', {
         method: 'GET',
         headers,
       });
       const data = await res.json();
       if (res.ok) {
-        setActionStatus({
-          type: 'success',
-          message: `Auto-Sync complete! ${data.auto_ingested_count || 0} release(s) scheduled across distributed daytime windows (8:30 AM, 1:30 PM, 6:00 PM, 8:45 PM IST). Promoted: ${data.promoted_campaigns || 0}.`,
-        });
+        if (data.quiet_hours) {
+          setActionStatus({
+            type: 'success',
+            message: `Auto-Sync complete! ${data.auto_ingested_count || 0} release(s) scheduled. Push dispatch is paused during Quiet Hours (10 PM - 8 AM IST) to protect users from nighttime alerts.`,
+          });
+        } else {
+          setActionStatus({
+            type: 'success',
+            message: `Auto-Sync complete! ${data.auto_ingested_count || 0} release(s) scheduled across distributed daytime windows (8:30 AM, 1:30 PM, 6:00 PM, 8:45 PM IST). Promoted: ${data.promoted_campaigns || 0}.`,
+          });
+        }
       } else {
         throw new Error(data.message || data.error || 'Sync failed');
       }
