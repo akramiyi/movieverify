@@ -771,15 +771,16 @@ function App() {
   const displayDownloadAvailable = (tmdbError || !downloadAvailable) ? [] : downloadAvailable;
 
   useEffect(() => {
-    if (displayFeatured && displayFeatured.length > 0 && displayFeatured[0].backdrop) {
-      const href = displayFeatured[0].backdrop;
-      if (!document.querySelector(`link[href="${href}"]`)) {
-        const link = document.createElement('link');
-        link.rel = 'preload';
-        link.as = 'image';
-        link.href = href;
-        document.head.appendChild(link);
-      }
+    if (displayFeatured && displayFeatured.length > 0) {
+      displayFeatured.slice(0, 2).forEach((item) => {
+        if (item.backdrop && !document.querySelector(`link[href="${item.backdrop}"]`)) {
+          const link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'image';
+          link.href = item.backdrop;
+          document.head.appendChild(link);
+        }
+      });
     }
   }, [displayFeatured]);
 
