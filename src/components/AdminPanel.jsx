@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight, Calendar, RotateCcw } from 'lucide-react';
+import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight, Calendar, RotateCcw, Database, BarChart3, FileText, Send } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, fetchMovieOrTVById, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
@@ -30,26 +30,26 @@ const AdminLiveClock = () => {
   const epochSec = Math.floor(epochMs / 1000);
 
   return (
-    <div className="flex items-center gap-2.5 bg-black/40 backdrop-blur-xl border border-white/[0.12] rounded-2xl px-3.5 py-1.5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.18),0_4px_12px_rgba(0,0,0,0.5)]">
-      <div className="w-7 h-7 rounded-full bg-[#E50914]/20 border border-[#E50914]/40 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(229,9,20,0.35)]">
-        <Clock className="w-3.5 h-3.5 text-[#E50914]" />
+    <div className="flex items-center gap-2 bg-black/40 backdrop-blur-xl border border-white/[0.12] rounded-2xl px-2.5 sm:px-3.5 py-1.5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.18),0_4px_12px_rgba(0,0,0,0.5)]">
+      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#E50914]/20 border border-[#E50914]/40 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(229,9,20,0.35)]">
+        <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#E50914]" />
       </div>
-      <div className="flex flex-col min-w-[135px]">
+      <div className="flex flex-col min-w-0">
         {showEpoch ? (
           <>
-            <span className="font-mono text-xs font-bold text-amber-400 tracking-wider">
+            <span className="font-mono text-[11px] sm:text-xs font-bold text-amber-400 tracking-wider truncate">
               {epochMs}
             </span>
-            <span className="text-[9px] text-gray-400 font-mono">
+            <span className="text-[9px] text-gray-400 font-mono truncate">
               Epoch ({epochSec}s)
             </span>
           </>
         ) : (
           <>
-            <span className="font-mono text-xs font-bold text-white tracking-wider">
+            <span className="font-mono text-[11px] sm:text-xs font-bold text-white tracking-wider truncate">
               {time}
             </span>
-            <span className="text-[9px] text-gray-400">
+            <span className="text-[9px] text-gray-400 truncate">
               {date}
             </span>
           </>
@@ -60,10 +60,10 @@ const AdminLiveClock = () => {
       <button
         type="button"
         onClick={() => setShowEpoch((prev) => !prev)}
-        className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition border border-white/10 active:scale-95 cursor-pointer ml-1 shadow-sm"
+        className="p-1 sm:p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition border border-white/10 active:scale-95 cursor-pointer ml-0.5 sm:ml-1 shadow-sm shrink-0"
         title={showEpoch ? 'Switch to Standard Time' : 'Switch to Epoch Time'}
       >
-        <ArrowLeftRight className="w-3.5 h-3.5 text-gray-300 hover:text-[#E50914]" />
+        <ArrowLeftRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-300 hover:text-[#E50914]" />
       </button>
     </div>
   );
@@ -1213,7 +1213,7 @@ const AdminPanel = ({ onClose }) => {
   const lastUpdated = latestUpdatedMovie ? new Date(latestUpdatedMovie.updated_at || latestUpdatedMovie.created_at || 0).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A';
 
   return (
-    <div className="fixed inset-0 z-[150] bg-black/90 flex flex-col p-4 md:p-8 overflow-y-auto backdrop-blur-xl">
+    <div className="fixed inset-0 z-[150] bg-black/90 flex flex-col p-2 sm:p-4 md:p-8 overflow-y-auto backdrop-blur-xl">
       {/* 3D Glass Ambient Background Lights */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#E50914]/20 rounded-full blur-[140px] animate-pulse" style={{ animationDuration: '6s' }} />
@@ -1221,81 +1221,103 @@ const AdminPanel = ({ onClose }) => {
         <div className="absolute -bottom-32 left-1/3 w-96 h-96 bg-amber-500/15 rounded-full blur-[140px] animate-pulse" style={{ animationDuration: '7s' }} />
       </div>
 
-      <div className="w-full max-w-5xl mx-auto glass-3d rounded-3xl p-6 md:p-8 relative mt-8 md:mt-12 flex flex-col z-10 transition-all">
+      <div className="w-full max-w-5xl mx-auto glass-3d rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 md:p-8 relative mt-2 sm:mt-6 md:mt-12 flex flex-col z-10 transition-all">
         {/* Specular Top Glare */}
-        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/[0.08] via-white/[0.02] to-transparent rounded-t-3xl pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/[0.08] via-white/[0.02] to-transparent rounded-t-2xl sm:rounded-t-3xl pointer-events-none" />
 
-        {/* Header Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6 px-2 md:px-0 relative z-10">
+        {/* Top Header & Actions Bar */}
+        <div className="flex items-center justify-between gap-2 mb-3 px-1 sm:px-0 relative z-10">
           <AdminLiveClock />
-          <div className="flex flex-wrap items-center gap-2">
-            <button 
-              onClick={() => setActiveTab(activeTab === 'analytics' ? 'manager' : 'analytics')}
-              className={`transition-all duration-300 text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border ${
-                activeTab === 'analytics'
-                  ? 'bg-purple-600 text-white border-purple-400/60 shadow-[0_0_20px_rgba(147,51,234,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
-                  : 'bg-white/[0.05] hover:bg-white/[0.12] text-purple-300 hover:text-white border-white/[0.10] hover:border-purple-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0'
-              }`}
-            >
-              {activeTab === 'analytics' ? 'Back to Manager' : 'View Analytics'}
-            </button>
-            <button 
-              onClick={() => setActiveTab(activeTab === 'campaigns' ? 'manager' : 'campaigns')}
-              className={`transition-all duration-300 text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border ${
-                activeTab === 'campaigns'
-                  ? 'bg-rose-600 text-white border-rose-400/60 shadow-[0_0_20px_rgba(225,29,72,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
-                  : 'bg-white/[0.05] hover:bg-white/[0.12] text-rose-300 hover:text-white border-white/[0.10] hover:border-rose-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0'
-              }`}
-            >
-              {activeTab === 'campaigns' ? 'Back to Manager' : 'Campaigns'}
-            </button>
-            <button 
-              onClick={() => setActiveTab(activeTab === 'scanner' ? 'manager' : 'scanner')}
-              className={`transition-all duration-300 text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border ${
-                activeTab === 'scanner'
-                  ? 'bg-rose-600 text-white border-rose-400/60 shadow-[0_0_20px_rgba(225,29,72,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
-                  : 'bg-white/[0.05] hover:bg-white/[0.12] text-rose-300 hover:text-white border-white/[0.10] hover:border-rose-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0'
-              }`}
-              title="Auto-scan upcoming South, Bollywood, Hollywood movies and Hindi & Hollywood web series releases"
-            >
-              <Film className="w-3.5 h-3.5 text-rose-400" />
-              {activeTab === 'scanner' ? 'Back to Manager' : '🎬 Upcoming Releases'}
-            </button>
-            <button 
-              onClick={() => setActiveTab(activeTab === 'schedule' ? 'manager' : 'schedule')}
-              className={`transition-all duration-300 text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border ${
-                activeTab === 'schedule'
-                  ? 'bg-amber-600 text-white border-amber-400/60 shadow-[0_0_20px_rgba(217,119,6,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
-                  : 'bg-white/[0.05] hover:bg-white/[0.12] text-amber-300 hover:text-white border-white/[0.10] hover:border-amber-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0'
-              }`}
-              title="View scheduled queue & notification timeline by category and date"
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              {activeTab === 'schedule' ? 'Back to Manager' : 'Schedule Queue'}
-            </button>
-            <button 
-              onClick={() => setActiveTab(activeTab === 'reports' ? 'manager' : 'reports')}
-              className={`transition-all duration-300 text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border ${
-                activeTab === 'reports'
-                  ? 'bg-blue-600 text-white border-blue-400/60 shadow-[0_0_20px_rgba(37,99,235,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
-                  : 'bg-white/[0.05] hover:bg-white/[0.12] text-blue-300 hover:text-white border-white/[0.10] hover:border-blue-400/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0'
-              }`}
-            >
-              {activeTab === 'reports' ? 'Back to Manager' : 'View Reports'}
-            </button>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button 
               onClick={handleLogout}
-              className="bg-white/[0.05] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-all text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md border border-white/[0.10] shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0"
+              className="bg-white/[0.05] hover:bg-white/[0.12] text-gray-300 hover:text-white transition-all text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md border border-white/[0.10] shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+              title="Logout"
             >
-              <LogOut className="w-3.5 h-3.5" /> Logout
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Logout</span>
             </button>
             <button 
               onClick={onClose}
-              className="bg-white/10 hover:bg-white/20 text-white transition-all text-xs font-bold px-4 py-2 rounded-full focus:outline-none backdrop-blur-md border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.25)] hover:scale-105 active:scale-95"
+              className="bg-white/10 hover:bg-white/20 text-white transition-all text-xs font-bold px-3 py-1.5 sm:px-4 sm:py-2 rounded-full focus:outline-none backdrop-blur-md border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.25)] hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1"
+              title="Close Manager"
             >
-              Close Manager
+              <X className="w-3.5 h-3.5 sm:hidden" />
+              <span>Close<span className="hidden sm:inline"> Manager</span></span>
             </button>
           </div>
+        </div>
+
+        {/* Navigation Tabs Bar - Horizontal swipeable pills on mobile */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2 mb-5 border-b border-white/10 relative z-10">
+          <button 
+            onClick={() => setActiveTab('manager')}
+            className={`transition-all duration-200 text-xs font-bold px-3.5 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border whitespace-nowrap shrink-0 ${
+              activeTab === 'manager'
+                ? 'bg-[#E50914] text-white border-red-500/60 shadow-[0_0_18px_rgba(229,9,20,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                : 'bg-white/[0.05] hover:bg-white/[0.12] text-gray-300 hover:text-white border-white/[0.10]'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Downloads DB</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab(activeTab === 'campaigns' ? 'manager' : 'campaigns')}
+            className={`transition-all duration-200 text-xs font-bold px-3.5 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border whitespace-nowrap shrink-0 ${
+              activeTab === 'campaigns'
+                ? 'bg-rose-600 text-white border-rose-400/60 shadow-[0_0_18px_rgba(225,29,72,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                : 'bg-white/[0.05] hover:bg-white/[0.12] text-rose-300 hover:text-white border-white/[0.10]'
+            }`}
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Campaigns</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab(activeTab === 'scanner' ? 'manager' : 'scanner')}
+            className={`transition-all duration-200 text-xs font-bold px-3.5 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border whitespace-nowrap shrink-0 ${
+              activeTab === 'scanner'
+                ? 'bg-rose-600 text-white border-rose-400/60 shadow-[0_0_18px_rgba(225,29,72,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                : 'bg-white/[0.05] hover:bg-white/[0.12] text-rose-300 hover:text-white border-white/[0.10]'
+            }`}
+            title="Auto-scan upcoming South, Bollywood, Hollywood movies and Hindi & Hollywood web series releases"
+          >
+            <Film className="w-3.5 h-3.5 text-rose-400" />
+            <span>🎬 Upcoming Releases</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab(activeTab === 'schedule' ? 'manager' : 'schedule')}
+            className={`transition-all duration-200 text-xs font-bold px-3.5 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border whitespace-nowrap shrink-0 ${
+              activeTab === 'schedule'
+                ? 'bg-amber-600 text-white border-amber-400/60 shadow-[0_0_18px_rgba(217,119,6,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                : 'bg-white/[0.05] hover:bg-white/[0.12] text-amber-300 hover:text-white border-white/[0.10]'
+            }`}
+            title="View scheduled queue & notification timeline by category and date"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Schedule Queue</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab(activeTab === 'analytics' ? 'manager' : 'analytics')}
+            className={`transition-all duration-200 text-xs font-bold px-3.5 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border whitespace-nowrap shrink-0 ${
+              activeTab === 'analytics'
+                ? 'bg-purple-600 text-white border-purple-400/60 shadow-[0_0_18px_rgba(147,51,234,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                : 'bg-white/[0.05] hover:bg-white/[0.12] text-purple-300 hover:text-white border-white/[0.10]'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Analytics</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab(activeTab === 'reports' ? 'manager' : 'reports')}
+            className={`transition-all duration-200 text-xs font-bold px-3.5 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border whitespace-nowrap shrink-0 ${
+              activeTab === 'reports'
+                ? 'bg-blue-600 text-white border-blue-400/60 shadow-[0_0_18px_rgba(37,99,235,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                : 'bg-white/[0.05] hover:bg-white/[0.12] text-blue-300 hover:text-white border-white/[0.10]'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Reports</span>
+          </button>
         </div>
 
         {/* Main Content Area */}
@@ -1324,33 +1346,33 @@ const AdminPanel = ({ onClose }) => {
             <>
               {/* Left Form Panel */}
               <div className="flex-1 space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div className="glass-card rounded-2xl p-4 text-center hover:border-white/20 transition-all hover:-translate-y-0.5">
-              <div className="text-3xl font-black text-white">{totalMovies}</div>
-              <div className="text-xs text-gray-400 mt-1 font-medium">Total Movies</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-5">
+            <div className="glass-card rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center hover:border-white/20 transition-all hover:-translate-y-0.5">
+              <div className="text-2xl sm:text-3xl font-black text-white">{totalMovies}</div>
+              <div className="text-[11px] sm:text-xs text-gray-400 mt-0.5 font-medium">Total Movies</div>
             </div>
-            <div className="glass-card rounded-2xl p-4 text-center hover:border-red-500/30 transition-all hover:-translate-y-0.5">
-              <div className="text-3xl font-black text-[#E50914]">{missing1080p}</div>
-              <div className="text-xs text-gray-400 mt-1 font-medium">Missing 1080p</div>
+            <div className="glass-card rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center hover:border-red-500/30 transition-all hover:-translate-y-0.5">
+              <div className="text-2xl sm:text-3xl font-black text-[#E50914]">{missing1080p}</div>
+              <div className="text-[11px] sm:text-xs text-gray-400 mt-0.5 font-medium">Missing 1080p</div>
             </div>
-            <div className="glass-card rounded-2xl p-4 text-center hover:border-yellow-500/30 transition-all hover:-translate-y-0.5">
-              <div className="text-3xl font-black text-yellow-400">{missing720p}</div>
-              <div className="text-xs text-gray-400 mt-1 font-medium">Missing 720p</div>
+            <div className="glass-card rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center hover:border-yellow-500/30 transition-all hover:-translate-y-0.5">
+              <div className="text-2xl sm:text-3xl font-black text-yellow-400">{missing720p}</div>
+              <div className="text-[11px] sm:text-xs text-gray-400 mt-0.5 font-medium">Missing 720p</div>
             </div>
-            <div className="glass-card rounded-2xl p-4 text-center hover:border-green-500/30 transition-all hover:-translate-y-0.5 flex flex-col justify-center">
-              <div className="text-xl font-black text-green-400">{lastUpdated}</div>
-              <div className="text-xs text-gray-400 mt-1 font-medium">Last Updated</div>
+            <div className="glass-card rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center hover:border-green-500/30 transition-all hover:-translate-y-0.5 flex flex-col justify-center">
+              <div className="text-lg sm:text-xl font-black text-green-400">{lastUpdated}</div>
+              <div className="text-[11px] sm:text-xs text-gray-400 mt-0.5 font-medium">Last Updated</div>
             </div>
           </div>
 
-          <div className={`backdrop-blur-xl border rounded-2xl p-4 mb-6 transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${
+          <div className={`backdrop-blur-xl border rounded-2xl p-3.5 sm:p-4 mb-6 transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${
             siteLockStatus ? 'border-red-500/50 bg-gradient-to-r from-red-950/40 via-black/40 to-black/40 shadow-[0_0_30px_rgba(239,68,68,0.2)]' : 'border-white/[0.08] bg-white/[0.03]'
           }`}>
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="text-white font-bold text-sm">Site Lock</h4>
-                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide uppercase ${
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-white font-bold text-sm whitespace-nowrap">Site Lock</h4>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold tracking-wide uppercase shrink-0 ${
                     siteLockStatus 
                       ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
                       : 'bg-green-500/20 text-green-400 border border-green-500/30'
@@ -1359,7 +1381,7 @@ const AdminPanel = ({ onClose }) => {
                     {siteLockStatus ? 'Locked (Private)' : 'Public (Active)'}
                   </span>
                 </div>
-                <p className="text-gray-400 text-xs mt-1">
+                <p className="text-gray-400 text-xs mt-1 leading-relaxed">
                   {siteLockStatus 
                     ? 'Site is currently password-protected. Visitors must enter the access key.' 
                     : 'Site is open and accessible to all visitors without restrictions.'}
@@ -1369,7 +1391,7 @@ const AdminPanel = ({ onClose }) => {
                 type="button"
                 onClick={handleToggleSiteLock}
                 disabled={lockToggling || lockKeyUpdating}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition flex items-center gap-1.5 shadow-md ${
+                className={`w-full sm:w-auto px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-full text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shrink-0 cursor-pointer ${
                   siteLockStatus 
                     ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-900/40' 
                     : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40'
@@ -1395,17 +1417,17 @@ const AdminPanel = ({ onClose }) => {
             </div>
             
             <div className="space-y-2 pt-2 border-t border-white/5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-red-400" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-1">
+                <label className="text-xs text-gray-300 font-medium flex items-center gap-1.5 whitespace-nowrap">
+                  <Key className="w-3.5 h-3.5 text-red-400 shrink-0" />
                   Access Key Management
                 </label>
                 {hasLockKey ? (
-                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold self-start sm:self-auto">
                     ✓ Key Configured
                   </span>
                 ) : (
-                  <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-semibold self-start sm:self-auto">
                     ⚠️ Key Required to Lock
                   </span>
                 )}
@@ -1414,7 +1436,7 @@ const AdminPanel = ({ onClose }) => {
                 <input
                   id="site-lock-key-input"
                   type="text"
-                  placeholder={hasLockKey ? "Change access key..." : "Enter access key (required to lock)..."}
+                  placeholder={hasLockKey ? "Change access key..." : "Enter access key..."}
                   value={lockKeyInput}
                   onChange={(e) => setLockKeyInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -1423,13 +1445,13 @@ const AdminPanel = ({ onClose }) => {
                       handleSaveLockKey();
                     }
                   }}
-                  className="flex-1 bg-black/40 backdrop-blur-md border border-white/[0.12] rounded-xl px-3.5 py-2 text-white text-sm outline-none focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]/40 transition shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]"
+                  className="flex-1 min-w-0 bg-black/40 backdrop-blur-md border border-white/[0.12] rounded-xl px-3 sm:px-3.5 py-2 text-white text-xs sm:text-sm outline-none focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]/40 transition shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]"
                 />
                 <button
                   type="button"
                   onClick={handleSaveLockKey}
                   disabled={lockKeyUpdating || lockToggling || !lockKeyInput.trim()}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap backdrop-blur-md border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] hover:scale-[1.02] active:scale-95 cursor-pointer"
+                  className="shrink-0 px-3.5 sm:px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap backdrop-blur-md border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] hover:scale-[1.02] active:scale-95 cursor-pointer"
                 >
                   {lockKeyUpdating ? (
                     <>
@@ -1445,7 +1467,7 @@ const AdminPanel = ({ onClose }) => {
                 </button>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
-                <p className="text-gray-500 text-[11px] flex-1">
+                <p className="text-gray-500 text-[11px] flex-1 leading-relaxed">
                   {siteLockStatus 
                     ? 'Visitors will need to enter this key to unlock and browse the catalog.' 
                     : hasLockKey
@@ -1457,7 +1479,7 @@ const AdminPanel = ({ onClose }) => {
                     type="button"
                     onClick={handleResetLockKey}
                     disabled={lockKeyUpdating || lockToggling}
-                    className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-300 border border-red-800/50 hover:border-red-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer shadow-sm disabled:opacity-50"
+                    className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 hover:text-red-300 border border-red-800/50 hover:border-red-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer shadow-sm disabled:opacity-50 shrink-0"
                     title="Password bhool gaye? Yahan se reset karke naya password banayein"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -1696,28 +1718,28 @@ const AdminPanel = ({ onClose }) => {
             className="w-full bg-black/40 backdrop-blur-md border border-white/[0.12] rounded-xl px-4 py-2 text-white text-sm outline-none focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]/40 transition mb-3 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]"
           />
 
-          <div className="flex gap-2 mb-3 flex-wrap">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 mb-3">
             <button
               onClick={() => setQualityFilter('all')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer ${qualityFilter === 'all' ? 'bg-[#E50914] text-white shadow-[0_0_12px_rgba(229,9,20,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer whitespace-nowrap shrink-0 ${qualityFilter === 'all' ? 'bg-[#E50914] text-white shadow-[0_0_12px_rgba(229,9,20,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
             >
               All Movies
             </button>
             <button
               onClick={() => setQualityFilter('missing1080p')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer ${qualityFilter === 'missing1080p' ? 'bg-[#E50914] text-white shadow-[0_0_12px_rgba(229,9,20,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer whitespace-nowrap shrink-0 ${qualityFilter === 'missing1080p' ? 'bg-[#E50914] text-white shadow-[0_0_12px_rgba(229,9,20,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
             >
               Missing 1080p
             </button>
             <button
               onClick={() => setQualityFilter('missing720p')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer ${qualityFilter === 'missing720p' ? 'bg-[#E50914] text-white shadow-[0_0_12px_rgba(229,9,20,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer whitespace-nowrap shrink-0 ${qualityFilter === 'missing720p' ? 'bg-[#E50914] text-white shadow-[0_0_12px_rgba(229,9,20,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
             >
               Missing 720p
             </button>
             <button
               onClick={() => setQualityFilter('complete')}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer ${qualityFilter === 'complete' ? 'bg-emerald-600 text-white shadow-[0_0_12px_rgba(16,185,129,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition backdrop-blur-md cursor-pointer whitespace-nowrap shrink-0 ${qualityFilter === 'complete' ? 'bg-emerald-600 text-white shadow-[0_0_12px_rgba(16,185,129,0.4)]' : 'bg-white/5 text-gray-400 hover:text-white border border-white/5'}`}
             >
               ✓ Complete
             </button>

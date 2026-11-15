@@ -817,12 +817,12 @@ export default function CampaignManager({ initialView = 'form' }) {
   return (
     <div className="space-y-6">
       {/* Top View Mode Switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-black/40 backdrop-blur-xl p-2 rounded-2xl border border-white/[0.12] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15),0_8px_20px_rgba(0,0,0,0.5)]">
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center justify-between gap-2 bg-black/40 backdrop-blur-xl p-2 rounded-2xl border border-white/[0.12] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15),0_8px_20px_rgba(0,0,0,0.5)]">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
           <button
             type="button"
             onClick={() => setActiveView('form')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeView === 'form'
                 ? 'bg-[#E50914] text-white shadow-[0_0_15px_rgba(229,9,20,0.45),inset_0_1px_0_rgba(255,255,255,0.25)] scale-[1.02]'
                 : 'text-gray-400 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/10'
@@ -835,14 +835,14 @@ export default function CampaignManager({ initialView = 'form' }) {
           <button
             type="button"
             onClick={() => setActiveView('queue')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeView === 'queue'
                 ? 'bg-amber-600 text-white shadow-[0_0_15px_rgba(217,119,6,0.45),inset_0_1px_0_rgba(255,255,255,0.25)] scale-[1.02]'
                 : 'text-gray-400 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/10'
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
-            <span>Scheduled Queue & Category Tracker</span>
+            <span>Scheduled Queue & Tracker</span>
             {stats.totalQueued > 0 && (
               <span className="bg-amber-400 text-black px-2 py-0.2 rounded-full text-[10px] font-black animate-pulse shadow-sm">
                 {stats.totalQueued}
@@ -853,14 +853,14 @@ export default function CampaignManager({ initialView = 'form' }) {
           <button
             type="button"
             onClick={() => setActiveView('scanner')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeView === 'scanner'
                 ? 'bg-rose-600 text-white shadow-[0_0_15px_rgba(225,29,72,0.45),inset_0_1px_0_rgba(255,255,255,0.25)] scale-[1.02]'
                 : 'text-gray-400 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/10'
             }`}
           >
             <Film className="w-3.5 h-3.5 text-rose-400" />
-            <span>🎬 Upcoming Releases Radar</span>
+            <span>🎬 Upcoming Radar</span>
             <span className="bg-rose-500/30 text-rose-300 px-2 py-0.2 rounded-full text-[10px] font-black border border-rose-500/40">
               Live TMDB
             </span>
@@ -871,11 +871,11 @@ export default function CampaignManager({ initialView = 'form' }) {
           type="button"
           onClick={fetchCampaigns}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-xl hover:bg-white/10 border border-white/5 transition"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-xl hover:bg-white/10 border border-white/5 transition cursor-pointer"
           title="Refresh campaigns data"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
+          <span className="hidden sm:inline">Refresh</span>
         </button>
       </div>
 
