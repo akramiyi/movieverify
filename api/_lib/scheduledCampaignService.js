@@ -176,44 +176,70 @@ export async function promoteDueScheduledCampaignsFallback(customSupabase = null
 }
 
 /**
- * 4 Morning Release Staggering Slots (Indian Standard Time - IST / UTC+05:30)
+ * Smart Distributed Notification Slots (IST / UTC+05:30)
+ * Designed to eliminate spam bursts by distributing notifications across waking daytime hours
+ * with 3.5 to 5.5 hours of breathing space.
  *
- * User Requirement:
- * - 07:00 AM IST -> 01:30:00.000Z UTC
- * - 08:00 AM IST -> 02:30:00.000Z UTC
- * - 09:00 AM IST -> 03:30:00.000Z UTC
- * - 10:00 AM IST -> 04:30:00.000Z UTC
+ * Quiet Hours: 10:00 PM to 08:00 AM IST (Strict DND - No pushes sent!)
  *
- * Distributes same-day releases across these 4 distinct morning slots to prevent
- * simultaneous notification spam, auto-dispatched without admin approval.
+ * Slots:
+ * - 08:30 AM IST (Morning Spotlight) -> 03:00 UTC
+ * - 01:30 PM IST (Afternoon Premiere) -> 08:00 UTC
+ * - 06:00 PM IST (Evening Prime) -> 12:30 UTC
+ * - 08:45 PM IST (Night Watchlist) -> 15:15 UTC
  */
-export const MORNING_SLOTS_IST = [
-  { hourIST: 7, minuteIST: 0, timeStr: '07:00 AM IST', utcSlot: '01:30:00.000Z' },
-  { hourIST: 8, minuteIST: 0, timeStr: '08:00 AM IST', utcSlot: '02:30:00.000Z' },
-  { hourIST: 9, minuteIST: 0, timeStr: '09:00 AM IST', utcSlot: '03:30:00.000Z' },
-  { hourIST: 10, minuteIST: 0, timeStr: '10:00 AM IST', utcSlot: '04:30:00.000Z' },
+export const SMART_DAYTIME_SLOTS_IST = [
+  { id: 'morning', hourIST: 8, minuteIST: 30, timeStr: '08:30 AM IST', utcSlot: '03:00:00.000Z', label: 'Morning Spotlight' },
+  { id: 'afternoon', hourIST: 13, minuteIST: 30, timeStr: '01:30 PM IST', utcSlot: '08:00:00.000Z', label: 'Afternoon Premiere' },
+  { id: 'evening', hourIST: 18, minuteIST: 0, timeStr: '06:00 PM IST', utcSlot: '12:30:00.000Z', label: 'Evening Prime' },
+  { id: 'night', hourIST: 20, minuteIST: 45, timeStr: '08:45 PM IST', utcSlot: '15:15:00.000Z', label: 'Night Watchlist' },
 ];
+
+export const MORNING_SLOTS_IST = SMART_DAYTIME_SLOTS_IST;
+export const MAX_DAILY_NOTIFICATIONS = 3;
+
+/**
+ * Returns today's date formatted as 'YYYY-MM-DD' in Indian Standard Time (UTC+05:30)
+ * @param {Date} [refDate]
+ * @returns {string}
+ */
+export function getTodayIST(refDate = new Date()) {
+  const istOffsetMs = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(refDate.getTime() + istOffsetMs);
+  return istDate.toISOString().split('T')[0];
+}
+
+/**
+ * Checks if current time is within Quiet Hours (10:00 PM to 08:00 AM IST)
+ * @param {Date} [refDate]
+ * @returns {boolean}
+ */
+export function isQuietHoursIST(refDate = new Date()) {
+  const istHours = (refDate.getUTCHours() + 5 + Math.floor((refDate.getUTCMinutes() + 30) / 60)) % 24;
+  return istHours >= 22 || istHours < 8; // 10 PM to 8 AM IST
+}
 
 /**
  * Calculate scheduled ISO timestamp for a release date and slot index
  *
  * @param {string} releaseDateStr 'YYYY-MM-DD'
  * @param {number} slotIndex 0-based index of movie on that release date
- * @returns {{ scheduled_for: string, slot_index: number, slot_time: string, hour_ist: number, minute_ist: number }}
+ * @returns {{ scheduled_for: string, slot_index: number, slot_time: string, slot_label: string, hour_ist: number, minute_ist: number }}
  */
 export function getScheduledSlotForRelease(releaseDateStr, slotIndex = 0) {
   if (!releaseDateStr || typeof releaseDateStr !== 'string') {
     throw new Error('releaseDateStr must be a non-empty string in YYYY-MM-DD format.');
   }
   const cleanDate = releaseDateStr.trim().split('T')[0];
-  const safeIndex = Math.abs(parseInt(slotIndex, 10) || 0) % MORNING_SLOTS_IST.length;
-  const slot = MORNING_SLOTS_IST[safeIndex];
+  const safeIndex = Math.min(Math.abs(parseInt(slotIndex, 10) || 0), SMART_DAYTIME_SLOTS_IST.length - 1);
+  const slot = SMART_DAYTIME_SLOTS_IST[safeIndex];
   const scheduledIso = `${cleanDate}T${slot.utcSlot}`;
 
   return {
     scheduled_for: scheduledIso,
     slot_index: safeIndex,
     slot_time: slot.timeStr,
+    slot_label: slot.label,
     hour_ist: slot.hourIST,
     minute_ist: slot.minuteIST,
   };
@@ -414,6 +440,7 @@ export async function autoIngestUpcomingReleases(customSupabase = null, options 
 
   const ingested = [];
   let skippedCount = 0;
+  const todayIST = getTodayIST();
 
   for (const item of releases) {
     const mediaType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
@@ -424,14 +451,26 @@ export async function autoIngestUpcomingReleases(customSupabase = null, options 
       continue;
     }
 
+    // Strict Future-Release Guard: Never schedule or send retrospective push alerts for past dates!
+    if (releaseDate < todayIST) {
+      skippedCount++;
+      continue;
+    }
+
+    // Anti-Spam Daily Cap: Never schedule more than MAX_DAILY_NOTIFICATIONS (3) individual alerts per date
+    const countOnDate = moviesPerDateCount[releaseDate] || 0;
+    if (countOnDate >= MAX_DAILY_NOTIFICATIONS) {
+      skippedCount++;
+      continue;
+    }
+
     const idempotencyKey = `auto_rel_${mediaType}_${itemId}_${releaseDate}`;
     if (existingKeys.has(idempotencyKey)) {
       skippedCount++;
       continue;
     }
 
-    // Determine slot based on existing movies count on that release date (stagger across 7, 8, 9, 10 AM IST)
-    const countOnDate = moviesPerDateCount[releaseDate] || 0;
+    // Determine distributed daytime slot (08:30 AM, 01:30 PM, 06:00 PM, 08:45 PM IST)
     const slotInfo = getScheduledSlotForRelease(releaseDate, countOnDate);
     moviesPerDateCount[releaseDate] = countOnDate + 1;
     existingKeys.add(idempotencyKey);

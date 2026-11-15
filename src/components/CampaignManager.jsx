@@ -29,12 +29,22 @@ import { supabase } from '../data/supabaseClient';
 import { fetchUpcomingReleases, fetchUpcomingIndianMovies } from '../hooks/useTMDB';
 import UpcomingReleaseModal from './UpcomingReleaseModal';
 import {
+  SMART_DAYTIME_SLOTS_IST,
   MORNING_SLOTS_IST,
   getSlotForRelease,
   getCountdownDetails,
+  getTodayIST,
+  isQuietHoursIST,
 } from '../utils/releaseSchedulerUtils';
 
-export { MORNING_SLOTS_IST, getSlotForRelease, getCountdownDetails };
+export {
+  SMART_DAYTIME_SLOTS_IST,
+  MORNING_SLOTS_IST,
+  getSlotForRelease,
+  getCountdownDetails,
+  getTodayIST,
+  isQuietHoursIST,
+};
 
 export const isCampaignCompleted = (c) => {
   if (!c) return false;
@@ -183,6 +193,11 @@ export default function CampaignManager({ initialView = 'form' }) {
   }, [currentTime, campaigns]);
 
   const triggerAutoDispatch = async () => {
+    // Quiet Hours Guard (10:00 PM - 08:00 AM IST):
+    // Never trigger automated background dispatch during sleep hours to prevent notification bursts
+    if (isQuietHoursIST()) {
+      return;
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
@@ -202,7 +217,7 @@ export default function CampaignManager({ initialView = 'form' }) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
-      const res = await fetch('/api/notifications/dispatch?auto_ingest=true&sweep_expired=true', {
+      const res = await fetch('/api/notifications/dispatch?auto_ingest=true&sweep_expired=true&force=true', {
         method: 'GET',
         headers,
       });
@@ -210,7 +225,7 @@ export default function CampaignManager({ initialView = 'form' }) {
       if (res.ok) {
         setActionStatus({
           type: 'success',
-          message: `Auto-Sync complete! ${data.auto_ingested_count || 0} release(s) auto-scheduled across 4 morning slots (7, 8, 9, 10 AM IST). Promoted: ${data.promoted_campaigns || 0}.`,
+          message: `Auto-Sync complete! ${data.auto_ingested_count || 0} release(s) scheduled across distributed daytime windows (8:30 AM, 1:30 PM, 6:00 PM, 8:45 PM IST). Promoted: ${data.promoted_campaigns || 0}.`,
         });
       } else {
         throw new Error(data.message || data.error || 'Sync failed');
@@ -490,11 +505,14 @@ export default function CampaignManager({ initialView = 'form' }) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Admin session required.');
 
-      const releaseDate = item.release_date || new Date().toISOString().split('T')[0];
-      const todayStr = new Date().toISOString().split('T')[0];
-      const isTodayOrPast = releaseDate <= todayStr;
+      const releaseDate = (item.release_date || getTodayIST()).split('T')[0];
+      const todayStr = getTodayIST();
+      if (releaseDate < todayStr) {
+        throw new Error(`Cannot schedule release alert for past date (${releaseDate}). Only upcoming releases can be scheduled.`);
+      }
       const slotInfo = getSlotForRelease(releaseDate, campaigns);
       const scheduledForIso = slotInfo.scheduled_for;
+      const isToday = releaseDate === todayStr;
 
       const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
       const catInfo = RELEASE_CATEGORIES.find((c) => c.id === item.release_category);
@@ -504,7 +522,7 @@ export default function CampaignManager({ initialView = 'form' }) {
       const alertHeader = isTv ? 'New Web Series Alert' : 'Big Screen Alert';
 
       const campaignPayload = {
-        title: `${titleEmoji} ${item.title} - ${actionText} ${isTodayOrPast ? 'Today!' : 'Soon'}`,
+        title: `${titleEmoji} ${item.title} - ${actionText} ${isToday ? 'Today!' : 'Soon'}`,
         body: `${alertHeader}: ${item.title} (${catLabel}) is scheduled for ${isTv ? 'streaming' : 'theatrical release'} on ${releaseDate}. Add it to your watchlist now to verify and watch instantly!`,
         category: isTv ? 'content_update' : 'movie_release',
         target_criteria: {
@@ -602,17 +620,21 @@ export default function CampaignManager({ initialView = 'form' }) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Admin session required.');
 
+      const todayStr = getTodayIST();
       const unscheduled = upcomingMovies.filter(
-        (m) =>
-          !campaigns.some(
+        (m) => {
+          const relDate = (m.release_date || '').split('T')[0];
+          if (relDate < todayStr) return false;
+          return !campaigns.some(
             (c) =>
               c.target_criteria?.movie_id === String(m.id) ||
               c.target_criteria?.series_id === String(m.id) ||
               c.title?.toLowerCase().includes(m.title.toLowerCase())
-          )
+          );
+        }
       );
 
-      const targetList = unscheduled.slice(0, count);
+      const targetList = unscheduled.slice(0, Math.min(count, 3));
       if (targetList.length === 0) {
         setActionStatus({ type: 'success', message: 'All upcoming releases in this view are already scheduled!' });
         setBatchScheduling(false);
@@ -621,9 +643,8 @@ export default function CampaignManager({ initialView = 'form' }) {
 
       let scheduledCount = 0;
       for (const item of targetList) {
-        const releaseDate = item.release_date || new Date().toISOString().split('T')[0];
-        const todayStr = new Date().toISOString().split('T')[0];
-        const isTodayOrPast = releaseDate <= todayStr;
+        const releaseDate = (item.release_date || todayStr).split('T')[0];
+        const isToday = releaseDate === todayStr;
         const slotInfo = getSlotForRelease(releaseDate, campaigns);
         const scheduledForIso = slotInfo.scheduled_for;
 
@@ -635,7 +656,7 @@ export default function CampaignManager({ initialView = 'form' }) {
         const alertHeader = isTv ? 'New Web Series Alert' : 'Big Screen Alert';
 
         const campaignPayload = {
-          title: `${titleEmoji} ${item.title} - ${actionText} ${isTodayOrPast ? 'Today!' : 'Soon'}`,
+          title: `${titleEmoji} ${item.title} - ${actionText} ${isToday ? 'Today!' : 'Soon'}`,
           body: `${alertHeader}: ${item.title} (${catLabel}) is scheduled for ${isTv ? 'streaming' : 'theatrical release'} on ${releaseDate}. Add it to your watchlist now to verify and watch instantly!`,
           category: isTv ? 'content_update' : 'movie_release',
           target_criteria: {
@@ -1027,14 +1048,14 @@ export default function CampaignManager({ initialView = 'form' }) {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-white font-bold text-sm">
-                    100% Zero-Approval Automated Release Dispatch
+                    🛡️ Smart Anti-Spam Automated Release Dispatch
                   </h3>
                   <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 animate-pulse">
                     Active
                   </span>
                 </div>
                 <p className="text-gray-400 text-xs mt-0.5">
-                  Upcoming releases auto-stagger across 4 morning slots: <strong className="text-amber-300">07:00 AM, 08:00 AM, 09:00 AM, 10:00 AM IST</strong>. Real-time 1-day timer counts down and auto-dispatches alerts without requiring manual admin approval.
+                  Upcoming releases auto-distribute across daytime windows: <strong className="text-amber-300">08:30 AM, 01:30 PM, 06:00 PM, 08:45 PM IST</strong> (Max 3/day). Quiet Hours (<span className="text-red-300 font-semibold">10 PM - 8 AM IST</span>) strictly protected to eliminate spam bursts.
                 </p>
               </div>
             </div>
@@ -1042,7 +1063,7 @@ export default function CampaignManager({ initialView = 'form' }) {
               type="button"
               onClick={handleManualSyncAndDispatch}
               className="px-3.5 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer"
-              title="Automatically sync upcoming TMDB releases across the 4 morning slots now"
+              title="Automatically sync upcoming TMDB releases across smart daytime slots now"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Sync Releases (Zero Approval)</span>

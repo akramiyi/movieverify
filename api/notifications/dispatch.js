@@ -19,6 +19,7 @@ import {
   promoteDueScheduledCampaigns,
   promoteDueScheduledCampaignsFallback,
   autoIngestUpcomingReleases,
+  isQuietHoursIST,
 } from '../_lib/scheduledCampaignService.js';
 import { sendJson, parseJsonBody } from '../_lib/requestUtils.js';
 
@@ -127,6 +128,27 @@ export default async function handler(req, res, customDependencies = {}) {
       code: 'DISPATCH_DISABLED',
       error: 'Notification dispatch is disabled.',
       message: 'Set NOTIFICATION_DISPATCH_ENABLED=true to enable server-side dispatch execution.',
+    });
+  }
+
+  // 2c. Quiet Hours Guard (10:00 PM - 08:00 AM IST)
+  // In production (when not running in test harness and not explicitly forced),
+  // suppress automated push dispatch during night sleep hours to protect users from nighttime bursts.
+  const isTestHarness = Boolean(customDependencies.supabase);
+  const isForced =
+    req.query?.force === 'true' ||
+    req.query?.force === true ||
+    customDependencies.bypassQuietHours === true ||
+    customDependencies.autoIngest === true;
+
+  if (!isTestHarness && !isForced && isQuietHoursIST()) {
+    return sendJson(res, 200, {
+      success: true,
+      quiet_hours: true,
+      message: 'Quiet hours active (10:00 PM - 08:00 AM IST). Push dispatch postponed to protect users from nighttime notification fatigue.',
+      processed: 0,
+      sent: 0,
+      promoted_campaigns: 0,
     });
   }
 

@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  SMART_DAYTIME_SLOTS_IST,
   MORNING_SLOTS_IST,
+  MAX_DAILY_NOTIFICATIONS,
+  getTodayIST,
+  isQuietHoursIST,
   getScheduledSlotForRelease,
   autoIngestUpcomingReleases,
 } from '../../api/_lib/scheduledCampaignService.js';
@@ -30,42 +34,42 @@ function createMockRes() {
   };
 }
 
-test('1. 4 Morning Time Slots - accurately configured for 7:00 AM, 8:00 AM, 9:00 AM, 10:00 AM IST', () => {
-  assert.equal(MORNING_SLOTS_IST.length, 4);
+test('1. Smart Distributed Time Slots - accurately configured for 8:30 AM, 1:30 PM, 6:00 PM, 8:45 PM IST', () => {
+  assert.equal(SMART_DAYTIME_SLOTS_IST.length, 4);
   assert.deepEqual(
-    MORNING_SLOTS_IST.map((s) => s.timeStr),
-    ['07:00 AM IST', '08:00 AM IST', '09:00 AM IST', '10:00 AM IST']
+    SMART_DAYTIME_SLOTS_IST.map((s) => s.timeStr),
+    ['08:30 AM IST', '01:30 PM IST', '06:00 PM IST', '08:45 PM IST']
   );
   // UTC Equivalencies for IST (UTC+05:30)
-  assert.equal(MORNING_SLOTS_IST[0].utcSlot, '01:30:00.000Z'); // 7:00 AM IST
-  assert.equal(MORNING_SLOTS_IST[1].utcSlot, '02:30:00.000Z'); // 8:00 AM IST
-  assert.equal(MORNING_SLOTS_IST[2].utcSlot, '03:30:00.000Z'); // 9:00 AM IST
-  assert.equal(MORNING_SLOTS_IST[3].utcSlot, '04:30:00.000Z'); // 10:00 AM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[0].utcSlot, '03:00:00.000Z'); // 8:30 AM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[1].utcSlot, '08:00:00.000Z'); // 1:30 PM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[2].utcSlot, '12:30:00.000Z'); // 6:00 PM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[3].utcSlot, '15:15:00.000Z'); // 8:45 PM IST
 });
 
-test('2. getScheduledSlotForRelease - staggers same-day movie releases across 4 morning slots', () => {
+test('2. getScheduledSlotForRelease - staggers same-day movie releases across daytime slots with max clamping', () => {
   const releaseDate = '2026-11-20';
 
   const slot0 = getScheduledSlotForRelease(releaseDate, 0);
-  assert.equal(slot0.slot_time, '07:00 AM IST');
-  assert.equal(slot0.scheduled_for, '2026-11-20T01:30:00.000Z');
+  assert.equal(slot0.slot_time, '08:30 AM IST');
+  assert.equal(slot0.scheduled_for, '2026-11-20T03:00:00.000Z');
 
   const slot1 = getScheduledSlotForRelease(releaseDate, 1);
-  assert.equal(slot1.slot_time, '08:00 AM IST');
-  assert.equal(slot1.scheduled_for, '2026-11-20T02:30:00.000Z');
+  assert.equal(slot1.slot_time, '01:30 PM IST');
+  assert.equal(slot1.scheduled_for, '2026-11-20T08:00:00.000Z');
 
   const slot2 = getScheduledSlotForRelease(releaseDate, 2);
-  assert.equal(slot2.slot_time, '09:00 AM IST');
-  assert.equal(slot2.scheduled_for, '2026-11-20T03:30:00.000Z');
+  assert.equal(slot2.slot_time, '06:00 PM IST');
+  assert.equal(slot2.scheduled_for, '2026-11-20T12:30:00.000Z');
 
   const slot3 = getScheduledSlotForRelease(releaseDate, 3);
-  assert.equal(slot3.slot_time, '10:00 AM IST');
-  assert.equal(slot3.scheduled_for, '2026-11-20T04:30:00.000Z');
+  assert.equal(slot3.slot_time, '08:45 PM IST');
+  assert.equal(slot3.scheduled_for, '2026-11-20T15:15:00.000Z');
 
-  // Slot 4 cycles back to 7:00 AM IST
+  // Slot 4 clamps to the last slot (8:45 PM IST)
   const slot4 = getScheduledSlotForRelease(releaseDate, 4);
-  assert.equal(slot4.slot_time, '07:00 AM IST');
-  assert.equal(slot4.scheduled_for, '2026-11-20T01:30:00.000Z');
+  assert.equal(slot4.slot_time, '08:45 PM IST');
+  assert.equal(slot4.scheduled_for, '2026-11-20T15:15:00.000Z');
 });
 
 test('3. autoIngestUpcomingReleases - automatically ingests releases with zero approval required and staggers same-day releases', async () => {
@@ -127,17 +131,17 @@ test('3. autoIngestUpcomingReleases - automatically ingests releases with zero a
   assert.equal(res1.ingested_count, 3);
   assert.equal(res1.skipped_count, 0);
 
-  // Movie 1 assigned Slot 0 (7:00 AM IST)
-  assert.equal(res1.releases[0].slot_time, '07:00 AM IST');
-  assert.equal(res1.releases[0].scheduled_for, '2026-11-25T01:30:00.000Z');
+  // Movie 1 assigned Slot 0 (08:30 AM IST)
+  assert.equal(res1.releases[0].slot_time, '08:30 AM IST');
+  assert.equal(res1.releases[0].scheduled_for, '2026-11-25T03:00:00.000Z');
 
-  // Movie 2 assigned Slot 1 (8:00 AM IST)
-  assert.equal(res1.releases[1].slot_time, '08:00 AM IST');
-  assert.equal(res1.releases[1].scheduled_for, '2026-11-25T02:30:00.000Z');
+  // Movie 2 assigned Slot 1 (01:30 PM IST)
+  assert.equal(res1.releases[1].slot_time, '01:30 PM IST');
+  assert.equal(res1.releases[1].scheduled_for, '2026-11-25T08:00:00.000Z');
 
-  // Movie 3 assigned Slot 2 (9:00 AM IST)
-  assert.equal(res1.releases[2].slot_time, '09:00 AM IST');
-  assert.equal(res1.releases[2].scheduled_for, '2026-11-25T03:30:00.000Z');
+  // Movie 3 assigned Slot 2 (06:00 PM IST)
+  assert.equal(res1.releases[2].slot_time, '06:00 PM IST');
+  assert.equal(res1.releases[2].scheduled_for, '2026-11-25T12:30:00.000Z');
 
   // Pass 2: Replay auto-ingest (Idempotency test)
   const res2 = await autoIngestUpcomingReleases(mockSupabase, { releases: sampleReleases });
@@ -215,7 +219,7 @@ test('4. dispatchHandler - executes autoIngest and returns auto_ingested_count w
     assert.equal(res.body.success, true);
     assert.equal(res.body.auto_ingested_count, 1);
     assert.equal(res.body.auto_ingested_releases[0].title, 'Kidney - Automatic Alert');
-    assert.equal(res.body.auto_ingested_releases[0].slot_time, '07:00 AM IST');
+    assert.equal(res.body.auto_ingested_releases[0].slot_time, '08:30 AM IST');
   } finally {
     if (prevSecret === undefined) delete process.env.INTERNAL_WORKER_SECRET;
     else process.env.INTERNAL_WORKER_SECRET = prevSecret;
@@ -251,4 +255,69 @@ test('5. getCountdownDetails - live ticking countdown calculations and 1-day thr
   const cd3 = getCountdownDetails(new Date(pastTime).toISOString(), baseTime);
   assert.equal(cd3.isDue, true);
   assert.match(cd3.label, /Release Time Reached/);
+});
+
+test('6. Anti-Spam Protection - Quiet Hours, Daily Cap (Max 3/Day), and Past Date Skipping', async () => {
+  // Test Quiet Hours check (10:00 PM to 08:00 AM IST)
+  const midnightUtc = new Date('2026-11-16T20:31:00.000Z'); // 02:01 AM IST
+  assert.equal(isQuietHoursIST(midnightUtc), true);
+
+  const daytimeUtc = new Date('2026-11-16T08:30:00.000Z'); // 02:00 PM IST
+  assert.equal(isQuietHoursIST(daytimeUtc), false);
+
+  const lateNightUtc = new Date('2026-11-16T17:00:00.000Z'); // 10:30 PM IST
+  assert.equal(isQuietHoursIST(lateNightUtc), true);
+
+  const earlyMorningUtc = new Date('2026-11-16T01:30:00.000Z'); // 07:00 AM IST
+  assert.equal(isQuietHoursIST(earlyMorningUtc), true);
+
+  // Test Past Date Skip and Daily Capping
+  const mockInsertedCampaigns = [];
+  const mockSupabase = {
+    from: (table) => {
+      if (table === 'notification_campaigns') {
+        return {
+          select: () => ({
+            neq: () => ({
+              limit: async () => ({ data: [...mockInsertedCampaigns], error: null }),
+            }),
+          }),
+          insert: (row) => ({
+            select: () => ({
+              single: async () => {
+                const inserted = { id: `camp-${mockInsertedCampaigns.length + 1}`, ...row };
+                mockInsertedCampaigns.push(inserted);
+                return { data: inserted, error: null };
+              },
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ error: null }) };
+    },
+  };
+
+  // 1 past release + 5 same-day future releases (testing max daily cap = 3)
+  const burstReleases = [
+    {
+      id: 999,
+      title: 'Past Movie (Should be Skipped)',
+      release_date: '2026-11-01', // definitely past
+      media_type: 'movie',
+      industry_label: 'Hollywood',
+    },
+    ...Array.from({ length: 5 }, (_, i) => ({
+      id: 200 + i,
+      title: `Blockbuster Part ${i + 1}`,
+      release_date: '2026-11-30',
+      media_type: 'movie',
+      industry_label: 'Hollywood',
+    })),
+  ];
+
+  const result = await autoIngestUpcomingReleases(mockSupabase, { releases: burstReleases });
+  // Past movie skipped (1) + 2 extra movies capped (total 5 - 3 = 2 skipped) -> total skipped = 3
+  assert.equal(result.ingested_count, 3); // Capped at MAX_DAILY_NOTIFICATIONS (3)
+  assert.equal(result.skipped_count, 3); // 1 past + 2 capped
+  assert.equal(mockInsertedCampaigns.length, 3);
 });

@@ -1,45 +1,75 @@
 /**
- * Release Scheduler & Real-Time Countdown Utilities
+ * Smart Anti-Spam Release Scheduler & Real-Time Countdown Utilities
  *
- * 4 Morning Release Staggering Slots (Indian Standard Time - IST / UTC+05:30):
- * - 07:00 AM IST -> 01:30:00.000Z UTC
- * - 08:00 AM IST -> 02:30:00.000Z UTC
- * - 09:00 AM IST -> 03:30:00.000Z UTC
- * - 10:00 AM IST -> 04:30:00.000Z UTC
- *
- * Automatically assigns same-day movie & web series releases across these 4 distinct
- * morning slots to prevent notification spam, running 1-day countdown timers that
- * auto-dispatch alerts without requiring manual admin approval.
+ * Designed to prevent notification fatigue and spam bursts:
+ * 1. Strict Future Ingestion Guard: Never sends retrospective push alerts for past releases.
+ * 2. Quiet Hours (DND): 10:00 PM to 08:00 AM IST (No push notifications dispatched during sleep hours).
+ * 3. Daytime Distributed Windows:
+ *    - 08:30 AM IST (Morning Spotlight) -> 03:00 UTC
+ *    - 01:30 PM IST (Afternoon Premiere) -> 08:00 UTC
+ *    - 06:00 PM IST (Evening Prime) -> 12:30 UTC
+ *    - 08:45 PM IST (Night Watchlist) -> 15:15 UTC
+ * 4. Multi-Movie Capping & Smart Digest:
+ *    - Max 3 push notifications per day.
+ *    - If 4+ movies release on the same date (e.g. 10 movies), sends 1 morning Mega-Release Digest
+ *      at 08:30 AM covering all 10 titles, plus afternoon & evening spotlights for top 2 blockbusters.
  */
 
-export const MORNING_SLOTS_IST = [
-  { hourIST: 7, minuteIST: 0, timeStr: '07:00 AM IST', utcSlot: '01:30:00.000Z' },
-  { hourIST: 8, minuteIST: 0, timeStr: '08:00 AM IST', utcSlot: '02:30:00.000Z' },
-  { hourIST: 9, minuteIST: 0, timeStr: '09:00 AM IST', utcSlot: '03:30:00.000Z' },
-  { hourIST: 10, minuteIST: 0, timeStr: '10:00 AM IST', utcSlot: '04:30:00.000Z' },
+export const SMART_DAYTIME_SLOTS_IST = [
+  { id: 'morning', hourIST: 8, minuteIST: 30, timeStr: '08:30 AM IST', utcSlot: '03:00:00.000Z', label: 'Morning Spotlight' },
+  { id: 'afternoon', hourIST: 13, minuteIST: 30, timeStr: '01:30 PM IST', utcSlot: '08:00:00.000Z', label: 'Afternoon Premiere' },
+  { id: 'evening', hourIST: 18, minuteIST: 0, timeStr: '06:00 PM IST', utcSlot: '12:30:00.000Z', label: 'Evening Prime' },
+  { id: 'night', hourIST: 20, minuteIST: 45, timeStr: '08:45 PM IST', utcSlot: '15:15:00.000Z', label: 'Night Watchlist' },
 ];
 
+// Backward-compatible alias for 4 slots
+export const MORNING_SLOTS_IST = SMART_DAYTIME_SLOTS_IST;
+
+export const MAX_DAILY_NOTIFICATIONS = 3;
+
 /**
- * Assigns one of the 4 morning release slots to a movie on a given release date
- * based on how many releases are already scheduled on that date.
+ * Returns today's date formatted as 'YYYY-MM-DD' in Indian Standard Time (UTC+05:30)
+ * @param {Date} [refDate]
+ * @returns {string}
+ */
+export function getTodayIST(refDate = new Date()) {
+  const istOffsetMs = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(refDate.getTime() + istOffsetMs);
+  return istDate.toISOString().split('T')[0];
+}
+
+/**
+ * Checks if current time is within Quiet Hours (10:00 PM to 08:00 AM IST)
+ * @param {Date} [refDate]
+ * @returns {boolean}
+ */
+export function isQuietHoursIST(refDate = new Date()) {
+  const istHours = (refDate.getUTCHours() + 5 + Math.floor((refDate.getUTCMinutes() + 30) / 60)) % 24;
+  return istHours >= 22 || istHours < 8; // 10 PM to 8 AM IST
+}
+
+/**
+ * Assigns one of the distributed daytime slots (08:30 AM, 01:30 PM, 06:00 PM, 08:45 PM IST)
+ * based on how many campaigns are already scheduled on that release date.
  *
  * @param {string} releaseDate 'YYYY-MM-DD'
  * @param {Array} existingCampaigns Array of existing campaigns
- * @returns {{ scheduled_for: string, slot_time: string, slot_index: number }}
+ * @returns {{ scheduled_for: string, slot_time: string, slot_index: number, slot_label: string }}
  */
 export const getSlotForRelease = (releaseDate, existingCampaigns = []) => {
-  const cleanDate = (releaseDate || new Date().toISOString().split('T')[0]).split('T')[0];
+  const cleanDate = (releaseDate || getTodayIST()).split('T')[0];
   const countOnDate = (existingCampaigns || []).filter(
     (c) => c && c.scheduled_for && String(c.scheduled_for).split('T')[0] === cleanDate && c.status !== 'cancelled'
   ).length;
 
-  const slotIndex = countOnDate % MORNING_SLOTS_IST.length;
-  const slot = MORNING_SLOTS_IST[slotIndex];
+  const slotIndex = Math.min(countOnDate, SMART_DAYTIME_SLOTS_IST.length - 1);
+  const slot = SMART_DAYTIME_SLOTS_IST[slotIndex];
 
   return {
     scheduled_for: `${cleanDate}T${slot.utcSlot}`,
     slot_time: slot.timeStr,
     slot_index: slotIndex,
+    slot_label: slot.label,
   };
 };
 
