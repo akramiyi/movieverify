@@ -39,7 +39,10 @@ const ActorsRow = ({ title, actors, onActorSelect, onSeeAll }) => {
   if (!actors || actors.length === 0) return null;
 
   const marqueeActors = Array.from({ length: multiplier }).flatMap(() => actors);
-  const scrollDuration = `${actors.length * 6.5}s`;
+  const cardPixelWidth = 140;
+  const shiftDistancePx = Math.max(1, ((multiplier || 2) / 2) * (actors?.length || 1) * cardPixelWidth);
+  const computedSeconds = Math.max(50, Math.round(shiftDistancePx / 25));
+  const scrollDuration = `${computedSeconds}s`;
 
   return (
     <div ref={rowRef} className="movie-row-container space-y-2 md:space-y-4 mb-8 overflow-visible">

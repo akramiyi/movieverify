@@ -46,7 +46,18 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
     ? Array.from({ length: multiplier }).flatMap(() => movies)
     : [];
 
-  const scrollDuration = movies && movies.length > 0 ? `${movies.length * 6.5}s` : '50s';
+  const isContinueBrowsing = typeof title === 'string' && title.toLowerCase().includes('continue');
+
+  // Constant, calm marquee pacing:
+  // The animation translates -50%, which equals (multiplier / 2) * movies.length * 240px.
+  // For small lists (especially 'Continue Browsing' with 1-4 items), the old `movies.length * 6.5s`
+  // formula caused posters to whiz past at 150+ px/sec.
+  // We now calculate duration from actual pixel shift at a calm, readable speed (~18-24 px/sec).
+  const cardPixelWidth = 240;
+  const shiftDistancePx = Math.max(1, ((multiplier || 2) / 2) * (movies?.length || 1) * cardPixelWidth);
+  const targetPxPerSec = isContinueBrowsing ? 18 : 24;
+  const computedSeconds = Math.max(isContinueBrowsing ? 75 : 60, Math.round(shiftDistancePx / targetPxPerSec));
+  const scrollDuration = `${computedSeconds}s`;
 
   return (
     <div ref={rowRef} className="movie-row-container space-y-2 md:space-y-4 mb-8 overflow-visible">

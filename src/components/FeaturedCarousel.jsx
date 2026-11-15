@@ -25,11 +25,50 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
   const [isPaused, setIsPaused] = useState(false);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
+  const pauseTimeoutRef = useRef(null);
 
   const totalMovies = movies && Array.isArray(movies) ? movies.length : 0;
   // Safe clamped index to completely prevent out-of-bounds undefined errors
   const safeIndex = totalMovies > 0 ? (currentIndex % totalMovies) : 0;
   const currentMovie = totalMovies > 0 ? movies[safeIndex] : null;
+
+  // Safe temporary pause with guaranteed auto-resume to prevent permanent freeze on mobile
+  const pauseTemporarily = useCallback((durationMs = 5000) => {
+    setIsPaused(true);
+    if (pauseTimeoutRef.current) {
+      clearTimeout(pauseTimeoutRef.current);
+    }
+    pauseTimeoutRef.current = setTimeout(() => {
+      setIsPaused(false);
+    }, durationMs);
+  }, []);
+
+  // Cleanup pause timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (pauseTimeoutRef.current) {
+        clearTimeout(pauseTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Keep index within valid bounds if movies array updates
+  useEffect(() => {
+    if (totalMovies > 0 && currentIndex >= totalMovies) {
+      setCurrentIndex(0);
+    }
+  }, [totalMovies, currentIndex]);
+
+  // Wake up timer immediately on tab visibility / phone unlock
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setIsPaused(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // Preload next movie's backdrop and poster to eliminate blank box / image pop flash
   useEffect(() => {
@@ -67,24 +106,34 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
     return () => clearInterval(timer);
   }, [totalMovies, isPaused, handleNext]);
 
-  // Touch gesture support for mobile swiping
+  // Touch gesture support for mobile swiping with tap-protection and auto-unpause
   const handleTouchStart = (e) => {
+    if (!e.touches || !e.touches[0]) return;
     touchStartX.current = e.touches[0].clientX;
+    touchEndX.current = e.touches[0].clientX; // initialize to same coordinate to prevent accidental tap jumps
+    pauseTemporarily(6000);
   };
 
   const handleTouchMove = (e) => {
+    if (!e.touches || !e.touches[0]) return;
     touchEndX.current = e.touches[0].clientX;
   };
 
   const handleTouchEnd = () => {
-    const diff = touchStartX.current - touchEndX.current;
-    if (Math.abs(diff) > 50) {
-      if (diff > 0) {
-        handleNext();
-      } else {
-        handlePrev();
+    if (touchStartX.current && touchEndX.current) {
+      const diff = touchStartX.current - touchEndX.current;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0) {
+          handleNext();
+        } else {
+          handlePrev();
+        }
       }
     }
+    // Always auto-resume rotation after mobile touch ends
+    pauseTemporarily(4000);
+    touchStartX.current = 0;
+    touchEndX.current = 0;
   };
 
   if (!currentMovie) return null;
@@ -100,8 +149,11 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
   return (
     <div 
       className="relative w-full h-[80vh] min-h-[580px] md:h-[88vh] md:min-h-[640px] max-h-[860px] overflow-hidden bg-[#141414] select-none group"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
+      onMouseEnter={() => pauseTemporarily(7000)}
+      onMouseLeave={() => {
+        if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current);
+        setIsPaused(false);
+      }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -211,7 +263,10 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
           {movies.slice(0, 8).map((_, idx) => (
             <button
               key={`dot-${idx}`}
-              onClick={() => setCurrentIndex(idx)}
+              onClick={() => {
+                setCurrentIndex(idx);
+                pauseTemporarily(7000);
+              }}
               className={`transition-all duration-300 rounded-full cursor-pointer ${
                 safeIndex === idx
                   ? 'w-6 sm:w-8 h-1.5 bg-[#E50914] shadow-[0_0_12px_rgba(229,9,20,0.8)]'
@@ -229,7 +284,10 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
         <>
           <button
             type="button"
-            onClick={handlePrev}
+            onClick={() => {
+              handlePrev();
+              pauseTemporarily(7000);
+            }}
             className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 items-center justify-center rounded-full bg-black/40 hover:bg-black/70 text-white/80 hover:text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 active:scale-90 cursor-pointer shadow-xl"
             title="Previous Featured Title"
             aria-label="Previous Featured Title"
@@ -238,7 +296,10 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
           </button>
           <button
             type="button"
-            onClick={handleNext}
+            onClick={() => {
+              handleNext();
+              pauseTemporarily(7000);
+            }}
             className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 items-center justify-center rounded-full bg-black/40 hover:bg-black/70 text-white/80 hover:text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 active:scale-90 cursor-pointer shadow-xl"
             title="Next Featured Title"
             aria-label="Next Featured Title"
