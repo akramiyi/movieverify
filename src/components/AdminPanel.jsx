@@ -808,13 +808,20 @@ const AdminPanel = ({ onClose }) => {
       // Non-blocking release automation: never fail or roll back successful catalog saves
       const hasAnyLinks = Boolean(
         link480.trim() || link720.trim() || link1080.trim() ||
-        seasonsData.some((s) => Array.isArray(s.parts) && s.parts.length > 0)
+        seasonsData.length > 0 ||
+        descriptionVal.trim()
       );
 
       if (hasAnyLinks) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
-          if (session?.access_token) {
+          if (!session?.access_token) {
+            console.warn('[AdminPanel] No active session access_token found for notification trigger.');
+            setActionStatus({
+              type: 'success',
+              message: `${successMessage} (Note: Push alert skipped - please log out and back in to refresh administrator token).`,
+            });
+          } else {
             let movieImage =
               selectedMovie?.backdrop ||
               selectedMovie?.poster ||
@@ -894,6 +901,7 @@ const AdminPanel = ({ onClose }) => {
 
             if (eventPayload) {
               const saveTimestamp = Date.now();
+              eventPayload.bypass_quiet_hours = true;
               if (broadcastToAll) {
                 eventPayload.target_type = 'all';
                 eventPayload.broadcast_all = true;
@@ -921,15 +929,27 @@ const AdminPanel = ({ onClose }) => {
                 const notifyData = await notifyRes.json().catch(() => ({}));
                 const pushSent = notifyData.immediate_dispatch?.sent ?? notifyData.push_deliveries ?? 0;
                 const totalRecip = notifyData.total_recipients ?? 0;
+                const isQuiet = notifyData.immediate_dispatch?.quiet_hours === true;
+
                 if (pushSent > 0) {
                   setActionStatus({
                     type: 'success',
                     message: `${successMessage} • 🔔 Sent push alert to ${pushSent} subscriber(s)!`,
                   });
+                } else if (isQuiet) {
+                  setActionStatus({
+                    type: 'success',
+                    message: `${successMessage} • 🌙 Scheduled for morning delivery (Quiet Hours active).`,
+                  });
                 } else if (totalRecip === 0) {
                   setActionStatus({
                     type: 'success',
                     message: `${successMessage} (0 users were subscribed to this title. Keep "Broadcast to all" enabled to notify everyone).`,
+                  });
+                } else {
+                  setActionStatus({
+                    type: 'success',
+                    message: `${successMessage} • 🔔 Push notification queued for ${totalRecip} subscriber(s).`,
                   });
                 }
               }
@@ -1587,7 +1607,7 @@ const AdminPanel = ({ onClose }) => {
                 </div>
               </div>
 
-              {selectedMovie.mediaType === 'tv' ? (
+              {(selectedMovie.mediaType === 'tv' || selectedMovie.media_type === 'tv' || selectedMovie.mediaType === 'series' || selectedMovie.media_type === 'series' || seasonsData.length > 0) ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h4 className="text-white font-bold">Seasons & Episodes</h4>
@@ -1778,6 +1798,11 @@ const AdminPanel = ({ onClose }) => {
                       {item.title}
                     </p>
                     <div className="flex gap-1 mt-1">
+                      {Array.isArray(item.seasons) && item.seasons.length > 0 && (
+                        <span className="text-[10px] bg-amber-900/50 text-amber-300 px-1.5 py-0.5 rounded font-semibold">
+                          📺 {item.seasons.length} Season{item.seasons.length > 1 ? 's' : ''}
+                        </span>
+                      )}
                       {item.download480p && item.download480p !== '#' && (
                         <span className="text-[10px] bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded">480p</span>
                       )}

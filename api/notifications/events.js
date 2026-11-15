@@ -227,12 +227,13 @@ export default async function handler(req, res, customDependencies = {}) {
       result.body?.status === 'queued' ||
       result.body?.status === 'processing';
 
-    if (result.status === 201 && hasPushDeliveries) {
+    if ((result.status === 201 || result.status === 200) && hasPushDeliveries) {
       const dispatchFn = customDependencies.runDispatchCycle || runDispatchCycle;
       try {
         const dispatchSummary = await dispatchFn({
           batchSize: 50,
           leaseSeconds: 60,
+          bypassQuietHours: Boolean(body.bypass_quiet_hours ?? true),
           customSupabase,
           customMessaging: customDependencies.messaging || null,
         });
@@ -242,6 +243,7 @@ export default async function handler(req, res, customDependencies = {}) {
             dispatched: true,
             sent: dispatchSummary?.sent ?? 0,
             failed: dispatchSummary?.failed ?? 0,
+            quiet_hours: Boolean(dispatchSummary?.quiet_hours),
           };
         }
         console.log(

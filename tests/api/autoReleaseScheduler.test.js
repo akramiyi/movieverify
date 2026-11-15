@@ -14,6 +14,7 @@ import {
   DEFAULT_CATEGORY_SETTINGS,
 } from '../../api/_lib/scheduledCampaignService.js';
 import dispatchHandler from '../../api/notifications/dispatch.js';
+import eventsHandler from '../../api/notifications/events.js';
 import { getCountdownDetails, getMovieReleaseCountdown } from '../../src/utils/releaseSchedulerUtils.js';
 
 function createMockRes() {
@@ -489,4 +490,80 @@ test('9. Live Countdown Timer & Due Expiration - flags isDue: true when timer re
   assert.equal(futureCd.secs, 0);
   assert.equal(futureCd.formattedTime, '05:00:00');
   assert.ok(futureCd.label.includes('1-Day Final Timer'));
+});
+
+test('10. eventsHandler & Catalog Publishing - manual admin save dispatches immediately and bypasses quiet hours', async () => {
+  const adminId = '11111111-1111-4111-8111-111111111111';
+  let passedDispatchOptions = null;
+
+  const mockSupabase = {
+    auth: {
+      getUser: async () => ({ data: { user: { id: adminId } }, error: null }),
+    },
+    from: (table) => {
+      if (table === 'admin_users') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { user_id: adminId }, error: null }),
+            }),
+          }),
+        };
+      }
+      return {};
+    },
+    rpc: async (fnName, params) => {
+      return {
+        data: {
+          campaign_id: 'camp-lotr-1',
+          status: 'processing',
+          total_recipients: 1,
+          total_deliveries: 1,
+          push_deliveries: 1,
+          already_exists: false,
+        },
+        error: null,
+      };
+    },
+  };
+
+  const mockDispatchFn = async (options) => {
+    passedDispatchOptions = options;
+    return {
+      workerId: 'worker-test-1',
+      processed: 1,
+      sent: 1,
+      failed: 0,
+      rejected: 0,
+      quiet_hours: false,
+    };
+  };
+
+  const res = createMockRes();
+  await eventsHandler(
+    {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-token' },
+      body: {
+        event_type: 'content_update',
+        tmdb_id: '12345',
+        media_type: 'tv',
+        title: 'The Lord of the Rings: The Rings of Power',
+        target_type: 'all',
+        broadcast_all: true,
+        bypass_quiet_hours: true,
+      },
+    },
+    res,
+    {
+      supabase: mockSupabase,
+      runDispatchCycle: mockDispatchFn,
+    }
+  );
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.immediate_dispatch.dispatched, true);
+  assert.equal(res.body.immediate_dispatch.sent, 1);
+  assert.equal(passedDispatchOptions?.bypassQuietHours, true);
 });

@@ -162,6 +162,8 @@ export default async function handler(req, res, customDependencies = {}) {
   const isTestHarness = Boolean(customDependencies.supabase);
   const bypassQuietHours =
     customDependencies.bypassQuietHours === true ||
+    query.bypass_quiet_hours === 'true' ||
+    req.headers['x-bypass-quiet-hours'] === 'true' ||
     (isTestHarness && customDependencies.autoIngest === true);
 
   if (!isTestHarness && !bypassQuietHours && isQuietHoursIST()) {
