@@ -23,6 +23,7 @@ import ReportProblemButton from './ReportProblemButton';
 import ShareButton from './ShareButton';
 import ReviewSection from './ReviewSection';
 import { useSubscriptions } from '../hooks/useSubscriptions';
+import useScrollLock from '../hooks/useScrollLock';
 
 const getMatchPercent = (rating) => {
   const num = parseFloat(rating);
@@ -68,24 +69,8 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
     }
   }, [isOpen, movie?.id]);
 
-  // Prevent background scroll bleed when modal is open
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevBodyOverflowY = document.body.style.overflowY;
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    document.body.style.overflowY = 'hidden';
-
-    return () => {
-      document.documentElement.style.overflow = prevHtmlOverflow;
-      document.body.style.overflow = prevBodyOverflow;
-      document.body.style.overflowY = prevBodyOverflowY;
-    };
-  }, [isOpen]);
+  // Prevent background scroll bleed when modal is open with reference-counted lock
+  useScrollLock(isOpen);
 
   useEffect(() => {
     setNotifyFeedback(null);

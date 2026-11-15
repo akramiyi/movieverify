@@ -1,8 +1,12 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, Trash2, Clock } from 'lucide-react';
+import useScrollLock from '../hooks/useScrollLock';
 
 const DownloadHistoryModal = ({ isOpen, onClose, history, onClear }) => {
+  // Lock background scroll when history modal is open
+  useScrollLock(isOpen);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -11,7 +15,7 @@ const DownloadHistoryModal = ({ isOpen, onClose, history, onClear }) => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[200] flex items-center 
-                     justify-center p-4"
+                     justify-center p-4 overscroll-contain"
         >
           <div 
             className="fixed inset-0 bg-black/80 backdrop-blur-sm"
@@ -24,7 +28,7 @@ const DownloadHistoryModal = ({ isOpen, onClose, history, onClear }) => {
             exit={{ scale: 0.95 }}
             className="relative w-full max-w-lg bg-[#141414] 
                        rounded-2xl overflow-hidden z-10 max-h-[80vh] 
-                       flex flex-col"
+                       flex flex-col overscroll-contain"
           >
             <div className="flex items-center justify-between 
                             p-5 border-b border-white/10">

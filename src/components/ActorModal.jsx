@@ -3,11 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, Bell, BellRing } from 'lucide-react';
 import { useSubscriptions } from '../hooks/useSubscriptions';
 import { formatMovie } from '../hooks/useTMDB';
+import useScrollLock from '../hooks/useScrollLock';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
 const BASE_URL = `${API_URL}/api/tmdb`;
 
 const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
+  // Lock background scroll when actor modal is open
+  useScrollLock(isOpen);
+
   const [movies, setMovies] = useState([]);
   const { isActorNotifying, toggleActorNotify } = useSubscriptions();
   const isSubscribed = actor ? isActorNotifying(actor.tmdb_id || actor.id) : false;
@@ -55,7 +59,7 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[200] flex items-center 
-                     justify-center p-4"
+                     justify-center p-4 overscroll-contain"
         >
           <div 
             className="fixed inset-0 bg-black/80 backdrop-blur-sm"
@@ -67,7 +71,7 @@ const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
             animate={{ scale: 1 }}
             exit={{ scale: 0.95 }}
             className="relative w-full max-w-4xl max-h-[90vh] bg-[#141414] 
-                       rounded-2xl overflow-hidden flex flex-col z-10"
+                       rounded-2xl overflow-hidden flex flex-col z-10 overscroll-contain"
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-[#E50914] 

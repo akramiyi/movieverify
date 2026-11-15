@@ -6,6 +6,7 @@ import ReportsPanel from './ReportsPanel';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import CampaignManager from './CampaignManager';
 import { buildContentUpdateIdempotencyKey } from '../utils/notificationLinks';
+import useScrollLock from '../hooks/useScrollLock';
 
 const MAX_ADMIN_ATTEMPTS = 5;
 const DEFAULT_ADMIN_LOCKOUT_SECONDS = 15 * 60; // 15 minutes
@@ -70,6 +71,9 @@ const AdminLiveClock = () => {
 };
 
 const AdminPanel = ({ onClose }) => {
+  // Lock background body/window scroll while Admin Panel is open
+  useScrollLock(true);
+
   const [activeTab, setActiveTab] = useState('manager'); // 'manager' | 'reports'
   // Login State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -997,7 +1001,7 @@ const AdminPanel = ({ onClose }) => {
 
   if (isCheckingSession) {
     return (
-      <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md">
+      <div className="fixed inset-0 z-[150] bg-[#0c0d12] flex items-center justify-center p-4 overscroll-contain backdrop-blur-md">
         <div className="flex flex-col items-center justify-center gap-3">
           <div className="w-9 h-9 border-2 border-[#E50914] border-t-transparent rounded-full animate-spin" />
           <p className="text-gray-400 text-xs font-medium tracking-wide">Checking administrator session...</p>
@@ -1010,7 +1014,7 @@ const AdminPanel = ({ onClose }) => {
 
   if (!isLoggedIn) {
     return (
-      <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md">
+      <div className="fixed inset-0 z-[150] bg-[#0c0d12] flex items-center justify-center p-4 overscroll-contain backdrop-blur-md">
         <div className="w-full max-w-sm bg-[#181818] border border-white/10 rounded-lg p-6 shadow-2xl relative overflow-hidden">
           
           {/* Top glowing bar */}
@@ -1213,7 +1217,7 @@ const AdminPanel = ({ onClose }) => {
   const lastUpdated = latestUpdatedMovie ? new Date(latestUpdatedMovie.updated_at || latestUpdatedMovie.created_at || 0).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A';
 
   return (
-    <div className="fixed inset-0 z-[150] bg-black/90 flex flex-col p-2 sm:p-4 md:p-8 overflow-y-auto backdrop-blur-xl">
+    <div className="fixed inset-0 z-[150] bg-[#0c0d12] flex flex-col p-2 sm:p-4 md:p-8 overflow-y-auto overscroll-contain">
       {/* 3D Glass Ambient Background Lights */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#E50914]/20 rounded-full blur-[140px] animate-pulse" style={{ animationDuration: '6s' }} />

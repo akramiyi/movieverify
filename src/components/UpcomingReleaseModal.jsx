@@ -21,6 +21,7 @@ import {
 import { fetchTMDBDetails } from '../hooks/useTMDB';
 import { useSubscriptions } from '../hooks/useSubscriptions';
 import { getMovieReleaseCountdown } from '../utils/releaseSchedulerUtils';
+import useScrollLock from '../hooks/useScrollLock';
 
 const getYouTubeKey = (url) => {
   if (!url) return null;
@@ -130,24 +131,8 @@ export default function UpcomingReleaseModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Prevent background scroll bleed when modal is open
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevBodyOverflowY = document.body.style.overflowY;
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    document.body.style.overflowY = 'hidden';
-
-    return () => {
-      document.documentElement.style.overflow = prevHtmlOverflow;
-      document.body.style.overflow = prevBodyOverflow;
-      document.body.style.overflowY = prevBodyOverflowY;
-    };
-  }, [isOpen]);
+  // Prevent background scroll bleed when modal is open with reference-counted lock
+  useScrollLock(isOpen);
 
   if (!isOpen || !item) return null;
 

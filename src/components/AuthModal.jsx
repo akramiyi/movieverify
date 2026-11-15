@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, ShieldCheck, AlertCircle, Loader2, Lock, User, Mail, Eye, EyeOff, ShieldAlert, Clock } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
+import useScrollLock from '../hooks/useScrollLock';
 
 const MAX_ADMIN_ATTEMPTS = 5;
 const DEFAULT_ADMIN_LOCKOUT_SECONDS = 15 * 60; // 15 minutes
@@ -571,57 +572,8 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
   const overlayRef = useRef(null);
   const cardRef = useRef(null);
 
-  // Lock document / body scrolling while modal is open, and restore original scroll position on close
-  useEffect(() => {
-    if (!isOpen) return;
-
-    // Capture current scroll position across all browsers
-    const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-
-    // Save previous inline styles
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevBodyOverflowY = document.body.style.overflowY;
-    const prevBodyPosition = document.body.style.position;
-    const prevBodyTop = document.body.style.top;
-    const prevBodyLeft = document.body.style.left;
-    const prevBodyRight = document.body.style.right;
-    const prevBodyWidth = document.body.style.width;
-    const prevBodyPaddingRight = document.body.style.paddingRight;
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-    const prevHtmlOverflowY = document.documentElement.style.overflowY;
-
-    // Apply mobile-bulletproof scroll lock to both documentElement and body
-    document.documentElement.style.overflow = 'hidden';
-    document.documentElement.style.overflowY = 'hidden';
-    document.body.style.overflow = 'hidden';
-    document.body.style.overflowY = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.left = '0';
-    document.body.style.right = '0';
-    document.body.style.width = '100%';
-    if (scrollbarWidth > 0) {
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
-    }
-
-    return () => {
-      // Revert styles when modal closes or unmounts
-      document.documentElement.style.overflow = prevHtmlOverflow;
-      document.documentElement.style.overflowY = prevHtmlOverflowY;
-      document.body.style.overflow = prevBodyOverflow;
-      document.body.style.overflowY = prevBodyOverflowY;
-      document.body.style.position = prevBodyPosition;
-      document.body.style.top = prevBodyTop;
-      document.body.style.left = prevBodyLeft;
-      document.body.style.right = prevBodyRight;
-      document.body.style.width = prevBodyWidth;
-      document.body.style.paddingRight = prevBodyPaddingRight;
-
-      // Restore exact scroll position
-      window.scrollTo(0, scrollY);
-    };
-  }, [isOpen]);
+  // Lock document / body scrolling while modal is open with reference-counted lock
+  useScrollLock(isOpen);
 
   // Handle touch events on mobile: prevent accidental background scrolling when dragging outside the card
   useEffect(() => {
