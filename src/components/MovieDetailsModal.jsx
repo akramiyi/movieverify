@@ -15,6 +15,9 @@ import {
   Bell,
   BellRing,
   LogIn,
+  ChevronLeft,
+  ChevronRight,
+  Camera,
 } from 'lucide-react';
 import { movies } from '../data/movies';
 import { fetchTMDBDetails, getDownloadLinks, getMediaTypeFromId } from '../hooks/useTMDB';
@@ -49,6 +52,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
     backdrop: null,
     poster: null,
     title: null,
+    images: [],
   });
 
   const clearDownloadTimers = () => {
@@ -109,6 +113,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
             backdrop: res.backdrop || movie.backdrop || null,
             poster: res.poster || movie.poster || null,
             title: res.title || null,
+            images: Array.isArray(res.images) && res.images.length > 0 ? res.images : (Array.isArray(movie.images) ? movie.images : []),
           });
         });
       } else {
@@ -119,10 +124,115 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
           backdrop: movie.backdrop || null,
           poster: movie.poster || null,
           title: movie.title || null,
+          images: Array.isArray(movie.images) ? movie.images : [],
         });
       }
     }
   }, [movie, parsedId, resolvedMediaType]);
+
+  // Derive gallery photos (2-4 images) from details, movie backdrops, and posters
+  const galleryPhotos = React.useMemo(() => {
+    const photos = [];
+    const primary = movie?.backdrop || details.backdrop;
+    if (primary && !photos.includes(primary)) {
+      photos.push(primary);
+    }
+
+    if (Array.isArray(details.images)) {
+      details.images.forEach((img) => {
+        if (img && !photos.includes(img)) photos.push(img);
+      });
+    }
+
+    if (Array.isArray(movie?.backdrops)) {
+      movie.backdrops.forEach((img) => {
+        if (img && !photos.includes(img)) photos.push(img);
+      });
+    }
+
+    if (Array.isArray(movie?.images)) {
+      movie.images.forEach((img) => {
+        if (img && !photos.includes(img)) photos.push(img);
+      });
+    }
+
+    const fallbackPoster = movie?.poster || details.poster;
+    if (photos.length < 2 && fallbackPoster && !photos.includes(fallbackPoster)) {
+      photos.push(fallbackPoster);
+    }
+
+    return photos.slice(0, 4);
+  }, [movie?.backdrop, movie?.poster, movie?.backdrops, movie?.images, details.backdrop, details.poster, details.images]);
+
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+
+  // Reset photo index when movie changes or modal opens
+  useEffect(() => {
+    setCurrentPhotoIndex(0);
+  }, [movie?.id, isOpen]);
+
+  const photoCount = galleryPhotos.length;
+  const activeIndex = photoCount > 0 ? Math.min(currentPhotoIndex, photoCount - 1) : 0;
+
+  const handleNextPhoto = (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (photoCount <= 1) return;
+    setCurrentPhotoIndex((prev) => (prev + 1) % photoCount);
+  };
+
+  const handlePrevPhoto = (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (photoCount <= 1) return;
+    setCurrentPhotoIndex((prev) => (prev - 1 + photoCount) % photoCount);
+  };
+
+  // Keyboard navigation for arrow keys
+  useEffect(() => {
+    if (!isOpen || photoCount <= 1) return;
+    const handleKeyDown = (e) => {
+      const tagName = document.activeElement?.tagName?.toLowerCase();
+      if (tagName === 'input' || tagName === 'textarea') return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setCurrentPhotoIndex((prev) => (prev + 1) % photoCount);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setCurrentPhotoIndex((prev) => (prev - 1 + photoCount) % photoCount);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, photoCount]);
+
+  // Touch swipe support for mobile
+  const touchStartXRef = useRef(null);
+  const touchStartYRef = useRef(null);
+
+  const handleTouchStart = (e) => {
+    if (e.touches && e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (touchStartXRef.current === null) return;
+    const touchEndX = e.changedTouches?.[0]?.clientX ?? null;
+    const touchEndY = e.changedTouches?.[0]?.clientY ?? null;
+    if (touchEndX !== null && touchStartYRef.current !== null) {
+      const deltaX = touchEndX - touchStartXRef.current;
+      const deltaY = touchEndY - touchStartYRef.current;
+      if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+        if (deltaX < 0) {
+          handleNextPhoto();
+        } else {
+          handlePrevPhoto();
+        }
+      }
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+  };
 
   if (isLoading && !movie) {
     return (
@@ -266,14 +376,91 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
 
             {/* Scrollable Content Wrapper */}
             <div className="overflow-y-auto overscroll-contain flex-1 hide-scrollbar">
-              {/* Top Banner Area */}
-              <div className="relative w-full aspect-video sm:h-[300px] md:h-[440px] flex-none overflow-hidden">
-                <ImageWithFallback
-                  src={movie.backdrop || details.backdrop}
-                  backdropSrc={movie.poster || details.poster}
-                  alt={cleanTitle}
-                  className={`w-full h-full object-cover ${movie.title?.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
-                />
+              {/* Top Banner Area with 2-4 Photo Slider */}
+              <div
+                className="relative w-full aspect-video sm:h-[300px] md:h-[440px] flex-none overflow-hidden group/banner select-none"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+              >
+                {/* Active Photo / Backdrop with Smooth Cross-fade */}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={galleryPhotos[activeIndex] || 'default-banner'}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="absolute inset-0 w-full h-full"
+                  >
+                    <ImageWithFallback
+                      src={galleryPhotos[activeIndex] || movie.backdrop || details.backdrop}
+                      backdropSrc={movie.poster || details.poster}
+                      alt={`${cleanTitle} - Photo ${activeIndex + 1}`}
+                      priority={activeIndex === 0}
+                      lazy={activeIndex > 0}
+                      className={`w-full h-full object-cover ${movie.title?.toLowerCase().includes('pushpa') ? 'object-bottom' : 'object-top'}`}
+                    />
+                  </motion.div>
+                </AnimatePresence>
+
+                {/* Multi-Photo Counter Badge (Only when multiple photos exist) */}
+                {photoCount > 1 && (
+                  <div
+                    data-testid="photo-counter-badge"
+                    className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-semibold text-white/95 border border-white/15 shadow-md pointer-events-none"
+                  >
+                    <Camera className="w-3.5 h-3.5 text-white/80" />
+                    <span>{activeIndex + 1} / {photoCount}</span>
+                  </div>
+                )}
+
+                {/* Navigation Arrows (Only when multiple photos exist) */}
+                {photoCount > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handlePrevPhoto}
+                      aria-label="Previous photo"
+                      data-testid="prev-photo-btn"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 bg-black/60 hover:bg-black/85 active:scale-90 text-white rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-80 sm:opacity-0 group-hover/banner:opacity-100 cursor-pointer shadow-lg"
+                    >
+                      <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNextPhoto}
+                      aria-label="Next photo"
+                      data-testid="next-photo-btn"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 bg-black/60 hover:bg-black/85 active:scale-90 text-white rounded-full flex items-center justify-center backdrop-blur-md border border-white/20 transition-all opacity-80 sm:opacity-0 group-hover/banner:opacity-100 cursor-pointer shadow-lg"
+                    >
+                      <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
+
+                    {/* Indicator Dots */}
+                    <div
+                      data-testid="photo-indicator-dots"
+                      className="absolute bottom-3 left-1/2 -translate-x-1/2 md:left-auto md:right-8 md:translate-x-0 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10"
+                    >
+                      {galleryPhotos.map((_, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentPhotoIndex(idx);
+                          }}
+                          aria-label={`Go to photo ${idx + 1}`}
+                          className={`transition-all duration-200 cursor-pointer ${
+                            idx === activeIndex
+                              ? 'w-5 h-1.5 bg-[#E50914] rounded-full shadow-sm'
+                              : 'w-1.5 h-1.5 bg-white/50 hover:bg-white/90 rounded-full'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+
                 {/* Bottom and side gradients for seamless blend */}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-[#181818]/40 to-transparent pointer-events-none" />
                 <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-[#181818]/80 via-[#181818]/30 to-transparent w-2/3 pointer-events-none" />

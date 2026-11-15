@@ -738,7 +738,9 @@ export const fetchTMDBDetails = async (id, mediaType) => {
     return {
       runtime: null,
       cast: 'Placeholder Actor 1, Placeholder Actor 2',
-      trailerUrl: ''
+      trailerUrl: '',
+      images: [],
+      backdrops: []
     };
   }
 
@@ -758,19 +760,23 @@ export const fetchTMDBDetails = async (id, mediaType) => {
     return {
       runtime: null,
       cast: 'Placeholder Actor 1, Placeholder Actor 2',
-      trailerUrl: ''
+      trailerUrl: '',
+      images: [],
+      backdrops: []
     };
   }
 
   try {
-    const endpoint = `/${resolvedType}/${parsedId}?append_to_response=credits,videos&include_video_language=en,hi,te,ta,ml,null`;
+    const endpoint = `/${resolvedType}/${parsedId}?append_to_response=credits,videos,images&include_video_language=en,hi,te,ta,ml,null&include_image_language=en,hi,null`;
 
     const res = await fetchTMDB(endpoint);
     if (!res) {
       return {
         runtime: null,
         cast: 'Placeholder Actor 1, Placeholder Actor 2',
-        trailerUrl: ''
+        trailerUrl: '',
+        images: [],
+        backdrops: []
       };
     }
 
@@ -789,6 +795,28 @@ export const fetchTMDBDetails = async (id, mediaType) => {
       ? res.credits.cast.slice(0, 5).map(c => c.name).join(', ')
       : 'Placeholder Actor 1, Placeholder Actor 2';
 
+    // Extract top 2-4 gallery images (high-res backdrops first, fallback to poster)
+    const rawBackdrops = (res.images && Array.isArray(res.images.backdrops)) ? res.images.backdrops : [];
+    const galleryImages = [];
+    if (res.backdrop_path) {
+      galleryImages.push(`${IMG_BASE}/w1280${res.backdrop_path}`);
+    }
+    for (const b of rawBackdrops) {
+      if (!b || !b.file_path) continue;
+      const fullUrl = `${IMG_BASE}/w1280${b.file_path}`;
+      if (!galleryImages.includes(fullUrl)) {
+        galleryImages.push(fullUrl);
+      }
+      if (galleryImages.length >= 4) break;
+    }
+    // If fewer than 2 backdrops exist, fallback to poster photo
+    if (galleryImages.length < 2 && res.poster_path) {
+      const posterUrl = `${IMG_BASE}/w780${res.poster_path}`;
+      if (!galleryImages.includes(posterUrl)) {
+        galleryImages.push(posterUrl);
+      }
+    }
+
     return {
       runtime: res.runtime || (res.episode_run_time ? res.episode_run_time[0] : null),
       cast: castList,
@@ -797,6 +825,8 @@ export const fetchTMDBDetails = async (id, mediaType) => {
       overview: res.overview || null,
       backdrop: res.backdrop_path ? `${IMG_BASE}/w1280${res.backdrop_path}` : null,
       poster: res.poster_path ? `${IMG_BASE}/w780${res.poster_path}` : null,
+      images: galleryImages,
+      backdrops: galleryImages,
     };
   } catch (err) {
     console.error('Error fetching TMDB details:', err);
@@ -808,6 +838,8 @@ export const fetchTMDBDetails = async (id, mediaType) => {
       overview: null,
       backdrop: null,
       poster: null,
+      images: [],
+      backdrops: []
     };
   }
 };
