@@ -177,3 +177,31 @@ export const getCountdownDetails = (isoString, nowMs = Date.now()) => {
       : `⏳ Auto-Sends in ${days}d ${pad(hours)}h ${pad(mins)}m ${pad(secs)}s`,
   };
 };
+
+/**
+ * Accurately determines whether a release date is past, today, tomorrow, or in the future.
+ * Never labels a past release (e.g. yesterday) as "Releases Today!".
+ *
+ * @param {string} releaseDateStr 'YYYY-MM-DD'
+ * @param {Date} [now]
+ * @returns {{ text: string, isUrgent: boolean, isPast: boolean, diffDays: number } | null}
+ */
+export const getMovieReleaseCountdown = (releaseDateStr, now = new Date()) => {
+  if (!releaseDateStr) return null;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const relDate = new Date(releaseDateStr.split('T')[0] + 'T00:00:00');
+  if (Number.isNaN(relDate.getTime())) return null;
+
+  const diffDays = Math.round((relDate - today) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return { text: 'Released', isUrgent: false, isPast: true, diffDays };
+  }
+  if (diffDays === 0) {
+    return { text: 'Releases Today!', isUrgent: true, isPast: false, diffDays };
+  }
+  if (diffDays === 1) {
+    return { text: 'Releases Tomorrow!', isUrgent: true, isPast: false, diffDays };
+  }
+  return { text: `In ${diffDays} days`, isUrgent: false, isPast: false, diffDays };
+};

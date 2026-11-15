@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { fetchTMDBDetails } from '../hooks/useTMDB';
 import { useSubscriptions } from '../hooks/useSubscriptions';
+import { getMovieReleaseCountdown } from '../utils/releaseSchedulerUtils';
 
 const getYouTubeKey = (url) => {
   if (!url) return null;
@@ -168,20 +169,7 @@ export default function UpcomingReleaseModal({
       ((existingCampaign.sent_count || 0) > 0 &&
         (existingCampaign.sent_count || 0) >= (existingCampaign.total_recipients || 1)));
 
-  // Countdown calculation
-  const getCountdown = (dateStr) => {
-    if (!dateStr) return null;
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const relDate = new Date(dateStr + 'T00:00:00');
-    const diffDays = Math.ceil((relDate - today) / (1000 * 60 * 60 * 24));
-
-    if (diffDays <= 0) return { text: 'Releases Today!', isUrgent: true };
-    if (diffDays === 1) return { text: 'Releases Tomorrow!', isUrgent: true };
-    return { text: `Releases in ${diffDays} days`, isUrgent: false };
-  };
-
-  const countdown = getCountdown(item.release_date);
+  const countdown = getMovieReleaseCountdown(item.release_date);
 
   return (
     <div
@@ -411,6 +399,11 @@ export default function UpcomingReleaseModal({
                   <div className="flex-1 py-2.5 px-4 rounded-xl bg-red-950/30 border border-red-500/30 text-red-300 text-xs font-bold flex items-center justify-center gap-2">
                     <VolumeX className="w-4 h-4 text-red-400" />
                     <span>Category Alerts Muted in Settings</span>
+                  </div>
+                ) : countdown?.isPast ? (
+                  <div className="flex-1 py-2.5 px-4 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs font-semibold flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-gray-500" />
+                    <span>Already Released ({item.release_date})</span>
                   </div>
                 ) : (
                   <button

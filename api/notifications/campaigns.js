@@ -31,6 +31,7 @@ import {
   promoteDueScheduledCampaignsFallback,
   getAdminCategorySettings,
   updateAdminCategorySettings,
+  autoIngestUpcomingReleases,
 } from '../_lib/scheduledCampaignService.js';
 import { getSupabaseServerClient } from '../_lib/supabaseServer.js';
 
@@ -153,6 +154,27 @@ export default async function handler(req, res, customDependencies = {}) {
       success: true,
       message: 'Category alert access settings updated successfully.',
       ...updated,
+    });
+  }
+
+  // Admin Release Auto-Synchronization Action:
+  // Scans upcoming releases across Bollywood, South, Hollywood & Web Series and
+  // schedules them across smart daytime slots without requiring manual admin approval.
+  if (method === 'POST' && (body.action === 'auto_sync' || body.action === 'sync_releases')) {
+    let ingestResult = { ingested_count: 0, skipped_count: 0, releases: [] };
+    try {
+      ingestResult = await autoIngestUpcomingReleases(customSupabase, customDependencies);
+    } catch (err) {
+      console.warn('[Campaigns] Auto-sync releases error:', err.message);
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+
+    return sendJson(res, 200, {
+      success: true,
+      action: body.action,
+      ingested_count: ingestResult.ingested_count,
+      skipped_count: ingestResult.skipped_count,
+      releases: ingestResult.releases,
     });
   }
 

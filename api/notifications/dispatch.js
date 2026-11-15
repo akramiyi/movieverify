@@ -21,6 +21,7 @@ import {
   autoIngestUpcomingReleases,
   isQuietHoursIST,
 } from '../_lib/scheduledCampaignService.js';
+import { isServerSideAdmin } from '../_lib/campaignService.js';
 import { sendJson, parseJsonBody } from '../_lib/requestUtils.js';
 
 /**
@@ -116,8 +117,20 @@ export default async function handler(req, res, customDependencies = {}) {
     return sendJson(res, 405, { error: 'Method not allowed. Use GET or POST.' });
   }
 
-  // 2. Validate Worker Authorization (strictly x-worker-secret or Authorization: Bearer, fail closed)
-  if (!isAuthorizedWorker(req.headers)) {
+  // 2. Validate Authorization (Worker secret, Vercel Cron Bearer, or Authenticated Admin Session)
+  let authorized = isAuthorizedWorker(req.headers);
+  if (!authorized) {
+    try {
+      const adminAuth = await isServerSideAdmin(req.headers, customDependencies.supabase);
+      if (adminAuth?.isAdmin) {
+        authorized = true;
+      }
+    } catch {
+      authorized = false;
+    }
+  }
+
+  if (!authorized) {
     return sendJson(res, 401, { error: 'Unauthorized: Valid x-worker-secret header required or Authorization Bearer token.' });
   }
 

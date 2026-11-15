@@ -433,8 +433,8 @@ export async function fetchServerUpcomingReleases(options = {}) {
     }
   };
 
-  const today = new Date().toISOString().split('T')[0];
-  const future = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const today = getTodayIST();
+  const future = new Date(Date.now() + 5.5 * 3600 * 1000 + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const queries = [
     {
@@ -466,6 +466,12 @@ export async function fetchServerUpcomingReleases(options = {}) {
       mediaType: 'tv',
       cat: 'hindi_series',
       label: 'Hindi Web Series',
+    },
+    {
+      endpoint: `/discover/tv?with_original_language=en&first_air_date.gte=${today}&first_air_date.lte=${future}&sort_by=first_air_date.asc&page=1`,
+      mediaType: 'tv',
+      cat: 'hollywood_series',
+      label: 'Hollywood Series',
     },
   ];
 

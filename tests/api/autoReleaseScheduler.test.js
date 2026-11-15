@@ -14,7 +14,7 @@ import {
   DEFAULT_CATEGORY_SETTINGS,
 } from '../../api/_lib/scheduledCampaignService.js';
 import dispatchHandler from '../../api/notifications/dispatch.js';
-import { getCountdownDetails } from '../../src/utils/releaseSchedulerUtils.js';
+import { getCountdownDetails, getMovieReleaseCountdown } from '../../src/utils/releaseSchedulerUtils.js';
 
 function createMockRes() {
   return {
@@ -441,4 +441,52 @@ test('7. Admin Category Access Controls - toggling categories suppresses automat
   assert.ok(ingestedTitles.includes('Pushpa 3'));
   assert.ok(!ingestedTitles.includes('Panchayat Season 4'));
   assert.ok(!ingestedTitles.includes('Avatar 3'));
+});
+
+test('8. getMovieReleaseCountdown - accurately classifies past, today, tomorrow, and future days without false Releases Today', () => {
+  const fixedNow = new Date('2026-11-16T12:00:00Z');
+
+  // Past release (Yesterday: 2026-11-15) - Must NOT be 'Releases Today!'
+  const pastResult = getMovieReleaseCountdown('2026-11-15', fixedNow);
+  assert.equal(pastResult.isPast, true);
+  assert.equal(pastResult.isUrgent, false);
+  assert.equal(pastResult.text, 'Released');
+
+  // Today release (2026-11-16)
+  const todayResult = getMovieReleaseCountdown('2026-11-16', fixedNow);
+  assert.equal(todayResult.isPast, false);
+  assert.equal(todayResult.isUrgent, true);
+  assert.equal(todayResult.text, 'Releases Today!');
+
+  // Tomorrow release (2026-11-17)
+  const tomorrowResult = getMovieReleaseCountdown('2026-11-17', fixedNow);
+  assert.equal(tomorrowResult.isPast, false);
+  assert.equal(tomorrowResult.isUrgent, true);
+  assert.equal(tomorrowResult.text, 'Releases Tomorrow!');
+
+  // Future release (2026-11-19)
+  const futureResult = getMovieReleaseCountdown('2026-11-19', fixedNow);
+  assert.equal(futureResult.isPast, false);
+  assert.equal(futureResult.isUrgent, false);
+  assert.equal(futureResult.text, 'In 3 days');
+});
+
+test('9. Live Countdown Timer & Due Expiration - flags isDue: true when timer reaches 00:00:00', () => {
+  const nowMs = new Date('2026-11-16T08:30:00.000Z').getTime();
+
+  // Exactly due
+  const dueCd = getCountdownDetails('2026-11-16T08:30:00.000Z', nowMs);
+  assert.equal(dueCd.isDue, true);
+  assert.equal(dueCd.formattedTime, '00:00:00');
+  assert.ok(dueCd.label.includes('Release Time Reached'));
+
+  // 1-day final timer (e.g. 5 hours left)
+  const futureCd = getCountdownDetails('2026-11-16T13:30:00.000Z', nowMs);
+  assert.equal(futureCd.isDue, false);
+  assert.equal(futureCd.isFinalDay, true);
+  assert.equal(futureCd.hours, 5);
+  assert.equal(futureCd.mins, 0);
+  assert.equal(futureCd.secs, 0);
+  assert.equal(futureCd.formattedTime, '05:00:00');
+  assert.ok(futureCd.label.includes('1-Day Final Timer'));
 });

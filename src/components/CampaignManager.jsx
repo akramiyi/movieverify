@@ -37,6 +37,7 @@ import {
   MORNING_SLOTS_IST,
   getSlotForRelease,
   getCountdownDetails,
+  getMovieReleaseCountdown,
   getTodayIST,
   isQuietHoursIST,
   CATEGORY_CONFIG_CAMPAIGN_ID,
@@ -49,6 +50,7 @@ export {
   MORNING_SLOTS_IST,
   getSlotForRelease,
   getCountdownDetails,
+  getMovieReleaseCountdown,
   getTodayIST,
   CATEGORY_CONFIG_CAMPAIGN_ID,
   DEFAULT_CATEGORY_SETTINGS,
@@ -298,6 +300,29 @@ export default function CampaignManager({ initialView = 'form' }) {
 
   useEffect(() => {
     fetchCampaigns();
+
+    // Automatic zero-approval synchronization of upcoming releases on page load
+    if (!autoSyncExecutedRef.current) {
+      autoSyncExecutedRef.current = true;
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await fetch('/api/notifications/campaigns', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({ action: 'auto_sync' }),
+            }).catch(() => null);
+            fetchCampaigns();
+          }
+        } catch {
+          // Non-fatal background sync
+        }
+      })();
+    }
   }, []);
 
   // Zero-Approval Automated Dispatch when a scheduled campaign's timer expires
@@ -324,10 +349,14 @@ export default function CampaignManager({ initialView = 'form' }) {
     }
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
-      await fetch('/api/notifications/dispatch?due_only=true', {
-        method: 'GET',
-        headers,
+      if (!session) return;
+      await fetch('/api/notifications/campaigns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action: 'dispatch_due' }),
       }).catch(() => null);
       fetchCampaigns();
     } catch {
@@ -340,28 +369,38 @@ export default function CampaignManager({ initialView = 'form' }) {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
-      const res = await fetch('/api/notifications/dispatch?auto_ingest=true&sweep_expired=true', {
-        method: 'GET',
-        headers,
+      if (!session) throw new Error('Admin session required.');
+      const res = await fetch('/api/notifications/campaigns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ action: 'auto_sync' }),
       });
       const data = await res.json();
-      if (res.ok) {
-        if (data.quiet_hours) {
-          setActionStatus({
-            type: 'success',
-            message: `Auto-Sync complete! ${data.auto_ingested_count || 0} release(s) scheduled. Push dispatch is paused during Quiet Hours (10 PM - 8 AM IST) to protect users from nighttime alerts.`,
-          });
-        } else {
-          setActionStatus({
-            type: 'success',
-            message: `Auto-Sync complete! ${data.auto_ingested_count || 0} release(s) scheduled across distributed daytime windows (8:30 AM, 1:30 PM, 6:00 PM, 8:45 PM IST). Promoted: ${data.promoted_campaigns || 0}.`,
-          });
-        }
-      } else {
-        throw new Error(data.message || data.error || 'Sync failed');
+      if (!res.ok) throw new Error(data.message || data.error || 'Sync failed');
+
+      // Also trigger a dispatch cycle if outside quiet hours
+      if (!isQuietHoursIST()) {
+        await fetch('/api/notifications/campaigns', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ action: 'dispatch_due' }),
+        }).catch(() => null);
       }
+
+      setActionStatus({
+        type: 'success',
+        message: `Auto-Sync complete! ${data.ingested_count || 0} upcoming release(s) scheduled across smart daytime slots (08:30 AM, 01:30 PM, 06:00 PM, 08:45 PM IST). ${data.skipped_count || 0} skipped (already scheduled or muted).`,
+      });
       fetchCampaigns();
+      if (upcomingMovies.length > 0) {
+        loadUpcomingMovies();
+      }
     } catch (err) {
       setActionStatus({ type: 'error', message: err.message });
     } finally {
@@ -913,18 +952,6 @@ export default function CampaignManager({ initialView = 'form' }) {
     if (type === 'actor') return `Actor #${criteria.actor_id || ''}`;
     if (type === 'genre') return `Genre #${criteria.genre_id || ''}`;
     return type;
-  };
-
-  const getMovieReleaseCountdown = (releaseDateStr) => {
-    if (!releaseDateStr) return null;
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const relDate = new Date(releaseDateStr + 'T00:00:00');
-    const diffDays = Math.ceil((relDate - today) / (1000 * 60 * 60 * 24));
-
-    if (diffDays <= 0) return { text: 'Releases Today!', isUrgent: true };
-    if (diffDays === 1) return { text: 'Releases Tomorrow!', isUrgent: true };
-    return { text: `In ${diffDays} days`, isUrgent: false };
   };
 
   // Compute stats across categories and dates
@@ -2382,6 +2409,7 @@ export default function CampaignManager({ initialView = 'form' }) {
                 );
                 const isAlreadyScheduled = Boolean(existingCampaign);
                 const isAlreadySent = existingCampaign && isCampaignCompleted(existingCampaign);
+                const cd = isAlreadyScheduled && existingCampaign?.scheduled_for ? getCountdownDetails(existingCampaign.scheduled_for, currentTime) : null;
 
                 const imageUrl =
                   (item.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : null) ||
@@ -2454,17 +2482,31 @@ export default function CampaignManager({ initialView = 'form' }) {
                             )}
                           </div>
 
-                          {countdown && (
+                          {cd && isAlreadyScheduled && !isAlreadySent ? (
+                            <span
+                              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full backdrop-blur-md border ${
+                                cd.isDue
+                                  ? 'bg-emerald-500/80 text-white animate-pulse border-emerald-400'
+                                  : cd.isFinalDay
+                                  ? 'bg-rose-500/80 text-white animate-pulse border-rose-400 font-black'
+                                  : 'bg-black/70 text-amber-300 border-amber-500/40'
+                              }`}
+                            >
+                              {cd.isDue ? '⚡ Due for Push' : cd.isFinalDay ? `🔥 ${cd.formattedTime}` : `⏳ ${cd.days}d ${cd.hours}h`}
+                            </span>
+                          ) : countdown ? (
                             <span
                               className={`text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-md ${
-                                countdown.isUrgent
+                                countdown.isPast
+                                  ? 'bg-black/70 text-gray-400 border border-white/10'
+                                  : countdown.isUrgent
                                   ? 'bg-rose-500/80 text-white animate-pulse font-black'
                                   : 'bg-black/60 text-amber-300 border border-amber-500/30'
                               }`}
                             >
                               {countdown.text}
                             </span>
-                          )}
+                          ) : null}
                         </div>
 
                         {/* Release Date Banner */}
@@ -2505,21 +2547,43 @@ export default function CampaignManager({ initialView = 'form' }) {
                           <span>Notification Sent</span>
                         </div>
                       ) : isAlreadyScheduled ? (
-                        <div className="w-full py-2 px-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-between">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-amber-400" />
-                            <span>In Queue</span>
-                          </span>
+                        <div className="w-full py-2 px-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-between shadow-inner">
+                          <div className="flex items-center gap-1.5 font-mono truncate mr-1">
+                            <Clock className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
+                            <span className="truncate">
+                              {cd?.isDue ? (
+                                <span className="text-emerald-300 animate-pulse">⚡ Auto-Dispatching...</span>
+                              ) : cd?.isFinalDay ? (
+                                <span className="text-amber-200">
+                                  🔥 Final: <strong className="text-white font-mono">{cd.formattedTime}</strong>
+                                </span>
+                              ) : cd ? (
+                                <span className="text-amber-300">
+                                  ⏳ In {cd.days}d {cd.hours}h {cd.mins}m {cd.secs}s
+                                </span>
+                              ) : (
+                                <span>In Queue</span>
+                              )}
+                            </span>
+                          </div>
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveView('queue');
                             }}
-                            className="text-[10px] text-amber-400 underline hover:text-white cursor-pointer"
+                            className="text-[10px] text-amber-400 hover:text-white underline font-semibold cursor-pointer shrink-0 ml-1"
                           >
-                            View
+                            Queue
                           </button>
+                        </div>
+                      ) : countdown?.isPast ? (
+                        <div className="w-full py-2 px-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs font-medium flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-[11px]">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-gray-500" />
+                            <span>Released in Theaters / OTT</span>
+                          </span>
+                          <span className="text-[10px] text-gray-500 font-mono">{item.release_date}</span>
                         </div>
                       ) : isCategoryMuted ? (
                         <div className="w-full py-2 px-3 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs font-bold flex items-center justify-between">
