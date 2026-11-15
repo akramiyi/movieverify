@@ -29,6 +29,8 @@ import { runDispatchCycle } from '../_lib/dispatchWorker.js';
 import {
   promoteDueScheduledCampaigns,
   promoteDueScheduledCampaignsFallback,
+  getAdminCategorySettings,
+  updateAdminCategorySettings,
 } from '../_lib/scheduledCampaignService.js';
 import { getSupabaseServerClient } from '../_lib/supabaseServer.js';
 
@@ -134,6 +136,24 @@ export default async function handler(req, res, customDependencies = {}) {
 
     const cancelResult = await cancelCampaign(campaignId, context, customSupabase);
     return sendJson(res, cancelResult.status, cancelResult.body);
+  }
+
+  // Admin Notification Category Controls: Get & Update allowed release alert categories
+  if (method === 'POST' && body.action === 'get_category_settings') {
+    const settings = await getAdminCategorySettings(customSupabase);
+    return sendJson(res, 200, { success: true, ...settings });
+  }
+
+  if (method === 'POST' && body.action === 'update_category_settings') {
+    const updated = await updateAdminCategorySettings(customSupabase, {
+      disabledCategories: body.disabled_categories || body.disabledCategories,
+      categories: body.categories,
+    });
+    return sendJson(res, 200, {
+      success: true,
+      message: 'Category alert access settings updated successfully.',
+      ...updated,
+    });
   }
 
   // Admin Manual or Scheduled Dispatch Trigger:

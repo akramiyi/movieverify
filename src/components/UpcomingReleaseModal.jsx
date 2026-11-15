@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Bell,
   Share2,
+  VolumeX,
 } from 'lucide-react';
 import { fetchTMDBDetails } from '../hooks/useTMDB';
 import { useSubscriptions } from '../hooks/useSubscriptions';
@@ -34,6 +35,7 @@ export default function UpcomingReleaseModal({
   onCustomize = null,
   existingCampaign = null,
   isScheduling = false,
+  isCategoryMuted = false,
 }) {
   const [details, setDetails] = useState({
     cast: '',
@@ -367,11 +369,26 @@ export default function UpcomingReleaseModal({
                     ✅ Sent
                   </span>
                 )}
+                {isCategoryMuted && (
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 flex items-center gap-1">
+                    <VolumeX className="w-3 h-3 text-red-400" />
+                    <span>🔕 Category Muted</span>
+                  </span>
+                )}
               </div>
 
-              <p className="text-xs text-gray-400 leading-relaxed">
-                Dispatch a push notification to subscribers for this release. You can schedule it with 1-click for release day at 09:00 AM, or customize the title and target audience.
-              </p>
+              {isCategoryMuted ? (
+                <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/30 text-red-200 text-xs flex items-center gap-2">
+                  <VolumeX className="w-4 h-4 text-red-400 shrink-0" />
+                  <span>
+                    <strong>Category Muted by Admin:</strong> Release alerts for this industry/category are currently muted in Category Controls. No automated alerts will be dispatched.
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Dispatch a push notification to subscribers for this release. You can schedule it with 1-click for release day at 09:00 AM, or customize the title and target audience.
+                </p>
+              )}
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
@@ -389,6 +406,11 @@ export default function UpcomingReleaseModal({
                     <span className="text-[10px] text-gray-400 font-normal font-mono">
                       9:00 AM
                     </span>
+                  </div>
+                ) : isCategoryMuted ? (
+                  <div className="flex-1 py-2.5 px-4 rounded-xl bg-red-950/30 border border-red-500/30 text-red-300 text-xs font-bold flex items-center justify-center gap-2">
+                    <VolumeX className="w-4 h-4 text-red-400" />
+                    <span>Category Alerts Muted in Settings</span>
                   </div>
                 ) : (
                   <button

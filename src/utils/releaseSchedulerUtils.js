@@ -27,6 +27,59 @@ export const MORNING_SLOTS_IST = SMART_DAYTIME_SLOTS_IST;
 
 export const MAX_DAILY_NOTIFICATIONS = 3;
 
+export const CATEGORY_CONFIG_CAMPAIGN_ID = '00000000-0000-4000-8000-000000000002';
+
+export const DEFAULT_CATEGORY_SETTINGS = Object.freeze({
+  south_movie: true,
+  bollywood_movie: true,
+  hollywood_movie: true,
+  hindi_series: true,
+  hollywood_series: true,
+});
+
+export const CATEGORY_METADATA = [
+  {
+    id: 'bollywood_movie',
+    label: 'Bollywood Movies',
+    sub: 'Hindi Cinema',
+    icon: '🎬',
+    color: 'from-orange-500/20 to-amber-500/20 border-orange-500/40 text-orange-300',
+    description: 'Theatrical and direct-to-digital Hindi movie releases',
+  },
+  {
+    id: 'hindi_series',
+    label: 'Hindi Web Series',
+    sub: 'Indian OTT Series',
+    icon: '📺',
+    color: 'from-purple-500/20 to-indigo-500/20 border-purple-500/40 text-purple-300',
+    description: 'Hindi web series, OTT seasons and episodic premieres',
+  },
+  {
+    id: 'south_movie',
+    label: 'South Indian Movies',
+    sub: 'Telugu, Tamil, Malayalam, Kannada',
+    icon: '🎬',
+    color: 'from-amber-500/20 to-yellow-500/20 border-amber-500/40 text-amber-300',
+    description: 'Tollywood, Kollywood, Mollywood & Sandalwood big-screen releases',
+  },
+  {
+    id: 'hollywood_movie',
+    label: 'Hollywood Movies',
+    sub: 'English & Global Cinema',
+    icon: '🎬',
+    color: 'from-blue-500/20 to-cyan-500/20 border-blue-500/40 text-blue-300',
+    description: 'Global blockbusters, studio releases & Hollywood premieres',
+  },
+  {
+    id: 'hollywood_series',
+    label: 'Hollywood Web Series',
+    sub: 'Global OTT Series',
+    icon: '📺',
+    color: 'from-emerald-500/20 to-teal-500/20 border-emerald-500/40 text-emerald-300',
+    description: 'English international television, Netflix/HBO/Amazon originals',
+  },
+];
+
 /**
  * Returns today's date formatted as 'YYYY-MM-DD' in Indian Standard Time (UTC+05:30)
  * @param {Date} [refDate]

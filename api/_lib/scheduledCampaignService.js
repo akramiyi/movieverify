@@ -198,6 +198,142 @@ export const SMART_DAYTIME_SLOTS_IST = [
 export const MORNING_SLOTS_IST = SMART_DAYTIME_SLOTS_IST;
 export const MAX_DAILY_NOTIFICATIONS = 3;
 
+export const CATEGORY_CONFIG_CAMPAIGN_ID = '00000000-0000-4000-8000-000000000002';
+
+export const DEFAULT_CATEGORY_SETTINGS = Object.freeze({
+  south_movie: true,
+  bollywood_movie: true,
+  hollywood_movie: true,
+  hindi_series: true,
+  hollywood_series: true,
+});
+
+/**
+ * Retrieve admin category notification access settings from Supabase.
+ *
+ * @param {object|null} customSupabase
+ * @returns {Promise<{ categories: object, disabled_categories: string[] }>}
+ */
+export async function getAdminCategorySettings(customSupabase = null) {
+  const supabase = getSupabaseServerClient(customSupabase);
+  try {
+    if (typeof supabase?.from === 'function') {
+      const { data, error } = await supabase
+        .from('notification_campaigns')
+        .select('target_criteria')
+        .eq('id', CATEGORY_CONFIG_CAMPAIGN_ID)
+        .maybeSingle();
+
+      if (!error && data?.target_criteria?.categories) {
+        const disabled = Array.isArray(data.target_criteria.disabled_categories)
+          ? data.target_criteria.disabled_categories
+          : Object.keys(data.target_criteria.categories).filter((k) => data.target_criteria.categories[k] === false);
+
+        return {
+          categories: { ...DEFAULT_CATEGORY_SETTINGS, ...data.target_criteria.categories },
+          disabled_categories: disabled,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[CategorySettings] Error fetching category settings:', err.message);
+  }
+
+  return {
+    categories: { ...DEFAULT_CATEGORY_SETTINGS },
+    disabled_categories: [],
+  };
+}
+
+/**
+ * Update admin category notification access settings in Supabase.
+ * When a category is disabled, automatically cancels any existing scheduled/queued
+ * campaigns matching that category to prevent further push alerts.
+ *
+ * @param {object|null} customSupabase
+ * @param {{ disabledCategories?: string[], categories?: object }} params
+ * @returns {Promise<{ categories: object, disabled_categories: string[], cancelled_campaigns_count: number }>}
+ */
+export async function updateAdminCategorySettings(customSupabase = null, { disabledCategories, categories = {} } = {}) {
+  const supabase = getSupabaseServerClient(customSupabase);
+  const normalizedCategories = { ...DEFAULT_CATEGORY_SETTINGS, ...(categories || {}) };
+
+  const disabledList = Array.isArray(disabledCategories)
+    ? [...new Set(disabledCategories)]
+    : Object.keys(normalizedCategories).filter((k) => normalizedCategories[k] === false);
+
+  for (const cat of Object.keys(normalizedCategories)) {
+    normalizedCategories[cat] = !disabledList.includes(cat);
+  }
+
+  const payload = {
+    disabled_categories: disabledList,
+    categories: normalizedCategories,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (typeof supabase?.from === 'function') {
+    const { error: upsertErr } = await supabase
+      .from('notification_campaigns')
+      .upsert(
+        {
+          id: CATEGORY_CONFIG_CAMPAIGN_ID,
+          title: 'Auto Release Notification Category Settings',
+          body: 'System setting for enabled/disabled release alert categories',
+          category: 'system',
+          target_type: 'all',
+          target_criteria: payload,
+          status: 'completed',
+          priority: 0,
+          total_recipients: 0,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+
+    if (upsertErr) {
+      console.warn('[CategorySettings] Error saving category settings:', upsertErr.message);
+    }
+  }
+
+  // If any categories were disabled, cancel matching active scheduled campaigns
+  let cancelledCount = 0;
+  if (disabledList.length > 0 && typeof supabase?.from === 'function') {
+    try {
+      const { data: matched } = await supabase
+        .from('notification_campaigns')
+        .select('id, target_criteria')
+        .in('status', ['scheduled', 'queued']);
+
+      const idsToCancel = (matched || [])
+        .filter((c) => c.target_criteria && disabledList.includes(c.target_criteria.release_category))
+        .map((c) => c.id);
+
+      if (idsToCancel.length > 0) {
+        cancelledCount = idsToCancel.length;
+        await supabase
+          .from('notification_campaigns')
+          .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+          .in('id', idsToCancel);
+
+        await supabase
+          .from('notification_deliveries')
+          .update({ delivery_status: 'cancelled', updated_at: new Date().toISOString() })
+          .in('campaign_id', idsToCancel)
+          .eq('delivery_status', 'pending');
+      }
+    } catch (cancelErr) {
+      console.warn('[CategorySettings] Error cancelling scheduled campaigns for disabled categories:', cancelErr.message);
+    }
+  }
+
+  return {
+    categories: normalizedCategories,
+    disabled_categories: disabledList,
+    cancelled_campaigns_count: cancelledCount,
+  };
+}
+
 /**
  * Returns today's date formatted as 'YYYY-MM-DD' in Indian Standard Time (UTC+05:30)
  * @param {Date} [refDate]
@@ -442,10 +578,24 @@ export async function autoIngestUpcomingReleases(customSupabase = null, options 
   let skippedCount = 0;
   const todayIST = getTodayIST();
 
+  // Load Admin Category Settings (which categories are enabled vs disabled)
+  let disabledCategories = new Set(options.disabledCategories || []);
+  if (options.disabledCategories === undefined && options.categorySettings?.disabled_categories) {
+    disabledCategories = new Set(options.categorySettings.disabled_categories);
+  } else if (options.disabledCategories === undefined && typeof supabase?.from === 'function') {
+    try {
+      const catSettings = await getAdminCategorySettings(supabase);
+      disabledCategories = new Set(catSettings.disabled_categories || []);
+    } catch (catErr) {
+      console.warn('[AutoIngest] Error reading category settings:', catErr.message);
+    }
+  }
+
   for (const item of releases) {
     const mediaType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
     const releaseDate = (item.release_date || item.first_air_date || '').split('T')[0];
     const itemId = String(item.id);
+    const category = item.release_category || (mediaType === 'tv' ? 'hindi_series' : 'bollywood_movie');
 
     if (!releaseDate || !itemId) {
       continue;
@@ -453,6 +603,12 @@ export async function autoIngestUpcomingReleases(customSupabase = null, options 
 
     // Strict Future-Release Guard: Never schedule or send retrospective push alerts for past dates!
     if (releaseDate < todayIST) {
+      skippedCount++;
+      continue;
+    }
+
+    // Category Filter Guard: Skip release alerts for categories muted by Admin!
+    if (disabledCategories.has(category)) {
       skippedCount++;
       continue;
     }
@@ -501,6 +657,8 @@ export async function autoIngestUpcomingReleases(customSupabase = null, options 
         movie_id: itemId,
         series_id: itemId,
         media_type: mediaType,
+        release_category: category,
+        industry_label: catLabel,
         idempotency_key: idempotencyKey,
         release_slot: slotInfo.slot_time,
         auto_scheduled: true,
@@ -567,9 +725,11 @@ export async function autoIngestUpcomingReleases(customSupabase = null, options 
         campaign_id: insertedId,
         title,
         media_type: mediaType,
+        release_category: category,
         release_date: releaseDate,
-        slot_time: slotInfo.slot_time,
         scheduled_for: slotInfo.scheduled_for,
+        slot_time: slotInfo.slot_time,
+        slot_label: slotInfo.slot_label,
         status: insertStatus,
       });
     }

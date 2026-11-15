@@ -9,6 +9,9 @@ import {
   isQuietHoursIST,
   getScheduledSlotForRelease,
   autoIngestUpcomingReleases,
+  getAdminCategorySettings,
+  updateAdminCategorySettings,
+  DEFAULT_CATEGORY_SETTINGS,
 } from '../../api/_lib/scheduledCampaignService.js';
 import dispatchHandler from '../../api/notifications/dispatch.js';
 import { getCountdownDetails } from '../../src/utils/releaseSchedulerUtils.js';
@@ -320,4 +323,122 @@ test('6. Anti-Spam Protection - Quiet Hours, Daily Cap (Max 3/Day), and Past Dat
   assert.equal(result.ingested_count, 3); // Capped at MAX_DAILY_NOTIFICATIONS (3)
   assert.equal(result.skipped_count, 3); // 1 past + 2 capped
   assert.equal(mockInsertedCampaigns.length, 3);
+});
+
+test('7. Admin Category Access Controls - toggling categories suppresses automated alerts for muted categories', async () => {
+  const mockInsertedCampaigns = [];
+  const mockDbState = new Map();
+
+  const mockSupabase = {
+    from: (table) => {
+      if (table === 'notification_campaigns') {
+        return {
+          select: () => ({
+            neq: () => ({
+              limit: async () => ({ data: [...mockInsertedCampaigns], error: null }),
+            }),
+            eq: (col, val) => ({
+              maybeSingle: async () => ({
+                data: mockDbState.get(val) || null,
+                error: null,
+              }),
+            }),
+            in: () => ({
+              data: [...mockInsertedCampaigns],
+              error: null,
+            }),
+          }),
+          insert: (row) => ({
+            select: () => ({
+              single: async () => {
+                const inserted = { id: `camp-${mockInsertedCampaigns.length + 1}`, ...row };
+                mockInsertedCampaigns.push(inserted);
+                return { data: inserted, error: null };
+              },
+            }),
+          }),
+          upsert: (row) => ({
+            select: () => ({
+              single: async () => {
+                mockDbState.set(row.id, row);
+                return { data: row, error: null };
+              },
+            }),
+          }),
+          update: () => ({
+            in: async () => ({ data: [], error: null }),
+          }),
+        };
+      }
+      return { select: () => ({ error: null }) };
+    },
+  };
+
+  // 1. Admin turns OFF Hindi Web Series and Hollywood Movies (User scenario)
+  const updatedSettings = await updateAdminCategorySettings(mockSupabase, {
+    disabledCategories: ['hindi_series', 'hollywood_movie'],
+    categories: {
+      ...DEFAULT_CATEGORY_SETTINGS,
+      hindi_series: false,
+      hollywood_movie: false,
+    },
+  });
+
+  assert.equal(updatedSettings.categories.hindi_series, false);
+  assert.equal(updatedSettings.categories.hollywood_movie, false);
+  assert.equal(updatedSettings.categories.bollywood_movie, true);
+  assert.equal(updatedSettings.categories.south_movie, true);
+  assert.deepEqual(updatedSettings.disabled_categories.sort(), ['hindi_series', 'hollywood_movie'].sort());
+
+  // 2. Incoming releases contains Bollywood, Hindi Series, Hollywood, and South releases
+  const mixedReleases = [
+    {
+      id: 501,
+      title: 'Stree 3',
+      release_date: '2026-11-28',
+      media_type: 'movie',
+      release_category: 'bollywood_movie',
+      industry_label: 'Bollywood',
+    },
+    {
+      id: 502,
+      title: 'Panchayat Season 4',
+      release_date: '2026-11-28',
+      media_type: 'tv',
+      release_category: 'hindi_series',
+      industry_label: 'Hindi Web Series',
+    },
+    {
+      id: 503,
+      title: 'Avatar 3',
+      release_date: '2026-11-28',
+      media_type: 'movie',
+      release_category: 'hollywood_movie',
+      industry_label: 'Hollywood',
+    },
+    {
+      id: 504,
+      title: 'Pushpa 3',
+      release_date: '2026-11-28',
+      media_type: 'movie',
+      release_category: 'south_movie',
+      industry_label: 'South Movies',
+    },
+  ];
+
+  // 3. Ingestion respects the disabled categories!
+  const ingestResult = await autoIngestUpcomingReleases(mockSupabase, {
+    releases: mixedReleases,
+    disabledCategories: updatedSettings.disabled_categories,
+  });
+
+  // Only Bollywood (Stree 3) and South (Pushpa 3) should be ingested!
+  // Hindi Series and Hollywood Movie must be skipped as requested!
+  assert.equal(ingestResult.ingested_count, 2);
+  assert.equal(ingestResult.skipped_count, 2);
+  const ingestedTitles = ingestResult.releases.map((r) => r.title);
+  assert.ok(ingestedTitles.includes('Stree 3'));
+  assert.ok(ingestedTitles.includes('Pushpa 3'));
+  assert.ok(!ingestedTitles.includes('Panchayat Season 4'));
+  assert.ok(!ingestedTitles.includes('Avatar 3'));
 });

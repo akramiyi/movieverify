@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight, Calendar, RotateCcw, Database, BarChart3, FileText, Send } from 'lucide-react';
+import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight, Calendar, RotateCcw, Database, BarChart3, FileText, Send, Sliders } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, fetchMovieOrTVById, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
@@ -1318,6 +1318,18 @@ const AdminPanel = ({ onClose }) => {
             <FileText className="w-3.5 h-3.5" />
             <span>Reports</span>
           </button>
+          <button 
+            onClick={() => setActiveTab(activeTab === 'categories' ? 'manager' : 'categories')}
+            className={`transition-all duration-200 text-xs font-bold px-3.5 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border whitespace-nowrap shrink-0 ${
+              activeTab === 'categories'
+                ? 'bg-purple-600 text-white border-purple-400/60 shadow-[0_0_18px_rgba(147,51,234,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                : 'bg-white/[0.05] hover:bg-white/[0.12] text-purple-300 hover:text-white border-white/[0.10]'
+            }`}
+            title="Admin category notification access controls (Mute or Enable Bollywood, South, Hollywood movies & series alerts)"
+          >
+            <Sliders className="w-3.5 h-3.5 text-purple-400" />
+            <span>Category Controls</span>
+          </button>
         </div>
 
         {/* Main Content Area */}
@@ -1333,6 +1345,10 @@ const AdminPanel = ({ onClose }) => {
           ) : activeTab === 'scanner' ? (
             <div className="w-full flex-1">
               <CampaignManager initialView="scanner" />
+            </div>
+          ) : activeTab === 'categories' ? (
+            <div className="w-full flex-1">
+              <CampaignManager initialView="categories" />
             </div>
           ) : activeTab === 'reports' ? (
             <div className="w-full flex-1">

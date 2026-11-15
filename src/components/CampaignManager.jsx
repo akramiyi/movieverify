@@ -24,6 +24,10 @@ import {
   ArrowUpRight,
   ListFilter,
   Play,
+  Sliders,
+  Volume2,
+  VolumeX,
+  ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { fetchUpcomingReleases, fetchUpcomingIndianMovies } from '../hooks/useTMDB';
@@ -35,6 +39,9 @@ import {
   getCountdownDetails,
   getTodayIST,
   isQuietHoursIST,
+  CATEGORY_CONFIG_CAMPAIGN_ID,
+  DEFAULT_CATEGORY_SETTINGS,
+  CATEGORY_METADATA,
 } from '../utils/releaseSchedulerUtils';
 
 export {
@@ -43,6 +50,9 @@ export {
   getSlotForRelease,
   getCountdownDetails,
   getTodayIST,
+  CATEGORY_CONFIG_CAMPAIGN_ID,
+  DEFAULT_CATEGORY_SETTINGS,
+  CATEGORY_METADATA,
   isQuietHoursIST,
 };
 
@@ -147,6 +157,15 @@ export default function CampaignManager({ initialView = 'form' }) {
   const autoDispatchedIdsRef = useRef(new Set());
   const autoSyncExecutedRef = useRef(false);
 
+  // Admin Notification Category Controls State
+  const [categoryControls, setCategoryControls] = useState({ ...DEFAULT_CATEGORY_SETTINGS });
+  const [categoryControlsLoading, setCategoryControlsLoading] = useState(false);
+  const [categoryToggleInProgress, setCategoryToggleInProgress] = useState(null);
+
+  const disabledCategoriesCount = useMemo(() => {
+    return Object.values(categoryControls).filter((v) => v === false).length;
+  }, [categoryControls]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(Date.now());
@@ -165,10 +184,115 @@ export default function CampaignManager({ initialView = 'form' }) {
 
       if (error) throw error;
       setCampaigns(data || []);
+
+      if (data) {
+        const configRow = data.find((c) => c.id === CATEGORY_CONFIG_CAMPAIGN_ID);
+        if (configRow?.target_criteria?.categories) {
+          setCategoryControls({ ...DEFAULT_CATEGORY_SETTINGS, ...configRow.target_criteria.categories });
+        }
+      }
     } catch (err) {
       console.warn('Failed to load campaigns:', err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleCategory = async (categoryId) => {
+    setCategoryToggleInProgress(categoryId);
+    const currentVal = categoryControls[categoryId] !== false;
+    const newVal = !currentVal;
+    const nextCategories = { ...categoryControls, [categoryId]: newVal };
+    const disabledList = Object.keys(nextCategories).filter((k) => nextCategories[k] === false);
+
+    // Optimistic UI update
+    setCategoryControls(nextCategories);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Admin session required.');
+
+      const res = await fetch('/api/notifications/campaigns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'update_category_settings',
+          categories: nextCategories,
+          disabled_categories: disabledList,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.message || resData.error);
+
+      const catMeta = CATEGORY_METADATA.find((c) => c.id === categoryId);
+      const catName = catMeta ? catMeta.label : categoryId;
+
+      if (newVal) {
+        setActionStatus({
+          type: 'success',
+          message: `🔔 ${catName} release alerts ENABLED. Automated notifications will be sent on release days.`,
+        });
+      } else {
+        setActionStatus({
+          type: 'success',
+          message: `🔕 ${catName} release alerts MUTED. No automated notifications will be scheduled or sent for this category. ${resData.cancelled_campaigns_count || 0} scheduled alerts cancelled.`,
+        });
+      }
+      fetchCampaigns();
+    } catch (err) {
+      setCategoryControls((prev) => ({ ...prev, [categoryId]: currentVal }));
+      setActionStatus({ type: 'error', message: `Failed to update category: ${err.message}` });
+    } finally {
+      setCategoryToggleInProgress(null);
+    }
+  };
+
+  const handleBatchToggleAllCategories = async (enableAll = true) => {
+    setCategoryControlsLoading(true);
+    const nextCategories = {};
+    for (const cat of Object.keys(DEFAULT_CATEGORY_SETTINGS)) {
+      nextCategories[cat] = enableAll;
+    }
+    const disabledList = enableAll ? [] : Object.keys(DEFAULT_CATEGORY_SETTINGS);
+
+    setCategoryControls(nextCategories);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Admin session required.');
+
+      const res = await fetch('/api/notifications/campaigns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action: 'update_category_settings',
+          categories: nextCategories,
+          disabled_categories: disabledList,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.message || resData.error);
+
+      setActionStatus({
+        type: 'success',
+        message: enableAll
+          ? '🔔 All movie & web series categories ENABLED for automated alerts.'
+          : `🔕 All release alert categories MUTED. ${resData.cancelled_campaigns_count || 0} scheduled alerts cancelled.`,
+      });
+      fetchCampaigns();
+    } catch (err) {
+      setActionStatus({ type: 'error', message: err.message });
+      fetchCampaigns();
+    } finally {
+      setCategoryControlsLoading(false);
     }
   };
 
@@ -517,11 +641,19 @@ export default function CampaignManager({ initialView = 'form' }) {
       if (releaseDate < todayStr) {
         throw new Error(`Cannot schedule release alert for past date (${releaseDate}). Only upcoming releases can be scheduled.`);
       }
+
+      const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
+      const releaseCat = item.release_category || (isTv ? 'hindi_series' : 'bollywood_movie');
+
+      if (categoryControls[releaseCat] === false) {
+        const catMeta = CATEGORY_METADATA.find((c) => c.id === releaseCat);
+        throw new Error(`Cannot schedule alert: "${catMeta?.label || releaseCat}" is currently MUTED in Admin Category Controls. Enable it first in the Category Controls tab.`);
+      }
+
       const slotInfo = getSlotForRelease(releaseDate, campaigns);
       const scheduledForIso = slotInfo.scheduled_for;
       const isToday = releaseDate === todayStr;
 
-      const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
       const catInfo = RELEASE_CATEGORIES.find((c) => c.id === item.release_category);
       const catLabel = catInfo ? catInfo.label : (isTv ? 'Web Series' : 'Movie');
       const titleEmoji = isTv ? '📺' : '🎬';
@@ -538,6 +670,7 @@ export default function CampaignManager({ initialView = 'form' }) {
           series_id: String(item.id),
           tmdb_id: String(item.id),
           media_type: isTv ? 'tv' : 'movie',
+          release_category: releaseCat,
           idempotency_key: `auto_rel_${isTv ? 'tv' : 'movie'}_${item.id}_${releaseDate}`,
           release_slot: slotInfo.slot_time,
           auto_scheduled: true,
@@ -632,6 +765,9 @@ export default function CampaignManager({ initialView = 'form' }) {
         (m) => {
           const relDate = (m.release_date || '').split('T')[0];
           if (relDate < todayStr) return false;
+          const isTv = m.media_type === 'tv' || m.release_category?.includes('series');
+          const releaseCat = m.release_category || (isTv ? 'hindi_series' : 'bollywood_movie');
+          if (categoryControls[releaseCat] === false) return false;
           return !campaigns.some(
             (c) =>
               c.target_criteria?.movie_id === String(m.id) ||
@@ -969,6 +1105,28 @@ export default function CampaignManager({ initialView = 'form' }) {
             <span className="bg-rose-500/30 text-rose-300 px-2 py-0.2 rounded-full text-[10px] font-black border border-rose-500/40">
               Live TMDB
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView('categories')}
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeView === 'categories'
+                ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.45),inset_0_1px_0_rgba(255,255,255,0.25)] scale-[1.02]'
+                : 'text-gray-400 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/10'
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5 text-purple-400" />
+            <span>Category Controls</span>
+            {disabledCategoriesCount > 0 ? (
+              <span className="bg-red-500/30 text-red-200 border border-red-500/40 px-2 py-0.2 rounded-full text-[10px] font-black">
+                {disabledCategoriesCount} Muted
+              </span>
+            ) : (
+              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.2 rounded-full text-[10px] font-black">
+                All Active
+              </span>
+            )}
           </button>
         </div>
 
@@ -2211,13 +2369,16 @@ export default function CampaignManager({ initialView = 'form' }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredUpcomingMovies.map((item) => {
                 const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
+                const catKey = item.release_category || (isTv ? 'hindi_series' : 'bollywood_movie');
+                const isCategoryMuted = categoryControls[catKey] === false;
                 const catInfo = RELEASE_CATEGORIES.find((c) => c.id === item.release_category);
                 const countdown = getMovieReleaseCountdown(item.release_date);
                 const existingCampaign = campaigns.find(
                   (c) =>
-                    c.target_criteria?.movie_id === String(item.id) ||
-                    c.target_criteria?.series_id === String(item.id) ||
-                    c.title?.toLowerCase().includes(item.title.toLowerCase())
+                    c.status !== 'cancelled' &&
+                    (c.target_criteria?.movie_id === String(item.id) ||
+                      c.target_criteria?.series_id === String(item.id) ||
+                      c.title?.toLowerCase().includes(item.title.toLowerCase()))
                 );
                 const isAlreadyScheduled = Boolean(existingCampaign);
                 const isAlreadySent = existingCampaign && isCampaignCompleted(existingCampaign);
@@ -2231,7 +2392,9 @@ export default function CampaignManager({ initialView = 'form' }) {
                 return (
                   <div
                     key={`${item.media_type || 'movie'}_${item.id}`}
-                    className="glass-card rounded-2xl overflow-hidden border border-white/10 hover:border-white/25 transition-all flex flex-col justify-between group hover:-translate-y-1 shadow-xl"
+                    className={`glass-card rounded-2xl overflow-hidden border transition-all flex flex-col justify-between group hover:-translate-y-1 shadow-xl ${
+                      isCategoryMuted ? 'border-red-500/20 opacity-80 hover:opacity-100' : 'border-white/10 hover:border-white/25'
+                    }`}
                   >
                     <div
                       onClick={() => setPreviewMovie(item)}
@@ -2283,6 +2446,12 @@ export default function CampaignManager({ initialView = 'form' }) {
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full backdrop-blur-md bg-black/60 text-gray-300 border border-white/10">
                               {isTv ? '📺 Series' : '🎬 Movie'}
                             </span>
+                            {isCategoryMuted && (
+                              <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full backdrop-blur-md bg-red-600/90 text-white border border-red-500/50 shadow-sm flex items-center gap-1">
+                                <VolumeX className="w-2.5 h-2.5" />
+                                <span>Muted</span>
+                              </span>
+                            )}
                           </div>
 
                           {countdown && (
@@ -2352,6 +2521,23 @@ export default function CampaignManager({ initialView = 'form' }) {
                             View
                           </button>
                         </div>
+                      ) : isCategoryMuted ? (
+                        <div className="w-full py-2 px-3 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs font-bold flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                            <span>Category Muted</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveView('categories');
+                            }}
+                            className="text-[10px] text-red-300 underline hover:text-white cursor-pointer"
+                          >
+                            Manage
+                          </button>
+                        </div>
                       ) : (
                         <button
                           type="button"
@@ -2381,6 +2567,213 @@ export default function CampaignManager({ initialView = 'form' }) {
         </div>
       ) : null}
 
+      {/* ========================================================================= */}
+      {/* VIEW D: ADMIN NOTIFICATION CATEGORY CONTROLS                              */}
+      {/* ========================================================================= */}
+      {activeView === 'categories' ? (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Header Summary & Control Hub */}
+          <div className="bg-gradient-to-r from-purple-950/40 via-[#181424] to-black/80 border border-purple-500/30 rounded-2xl p-5 shadow-2xl space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center shrink-0 shadow-lg shadow-purple-500/10">
+                  <Sliders className="w-6 h-6 text-purple-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-white font-extrabold text-base sm:text-lg tracking-tight">
+                      Category Notification Controls
+                    </h3>
+                    <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/35">
+                      Admin Access
+                    </span>
+                  </div>
+                  <p className="text-gray-400 text-xs mt-1 leading-relaxed max-w-2xl">
+                    Control which movie and web series categories receive automated release day SMS / push notifications.
+                    Muting a category immediately suppresses automated ingestion and cancels pending scheduled alerts for that category.
+                  </p>
+                </div>
+              </div>
+
+              {/* Batch Action Buttons */}
+              <div className="flex items-center gap-2.5 self-start lg:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleBatchToggleAllCategories(true)}
+                  disabled={categoryControlsLoading || disabledCategoriesCount === 0}
+                  className="px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>Enable All</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleBatchToggleAllCategories(false)}
+                  disabled={categoryControlsLoading || disabledCategoriesCount === CATEGORY_METADATA.length}
+                  className="px-3.5 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <VolumeX className="w-3.5 h-3.5" />
+                  <span>Mute All</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3 border-t border-white/5">
+              <div className="glass-card rounded-xl p-3 border border-white/10">
+                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Categories</div>
+                <div className="text-xl font-black text-white mt-0.5">{CATEGORY_METADATA.length}</div>
+              </div>
+              <div className="glass-card rounded-xl p-3 border border-emerald-500/25">
+                <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Active Alerts</div>
+                <div className="text-xl font-black text-emerald-300 mt-0.5">
+                  {CATEGORY_METADATA.length - disabledCategoriesCount} Active
+                </div>
+              </div>
+              <div className="glass-card rounded-xl p-3 border border-red-500/25 col-span-2 sm:col-span-1">
+                <div className="text-[11px] font-bold text-red-400 uppercase tracking-wider">Muted Categories</div>
+                <div className="text-xl font-black text-red-300 mt-0.5">
+                  {disabledCategoriesCount > 0 ? `${disabledCategoriesCount} Muted` : '0 Muted'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Category Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {CATEGORY_METADATA.map((cat) => {
+              const isEnabled = categoryControls[cat.id] !== false;
+              const isToggling = categoryToggleInProgress === cat.id || categoryControlsLoading;
+
+              return (
+                <div
+                  key={cat.id}
+                  className={`glass-card rounded-2xl p-5 border transition-all flex flex-col justify-between gap-4 shadow-xl ${
+                    isEnabled
+                      ? 'border-emerald-500/30 bg-[#12141a]/80 hover:border-emerald-500/50 hover:shadow-emerald-950/20'
+                      : 'border-red-500/30 bg-[#1a1214]/80 hover:border-red-500/50 hover:shadow-red-950/20'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    {/* Top Row: Icon, Label, Status Badge */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0 border ${
+                            isEnabled
+                              ? 'bg-emerald-500/15 border-emerald-500/30 shadow-inner'
+                              : 'bg-red-500/15 border-red-500/30 shadow-inner'
+                          }`}
+                        >
+                          {cat.icon}
+                        </div>
+                        <div>
+                          <h4 className="text-white font-extrabold text-sm leading-snug">
+                            {cat.label}
+                          </h4>
+                          <span className="text-[11px] font-semibold text-gray-400">
+                            {cat.subLabel}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border shrink-0 flex items-center gap-1 ${
+                          isEnabled
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-red-500/20 text-red-300 border-red-500/40'
+                        }`}
+                      >
+                        {isEnabled ? (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            <span>Active</span>
+                          </>
+                        ) : (
+                          <>
+                            <VolumeX className="w-2.5 h-2.5 text-red-400" />
+                            <span>Muted</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-xs text-gray-300 leading-relaxed min-h-[38px]">
+                      {cat.description}
+                    </p>
+
+                    {/* Status Info Box */}
+                    <div
+                      className={`p-2.5 rounded-xl text-[11px] font-medium border ${
+                        isEnabled
+                          ? 'bg-emerald-950/30 border-emerald-500/20 text-emerald-300'
+                          : 'bg-red-950/30 border-red-500/20 text-red-300'
+                      }`}
+                    >
+                      {isEnabled ? (
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Release alerts are <strong>ACTIVE</strong> for this category.</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                          <span>Alerts <strong>MUTED</strong>. Auto-ingest & dispatch disabled.</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Toggle Button */}
+                  <div className="pt-2 border-t border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCategory(cat.id)}
+                      disabled={isToggling}
+                      className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isEnabled
+                          ? 'bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/35 hover:border-red-500/50'
+                          : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-900/30 border border-emerald-500/40'
+                      }`}
+                    >
+                      {isToggling ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Updating Setting...</span>
+                        </>
+                      ) : isEnabled ? (
+                        <>
+                          <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                          <span>Mute {cat.label} Alerts</span>
+                        </>
+                      ) : (
+                        <>
+                          <Volume2 className="w-3.5 h-3.5 text-white" />
+                          <span>Enable {cat.label} Alerts</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Protective Policy Banner */}
+          <div className="glass-card rounded-2xl p-4 border border-purple-500/20 bg-purple-950/10 flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-gray-300 space-y-1">
+              <strong className="text-white block font-bold">Automatic Synchronization & Spam Protection:</strong>
+              <p className="text-gray-400 leading-relaxed">
+                When you mute a category, any active releases currently waiting in the schedule queue for that category are immediately cancelled.
+                Re-enabling the category allows future releases to be scheduled automatically across the 4 safe daytime slots (08:30 AM, 01:30 PM, 06:00 PM, 08:45 PM IST).
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* Dedicated Upcoming Release Admin Preview Modal */}
       <UpcomingReleaseModal
         item={previewMovie}
@@ -2388,6 +2781,16 @@ export default function CampaignManager({ initialView = 'form' }) {
         onClose={() => setPreviewMovie(null)}
         onAutoSchedule={handleAutoScheduleMovie}
         onCustomize={handleCustomizeCampaignFromRelease}
+        isCategoryMuted={
+          previewMovie
+            ? categoryControls[
+                previewMovie.release_category ||
+                  (previewMovie.media_type === 'tv' || previewMovie.release_category?.includes('series')
+                    ? 'hindi_series'
+                    : 'bollywood_movie')
+              ] === false
+            : false
+        }
         existingCampaign={
           previewMovie
             ? campaigns.find(
