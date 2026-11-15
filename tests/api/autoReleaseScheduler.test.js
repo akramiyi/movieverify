@@ -1,0 +1,254 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  MORNING_SLOTS_IST,
+  getScheduledSlotForRelease,
+  autoIngestUpcomingReleases,
+} from '../../api/_lib/scheduledCampaignService.js';
+import dispatchHandler from '../../api/notifications/dispatch.js';
+import { getCountdownDetails } from '../../src/utils/releaseSchedulerUtils.js';
+
+function createMockRes() {
+  return {
+    statusCode: null,
+    headers: {},
+    body: null,
+    setHeader(name, value) {
+      this.headers[name] = value;
+    },
+    end(payload) {
+      if (payload) {
+        try {
+          this.body = JSON.parse(payload);
+        } catch {
+          this.body = payload;
+        }
+      }
+      return this;
+    },
+  };
+}
+
+test('1. 4 Morning Time Slots - accurately configured for 7:00 AM, 8:00 AM, 9:00 AM, 10:00 AM IST', () => {
+  assert.equal(MORNING_SLOTS_IST.length, 4);
+  assert.deepEqual(
+    MORNING_SLOTS_IST.map((s) => s.timeStr),
+    ['07:00 AM IST', '08:00 AM IST', '09:00 AM IST', '10:00 AM IST']
+  );
+  // UTC Equivalencies for IST (UTC+05:30)
+  assert.equal(MORNING_SLOTS_IST[0].utcSlot, '01:30:00.000Z'); // 7:00 AM IST
+  assert.equal(MORNING_SLOTS_IST[1].utcSlot, '02:30:00.000Z'); // 8:00 AM IST
+  assert.equal(MORNING_SLOTS_IST[2].utcSlot, '03:30:00.000Z'); // 9:00 AM IST
+  assert.equal(MORNING_SLOTS_IST[3].utcSlot, '04:30:00.000Z'); // 10:00 AM IST
+});
+
+test('2. getScheduledSlotForRelease - staggers same-day movie releases across 4 morning slots', () => {
+  const releaseDate = '2026-11-20';
+
+  const slot0 = getScheduledSlotForRelease(releaseDate, 0);
+  assert.equal(slot0.slot_time, '07:00 AM IST');
+  assert.equal(slot0.scheduled_for, '2026-11-20T01:30:00.000Z');
+
+  const slot1 = getScheduledSlotForRelease(releaseDate, 1);
+  assert.equal(slot1.slot_time, '08:00 AM IST');
+  assert.equal(slot1.scheduled_for, '2026-11-20T02:30:00.000Z');
+
+  const slot2 = getScheduledSlotForRelease(releaseDate, 2);
+  assert.equal(slot2.slot_time, '09:00 AM IST');
+  assert.equal(slot2.scheduled_for, '2026-11-20T03:30:00.000Z');
+
+  const slot3 = getScheduledSlotForRelease(releaseDate, 3);
+  assert.equal(slot3.slot_time, '10:00 AM IST');
+  assert.equal(slot3.scheduled_for, '2026-11-20T04:30:00.000Z');
+
+  // Slot 4 cycles back to 7:00 AM IST
+  const slot4 = getScheduledSlotForRelease(releaseDate, 4);
+  assert.equal(slot4.slot_time, '07:00 AM IST');
+  assert.equal(slot4.scheduled_for, '2026-11-20T01:30:00.000Z');
+});
+
+test('3. autoIngestUpcomingReleases - automatically ingests releases with zero approval required and staggers same-day releases', async () => {
+  const mockInsertedCampaigns = [];
+
+  const mockSupabase = {
+    from: (table) => {
+      if (table === 'notification_campaigns') {
+        return {
+          select: () => ({
+            neq: () => ({
+              limit: async () => ({ data: [...mockInsertedCampaigns], error: null }),
+            }),
+          }),
+          insert: (row) => ({
+            select: () => ({
+              single: async () => {
+                const inserted = { id: `camp-${mockInsertedCampaigns.length + 1}`, ...row };
+                mockInsertedCampaigns.push(inserted);
+                return { data: inserted, error: null };
+              },
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ error: null }) };
+    },
+  };
+
+  const sampleReleases = [
+    {
+      id: 101,
+      title: 'South Movie 1',
+      release_date: '2026-11-25',
+      media_type: 'movie',
+      industry_label: 'South Movies',
+      poster_path: '/poster1.jpg',
+    },
+    {
+      id: 102,
+      title: 'South Movie 2 (Same Date)',
+      release_date: '2026-11-25',
+      media_type: 'movie',
+      industry_label: 'South Movies',
+      backdrop_path: '/backdrop2.jpg',
+    },
+    {
+      id: 103,
+      title: 'Bollywood Movie 3 (Same Date)',
+      release_date: '2026-11-25',
+      media_type: 'movie',
+      industry_label: 'Bollywood',
+      poster_path: '/poster3.jpg',
+    },
+  ];
+
+  // Pass 1: Initial auto-ingest
+  const res1 = await autoIngestUpcomingReleases(mockSupabase, { releases: sampleReleases });
+  assert.equal(res1.ingested_count, 3);
+  assert.equal(res1.skipped_count, 0);
+
+  // Movie 1 assigned Slot 0 (7:00 AM IST)
+  assert.equal(res1.releases[0].slot_time, '07:00 AM IST');
+  assert.equal(res1.releases[0].scheduled_for, '2026-11-25T01:30:00.000Z');
+
+  // Movie 2 assigned Slot 1 (8:00 AM IST)
+  assert.equal(res1.releases[1].slot_time, '08:00 AM IST');
+  assert.equal(res1.releases[1].scheduled_for, '2026-11-25T02:30:00.000Z');
+
+  // Movie 3 assigned Slot 2 (9:00 AM IST)
+  assert.equal(res1.releases[2].slot_time, '09:00 AM IST');
+  assert.equal(res1.releases[2].scheduled_for, '2026-11-25T03:30:00.000Z');
+
+  // Pass 2: Replay auto-ingest (Idempotency test)
+  const res2 = await autoIngestUpcomingReleases(mockSupabase, { releases: sampleReleases });
+  assert.equal(res2.ingested_count, 0);
+  assert.equal(res2.skipped_count, 3); // All skipped, 0 duplicates!
+});
+
+test('4. dispatchHandler - executes autoIngest and returns auto_ingested_count when autoIngest: true', async () => {
+  const prevSecret = process.env.INTERNAL_WORKER_SECRET;
+  const prevDispatch = process.env.NOTIFICATION_DISPATCH_ENABLED;
+  process.env.INTERNAL_WORKER_SECRET = 'test-worker-secret-release';
+  process.env.NOTIFICATION_DISPATCH_ENABLED = 'true';
+
+  try {
+    const mockDbCampaigns = [];
+    const mockSupabase = {
+      from: (table) => {
+        if (table === 'notification_campaigns') {
+          return {
+            select: () => ({
+              neq: () => ({
+                limit: async () => ({ data: [...mockDbCampaigns], error: null }),
+              }),
+            }),
+            insert: (row) => ({
+              select: () => ({
+                single: async () => {
+                  const inserted = { id: `auto-${mockDbCampaigns.length + 1}`, ...row };
+                  mockDbCampaigns.push(inserted);
+                  return { data: inserted, error: null };
+                },
+              }),
+            }),
+          };
+        }
+        return { select: () => ({ error: null }) };
+      },
+      rpc: async (fn) => {
+        if (fn === 'promote_due_scheduled_campaigns') {
+          return { data: { promoted_count: 0, campaigns: [] }, error: null };
+        }
+        if (fn === 'reserve_notification_deliveries') {
+          return { data: [], error: null };
+        }
+        return { data: null, error: null };
+      },
+    };
+
+    const res = createMockRes();
+    const req = {
+      method: 'GET',
+      headers: {
+        'x-worker-secret': 'test-worker-secret-release',
+      },
+      url: '/api/notifications/dispatch',
+    };
+
+    await dispatchHandler(req, res, {
+      supabase: mockSupabase,
+      messaging: { send: async () => 'mock-msg' },
+      autoIngest: true,
+      releases: [
+        {
+          id: 555,
+          title: 'Kidney - Automatic Alert',
+          release_date: '2026-11-28',
+          media_type: 'movie',
+          industry_label: 'Bollywood',
+          poster_path: '/kidney.jpg',
+        },
+      ],
+    });
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.auto_ingested_count, 1);
+    assert.equal(res.body.auto_ingested_releases[0].title, 'Kidney - Automatic Alert');
+    assert.equal(res.body.auto_ingested_releases[0].slot_time, '07:00 AM IST');
+  } finally {
+    if (prevSecret === undefined) delete process.env.INTERNAL_WORKER_SECRET;
+    else process.env.INTERNAL_WORKER_SECRET = prevSecret;
+    if (prevDispatch === undefined) delete process.env.NOTIFICATION_DISPATCH_ENABLED;
+    else process.env.NOTIFICATION_DISPATCH_ENABLED = prevDispatch;
+  }
+});
+
+test('5. getCountdownDetails - live ticking countdown calculations and 1-day threshold detection', () => {
+  const baseTime = new Date('2026-11-19T00:00:00.000Z').getTime();
+
+  // Case A: Movie scheduled 14 hours away (within 24 hours -> 1-day final timer)
+  const scheduledTime1 = new Date('2026-11-19T14:22:15.000Z').getTime();
+  const cd1 = getCountdownDetails(new Date(scheduledTime1).toISOString(), baseTime);
+  assert.equal(cd1.isDue, false);
+  assert.equal(cd1.isFinalDay, true);
+  assert.equal(cd1.hours, 14);
+  assert.equal(cd1.mins, 22);
+  assert.equal(cd1.secs, 15);
+  assert.equal(cd1.formattedTime, '14:22:15');
+  assert.match(cd1.label, /1-Day Final Timer: 14h 22m 15s/);
+
+  // Case B: Movie scheduled 3 days away (> 24 hours)
+  const scheduledTime2 = new Date('2026-11-22T04:30:00.000Z').getTime();
+  const cd2 = getCountdownDetails(new Date(scheduledTime2).toISOString(), baseTime);
+  assert.equal(cd2.isDue, false);
+  assert.equal(cd2.isFinalDay, false);
+  assert.equal(cd2.days, 3);
+  assert.match(cd2.label, /Auto-Sends in 3d/);
+
+  // Case C: Release slot has arrived or passed (diff <= 0 -> isDue)
+  const pastTime = new Date('2026-11-18T23:59:00.000Z').getTime();
+  const cd3 = getCountdownDetails(new Date(pastTime).toISOString(), baseTime);
+  assert.equal(cd3.isDue, true);
+  assert.match(cd3.label, /Release Time Reached/);
+});

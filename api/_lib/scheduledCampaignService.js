@@ -175,5 +175,374 @@ export async function promoteDueScheduledCampaignsFallback(customSupabase = null
   };
 }
 
+/**
+ * 4 Morning Release Staggering Slots (Indian Standard Time - IST / UTC+05:30)
+ *
+ * User Requirement:
+ * - 07:00 AM IST -> 01:30:00.000Z UTC
+ * - 08:00 AM IST -> 02:30:00.000Z UTC
+ * - 09:00 AM IST -> 03:30:00.000Z UTC
+ * - 10:00 AM IST -> 04:30:00.000Z UTC
+ *
+ * Distributes same-day releases across these 4 distinct morning slots to prevent
+ * simultaneous notification spam, auto-dispatched without admin approval.
+ */
+export const MORNING_SLOTS_IST = [
+  { hourIST: 7, minuteIST: 0, timeStr: '07:00 AM IST', utcSlot: '01:30:00.000Z' },
+  { hourIST: 8, minuteIST: 0, timeStr: '08:00 AM IST', utcSlot: '02:30:00.000Z' },
+  { hourIST: 9, minuteIST: 0, timeStr: '09:00 AM IST', utcSlot: '03:30:00.000Z' },
+  { hourIST: 10, minuteIST: 0, timeStr: '10:00 AM IST', utcSlot: '04:30:00.000Z' },
+];
+
+/**
+ * Calculate scheduled ISO timestamp for a release date and slot index
+ *
+ * @param {string} releaseDateStr 'YYYY-MM-DD'
+ * @param {number} slotIndex 0-based index of movie on that release date
+ * @returns {{ scheduled_for: string, slot_index: number, slot_time: string, hour_ist: number, minute_ist: number }}
+ */
+export function getScheduledSlotForRelease(releaseDateStr, slotIndex = 0) {
+  if (!releaseDateStr || typeof releaseDateStr !== 'string') {
+    throw new Error('releaseDateStr must be a non-empty string in YYYY-MM-DD format.');
+  }
+  const cleanDate = releaseDateStr.trim().split('T')[0];
+  const safeIndex = Math.abs(parseInt(slotIndex, 10) || 0) % MORNING_SLOTS_IST.length;
+  const slot = MORNING_SLOTS_IST[safeIndex];
+  const scheduledIso = `${cleanDate}T${slot.utcSlot}`;
+
+  return {
+    scheduled_for: scheduledIso,
+    slot_index: safeIndex,
+    slot_time: slot.timeStr,
+    hour_ist: slot.hourIST,
+    minute_ist: slot.minuteIST,
+  };
+}
+
+/**
+ * Fetches upcoming releases across Bollywood, South Indian, Hollywood, and Web Series
+ *
+ * @param {object} options Optional custom fetcher or release items (for testing/overrides)
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchServerUpcomingReleases(options = {}) {
+  if (typeof options.fetchUpcomingReleases === 'function') {
+    return options.fetchUpcomingReleases();
+  }
+  if (Array.isArray(options.releases)) {
+    return options.releases;
+  }
+
+  const serverToken =
+    process.env.TMDB_READ_TOKEN ||
+    process.env.TMDB_TOKEN ||
+    process.env.TMDB_API_KEY ||
+    process.env.VITE_TMDB_API_KEY ||
+    process.env.VITE_TMDB_READ_TOKEN;
+
+  const isBearer = serverToken && serverToken.length > 50;
+  const headers = {
+    Accept: 'application/json',
+    ...(isBearer ? { Authorization: `Bearer ${serverToken}` } : {}),
+  };
+
+  const fetchJson = async (endpoint) => {
+    try {
+      const sep = endpoint.includes('?') ? '&' : '?';
+      const url = isBearer
+        ? `https://api.themoviedb.org/3${endpoint}`
+        : (serverToken
+          ? `https://api.themoviedb.org/3${endpoint}${sep}api_key=${encodeURIComponent(serverToken)}`
+          : `https://movieverify-backend.onrender.com/api/tmdb${endpoint}`);
+
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 6000) : null;
+
+      const r = await fetch(url, {
+        headers,
+        signal: controller ? controller.signal : undefined,
+      }).catch(() => null);
+
+      if (timeoutId) clearTimeout(timeoutId);
+      if (!r || !r.ok) return { results: [] };
+      return await r.json();
+    } catch {
+      return { results: [] };
+    }
+  };
+
+  const today = new Date().toISOString().split('T')[0];
+  const future = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const queries = [
+    {
+      endpoint: `/discover/movie?with_original_language=hi&region=IN&primary_release_date.gte=${today}&primary_release_date.lte=${future}&sort_by=primary_release_date.asc&page=1`,
+      mediaType: 'movie',
+      cat: 'bollywood_movie',
+      label: 'Bollywood',
+    },
+    {
+      endpoint: `/discover/movie?with_original_language=te&region=IN&primary_release_date.gte=${today}&primary_release_date.lte=${future}&sort_by=primary_release_date.asc&page=1`,
+      mediaType: 'movie',
+      cat: 'south_movie',
+      label: 'South Movies',
+    },
+    {
+      endpoint: `/discover/movie?with_original_language=ta&region=IN&primary_release_date.gte=${today}&primary_release_date.lte=${future}&sort_by=primary_release_date.asc&page=1`,
+      mediaType: 'movie',
+      cat: 'south_movie',
+      label: 'South Movies',
+    },
+    {
+      endpoint: `/discover/movie?with_original_language=en&region=US&primary_release_date.gte=${today}&primary_release_date.lte=${future}&sort_by=primary_release_date.asc&page=1`,
+      mediaType: 'movie',
+      cat: 'hollywood_movie',
+      label: 'Hollywood',
+    },
+    {
+      endpoint: `/discover/tv?with_original_language=hi&first_air_date.gte=${today}&first_air_date.lte=${future}&sort_by=first_air_date.asc&page=1`,
+      mediaType: 'tv',
+      cat: 'hindi_series',
+      label: 'Hindi Web Series',
+    },
+  ];
+
+  try {
+    const results = await Promise.all(
+      queries.map(async (q) => {
+        const data = await fetchJson(q.endpoint);
+        return (data.results || []).map((item) => ({
+          ...item,
+          media_type: q.mediaType,
+          release_category: q.cat,
+          industry_label: q.label,
+          release_date: item.release_date || item.first_air_date,
+        }));
+      })
+    );
+
+    const flat = results.flat();
+    const seen = new Set();
+    const deduped = [];
+
+    for (const item of flat) {
+      const key = `${item.media_type}_${item.id}`;
+      if (item.id && !seen.has(key) && (item.title || item.name) && item.release_date) {
+        seen.add(key);
+        deduped.push({
+          id: item.id,
+          title: item.title || item.name,
+          release_date: item.release_date,
+          media_type: item.media_type,
+          release_category: item.release_category,
+          industry_label: item.industry_label,
+          overview: item.overview || '',
+          poster_path: item.poster_path,
+          backdrop_path: item.backdrop_path,
+        });
+      }
+    }
+
+    return deduped.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
+  } catch (err) {
+    console.warn('[ScheduledCampaignService] fetchServerUpcomingReleases error:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Automatically ingests upcoming movie & web series releases into the notification queue
+ * with 4-slot morning staggering (7, 8, 9, 10 AM IST) without requiring admin approval.
+ *
+ * @param {object|null} customSupabase Optional Supabase client override
+ * @param {object} options Optional fetcher or settings override
+ * @returns {Promise<{ ingested_count: number, skipped_count: number, releases: Array<object>, error?: string }>}
+ */
+export async function autoIngestUpcomingReleases(customSupabase = null, options = {}) {
+  const supabase = getSupabaseServerClient(customSupabase);
+
+  // 1. Fetch upcoming releases from TMDB (or injected test options)
+  let releases = [];
+  try {
+    releases = await fetchServerUpcomingReleases(options);
+  } catch (err) {
+    console.warn('[AutoIngest] Error fetching upcoming releases:', err.message);
+    return { ingested_count: 0, skipped_count: 0, releases: [], error: err.message };
+  }
+
+  if (!Array.isArray(releases) || releases.length === 0) {
+    return { ingested_count: 0, skipped_count: 0, releases: [] };
+  }
+
+  // 2. Query existing campaigns to prevent duplicates and calculate slot distribution
+  let existingCampaigns = [];
+  try {
+    if (typeof supabase?.from === 'function') {
+      const { data, error } = await supabase
+        .from('notification_campaigns')
+        .select('id, target_criteria, scheduled_for, status')
+        .neq('status', 'cancelled')
+        .limit(500);
+
+      if (!error && Array.isArray(data)) {
+        existingCampaigns = data;
+      }
+    }
+  } catch (err) {
+    console.warn('[AutoIngest] Error querying existing campaigns:', err.message);
+  }
+
+  const existingKeys = new Set();
+  const moviesPerDateCount = {};
+
+  for (const c of existingCampaigns) {
+    const crit = c.target_criteria || {};
+    if (crit.idempotency_key) {
+      existingKeys.add(String(crit.idempotency_key));
+    }
+    const mediaType = crit.media_type || (crit.series_id ? 'tv' : 'movie');
+    const targetId = crit.tmdb_id || crit.movie_id || crit.series_id;
+    if (targetId && c.scheduled_for) {
+      const dateStr = String(c.scheduled_for).split('T')[0];
+      existingKeys.add(`auto_rel_${mediaType}_${targetId}_${dateStr}`);
+    }
+    if (c.scheduled_for) {
+      const dateStr = String(c.scheduled_for).split('T')[0];
+      moviesPerDateCount[dateStr] = (moviesPerDateCount[dateStr] || 0) + 1;
+    }
+  }
+
+  const ingested = [];
+  let skippedCount = 0;
+
+  for (const item of releases) {
+    const mediaType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+    const releaseDate = (item.release_date || item.first_air_date || '').split('T')[0];
+    const itemId = String(item.id);
+
+    if (!releaseDate || !itemId) {
+      continue;
+    }
+
+    const idempotencyKey = `auto_rel_${mediaType}_${itemId}_${releaseDate}`;
+    if (existingKeys.has(idempotencyKey)) {
+      skippedCount++;
+      continue;
+    }
+
+    // Determine slot based on existing movies count on that release date (stagger across 7, 8, 9, 10 AM IST)
+    const countOnDate = moviesPerDateCount[releaseDate] || 0;
+    const slotInfo = getScheduledSlotForRelease(releaseDate, countOnDate);
+    moviesPerDateCount[releaseDate] = countOnDate + 1;
+    existingKeys.add(idempotencyKey);
+
+    const isTv = mediaType === 'tv';
+    const title = item.title || item.name || 'Untitled';
+    const isTodayOrPast = releaseDate <= new Date().toISOString().split('T')[0];
+    const actionText = isTv ? 'Streaming' : 'Releasing';
+    const alertHeader = isTv ? 'New Web Series Alert' : 'Big Screen Alert';
+    const catLabel = item.industry_label || (isTv ? 'Web Series' : 'Movie');
+
+    const posterImage = item.backdrop_path
+      ? `https://image.tmdb.org/t/p/w780${String(item.backdrop_path).startsWith('/') ? '' : '/'}${item.backdrop_path}`
+      : (item.poster_path
+        ? `https://image.tmdb.org/t/p/w500${String(item.poster_path).startsWith('/') ? '' : '/'}${item.poster_path}`
+        : 'https://movieverify.vercel.app/og-fallback.jpg');
+
+    const campaignPayload = {
+      title: `${isTv ? '📺' : '🎬'} ${title} - ${actionText} ${isTodayOrPast ? 'Today!' : 'Soon'}`,
+      body: `${alertHeader}: ${title} (${catLabel}) is scheduled for ${isTv ? 'streaming' : 'theatrical release'} on ${releaseDate}. Add it to your watchlist now to verify and watch instantly!`,
+      category: isTv ? 'content_update' : 'movie_release',
+      url: `/?type=${mediaType}&id=${itemId}`,
+      image_url: posterImage,
+      scheduled_for: slotInfo.scheduled_for,
+      target_criteria: {
+        type: 'all',
+        tmdb_id: itemId,
+        movie_id: itemId,
+        series_id: itemId,
+        media_type: mediaType,
+        idempotency_key: idempotencyKey,
+        release_slot: slotInfo.slot_time,
+        auto_scheduled: true,
+      },
+    };
+
+    let insertedId = null;
+    let insertStatus = 'scheduled';
+
+    // Try canonical RPC ingest_notification_campaign first
+    if (typeof supabase.rpc === 'function') {
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('ingest_notification_campaign', {
+          p_title: campaignPayload.title,
+          p_body: campaignPayload.body,
+          p_category: campaignPayload.category,
+          p_url: campaignPayload.url,
+          p_image_url: campaignPayload.image_url,
+          p_target_criteria: campaignPayload.target_criteria,
+          p_scheduled_for: campaignPayload.scheduled_for,
+          p_created_by: null,
+        });
+
+        if (!rpcErr && rpcData?.campaign_id) {
+          insertedId = rpcData.campaign_id;
+          insertStatus = rpcData.status || 'scheduled';
+        }
+      } catch {
+        // Fallback to direct table insert
+      }
+    }
+
+    // Direct table insert fallback if RPC is uninstalled or failed
+    if (!insertedId && typeof supabase.from === 'function') {
+      try {
+        const { data: tblData, error: tblErr } = await supabase
+          .from('notification_campaigns')
+          .insert({
+            title: campaignPayload.title,
+            body: campaignPayload.body,
+            category: campaignPayload.category,
+            action_url: campaignPayload.url,
+            image_url: campaignPayload.image_url,
+            target_type: 'all',
+            target_criteria: campaignPayload.target_criteria,
+            status: 'scheduled',
+            scheduled_for: campaignPayload.scheduled_for,
+          })
+          .select('id, status')
+          .single();
+
+        if (!tblErr && tblData?.id) {
+          insertedId = tblData.id;
+          insertStatus = tblData.status || 'scheduled';
+        }
+      } catch (insertErr) {
+        console.warn(`[AutoIngest] Table insert failed for ${title}:`, insertErr.message);
+      }
+    }
+
+    if (insertedId) {
+      ingested.push({
+        id: itemId,
+        campaign_id: insertedId,
+        title,
+        media_type: mediaType,
+        release_date: releaseDate,
+        slot_time: slotInfo.slot_time,
+        scheduled_for: slotInfo.scheduled_for,
+        status: insertStatus,
+      });
+    }
+  }
+
+  return {
+    ingested_count: ingested.length,
+    skipped_count: skippedCount,
+    releases: ingested,
+  };
+}
+
+
 
 

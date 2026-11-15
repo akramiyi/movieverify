@@ -15,7 +15,11 @@
 
 import crypto from 'node:crypto';
 import { isNotificationDispatchEnabled, runDispatchCycle, sweepExpiredReservations } from '../_lib/dispatchWorker.js';
-import { promoteDueScheduledCampaigns, promoteDueScheduledCampaignsFallback } from '../_lib/scheduledCampaignService.js';
+import {
+  promoteDueScheduledCampaigns,
+  promoteDueScheduledCampaignsFallback,
+  autoIngestUpcomingReleases,
+} from '../_lib/scheduledCampaignService.js';
 import { sendJson, parseJsonBody } from '../_lib/requestUtils.js';
 
 /**
@@ -221,6 +225,21 @@ export default async function handler(req, res, customDependencies = {}) {
     const customSupabase = customDependencies.supabase || null;
     const customMessaging = customDependencies.messaging || null;
 
+    // Auto-ingest upcoming releases (Bollywood, South, Hollywood, Web Series) with 4 morning slots
+    // (7 AM, 8 AM, 9 AM, 10 AM IST) - Zero Admin Approval Required!
+    let autoIngestResult = { ingested_count: 0, skipped_count: 0, releases: [] };
+    const shouldAutoIngest =
+      customDependencies.autoIngest === true ||
+      (customDependencies.autoIngest !== false && !customDependencies.supabase);
+
+    if (shouldAutoIngest) {
+      try {
+        autoIngestResult = await autoIngestUpcomingReleases(customSupabase, customDependencies);
+      } catch (autoErr) {
+        console.warn('[DispatchEndpoint] Auto-ingest releases non-fatal error:', autoErr.message);
+      }
+    }
+
     // Promote due scheduled campaigns into notification_deliveries & user_notifications
     // ahead of B5E reservation. Gracefully skip only when scheduled promotion RPC is
     // not yet installed (standalone B5D/B5E deployments) or omitted by a test mock.
@@ -286,6 +305,7 @@ export default async function handler(req, res, customDependencies = {}) {
         rejected: cycleResult.rejected,
         swept_expired: sweptCount,
         promoted_campaigns: 0,
+        auto_ingested_count: autoIngestResult.ingested_count,
         results: cycleResult.results,
       });
     }
@@ -299,6 +319,8 @@ export default async function handler(req, res, customDependencies = {}) {
       rejected: cycleResult.rejected,
       swept_expired: sweptCount,
       promoted_campaigns: promotionResult.promoted_count,
+      auto_ingested_count: autoIngestResult.ingested_count,
+      auto_ingested_releases: autoIngestResult.releases,
       ...(promotionSkipped ? { scheduled_promotion_skipped: true } : {}),
       results: cycleResult.results,
     });

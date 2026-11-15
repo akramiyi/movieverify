@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Send,
   Calendar,
@@ -28,6 +28,13 @@ import {
 import { supabase } from '../data/supabaseClient';
 import { fetchUpcomingReleases, fetchUpcomingIndianMovies } from '../hooks/useTMDB';
 import UpcomingReleaseModal from './UpcomingReleaseModal';
+import {
+  MORNING_SLOTS_IST,
+  getSlotForRelease,
+  getCountdownDetails,
+} from '../utils/releaseSchedulerUtils';
+
+export { MORNING_SLOTS_IST, getSlotForRelease, getCountdownDetails };
 
 export const isCampaignCompleted = (c) => {
   if (!c) return false;
@@ -125,6 +132,18 @@ export default function CampaignManager({ initialView = 'form' }) {
     }
   }, [initialView]);
 
+  // Live ticking 1-second clock for real-time countdown timers
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const autoDispatchedIdsRef = useRef(new Set());
+  const autoSyncExecutedRef = useRef(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const fetchCampaigns = async () => {
     setLoading(true);
     try {
@@ -146,6 +165,63 @@ export default function CampaignManager({ initialView = 'form' }) {
   useEffect(() => {
     fetchCampaigns();
   }, []);
+
+  // Zero-Approval Automated Dispatch when a scheduled campaign's timer expires
+  useEffect(() => {
+    const dueCampaigns = campaigns.filter(
+      (c) =>
+        c.status === 'scheduled' &&
+        c.scheduled_for &&
+        new Date(c.scheduled_for).getTime() <= currentTime &&
+        !autoDispatchedIdsRef.current.has(c.id)
+    );
+
+    if (dueCampaigns.length > 0) {
+      dueCampaigns.forEach((c) => autoDispatchedIdsRef.current.add(c.id));
+      triggerAutoDispatch();
+    }
+  }, [currentTime, campaigns]);
+
+  const triggerAutoDispatch = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+      await fetch('/api/notifications/dispatch?due_only=true', {
+        method: 'GET',
+        headers,
+      }).catch(() => null);
+      fetchCampaigns();
+    } catch {
+      // Non-fatal auto-dispatch
+    }
+  };
+
+  const handleManualSyncAndDispatch = async () => {
+    setActionStatus({ type: '', message: '' });
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+      const res = await fetch('/api/notifications/dispatch?auto_ingest=true&sweep_expired=true', {
+        method: 'GET',
+        headers,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setActionStatus({
+          type: 'success',
+          message: `Auto-Sync complete! ${data.auto_ingested_count || 0} release(s) auto-scheduled across 4 morning slots (7, 8, 9, 10 AM IST). Promoted: ${data.promoted_campaigns || 0}.`,
+        });
+      } else {
+        throw new Error(data.message || data.error || 'Sync failed');
+      }
+      fetchCampaigns();
+    } catch (err) {
+      setActionStatus({ type: 'error', message: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -417,12 +493,8 @@ export default function CampaignManager({ initialView = 'form' }) {
       const releaseDate = item.release_date || new Date().toISOString().split('T')[0];
       const todayStr = new Date().toISOString().split('T')[0];
       const isTodayOrPast = releaseDate <= todayStr;
-
-      let scheduledForIso = null;
-      if (!isTodayOrPast) {
-        const scheduleDate = new Date(`${releaseDate}T09:00:00`);
-        scheduledForIso = Number.isNaN(scheduleDate.getTime()) ? null : scheduleDate.toISOString();
-      }
+      const slotInfo = getSlotForRelease(releaseDate, campaigns);
+      const scheduledForIso = slotInfo.scheduled_for;
 
       const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
       const catInfo = RELEASE_CATEGORIES.find((c) => c.id === item.release_category);
@@ -440,6 +512,10 @@ export default function CampaignManager({ initialView = 'form' }) {
           movie_id: String(item.id),
           series_id: String(item.id),
           tmdb_id: String(item.id),
+          media_type: isTv ? 'tv' : 'movie',
+          idempotency_key: `auto_rel_${isTv ? 'tv' : 'movie'}_${item.id}_${releaseDate}`,
+          release_slot: slotInfo.slot_time,
+          auto_scheduled: true,
         },
         url: `/?type=${isTv ? 'tv' : 'movie'}&id=${item.id}`,
         image_url:
@@ -468,7 +544,7 @@ export default function CampaignManager({ initialView = 'form' }) {
 
       setActionStatus({
         type: 'success',
-        message: `Auto-scheduled "${item.title}" ${isTv ? 'web series' : 'movie'} alert for ${releaseDate}!`,
+        message: `Auto-scheduled "${item.title}" ${isTv ? 'web series' : 'movie'} alert for ${releaseDate} at ${slotInfo.slot_time} (Zero Approval)!`,
       });
       fetchCampaigns();
     } catch (err) {
@@ -548,11 +624,8 @@ export default function CampaignManager({ initialView = 'form' }) {
         const releaseDate = item.release_date || new Date().toISOString().split('T')[0];
         const todayStr = new Date().toISOString().split('T')[0];
         const isTodayOrPast = releaseDate <= todayStr;
-        let scheduledForIso = null;
-        if (!isTodayOrPast) {
-          const scheduleDate = new Date(`${releaseDate}T09:00:00`);
-          scheduledForIso = Number.isNaN(scheduleDate.getTime()) ? null : scheduleDate.toISOString();
-        }
+        const slotInfo = getSlotForRelease(releaseDate, campaigns);
+        const scheduledForIso = slotInfo.scheduled_for;
 
         const isTv = item.media_type === 'tv' || item.release_category?.includes('series');
         const catInfo = RELEASE_CATEGORIES.find((c) => c.id === item.release_category);
@@ -570,6 +643,10 @@ export default function CampaignManager({ initialView = 'form' }) {
             movie_id: String(item.id),
             series_id: String(item.id),
             tmdb_id: String(item.id),
+            media_type: isTv ? 'tv' : 'movie',
+            idempotency_key: `auto_rel_${isTv ? 'tv' : 'movie'}_${item.id}_${releaseDate}`,
+            release_slot: slotInfo.slot_time,
+            auto_scheduled: true,
           },
           url: `/?type=${isTv ? 'tv' : 'movie'}&id=${item.id}`,
           image_url:
@@ -941,6 +1018,37 @@ export default function CampaignManager({ initialView = 'form' }) {
             </div>
           </div>
 
+          {/* 100% Zero-Approval Automated Release Dispatch Status Banner */}
+          <div className="bg-gradient-to-r from-red-950/40 via-[#1e1714] to-amber-950/40 border border-amber-500/30 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <Zap className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-white font-bold text-sm">
+                    100% Zero-Approval Automated Release Dispatch
+                  </h3>
+                  <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 animate-pulse">
+                    Active
+                  </span>
+                </div>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  Upcoming releases auto-stagger across 4 morning slots: <strong className="text-amber-300">07:00 AM, 08:00 AM, 09:00 AM, 10:00 AM IST</strong>. Real-time 1-day timer counts down and auto-dispatches alerts without requiring manual admin approval.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleManualSyncAndDispatch}
+              className="px-3.5 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+              title="Automatically sync upcoming TMDB releases across the 4 morning slots now"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Sync Releases (Zero Approval)</span>
+            </button>
+          </div>
+
           {/* Quick Action Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.03] border border-white/10 rounded-2xl p-3 shadow-lg">
             <div className="flex items-center gap-2">
@@ -1266,6 +1374,46 @@ export default function CampaignManager({ initialView = 'form' }) {
                           </div>
                         </div>
 
+                        {/* Live 1-Day / Scheduled Countdown Timer & Slot Badge */}
+                        {isQueued && c.scheduled_for && (() => {
+                          const cd = getCountdownDetails(c.scheduled_for, currentTime);
+                          const slotLabel = c.target_criteria?.release_slot || formatScheduleTime(c.scheduled_for);
+                          if (!cd) return null;
+
+                          return (
+                            <div
+                              className={`p-2.5 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 border font-mono transition-all ${
+                                cd.isDue
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
+                                  : cd.isFinalDay
+                                  ? 'bg-red-500/15 text-red-300 border-red-500/40 ring-1 ring-red-500/30'
+                                  : 'bg-white/5 text-amber-200/90 border-white/10'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 font-bold">
+                                {cd.isFinalDay ? (
+                                  <span className="flex h-2.5 w-2.5 relative">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                                  </span>
+                                ) : (
+                                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                )}
+                                <span>{cd.label}</span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 text-[10px]">
+                                <span className="bg-black/50 text-gray-300 px-2 py-0.5 rounded border border-white/5">
+                                  ⏰ Slot: {slotLabel}
+                                </span>
+                                <span className="bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded border border-emerald-500/30">
+                                  Auto-Sends (Zero Approval)
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {/* Title and Message with Photo */}
                         <div className="flex gap-3">
                           {c.image_url && (
@@ -1307,9 +1455,16 @@ export default function CampaignManager({ initialView = 'form' }) {
                       <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
                         {isQueued ? (
                           <>
-                            <div className="text-[11px] text-amber-300/90 font-medium flex items-center gap-1">
+                            <div className="text-[11px] text-amber-300/90 font-medium flex items-center gap-1 font-mono">
                               <Clock className="w-3 h-3 text-amber-400" />
-                              <span>{c.scheduled_for ? getTimeRemainingText(c.scheduled_for) : (c.status === 'queued' ? 'Ready to Dispatch' : 'In Queue')}</span>
+                              <span>
+                                {c.scheduled_for
+                                  ? (() => {
+                                      const cd = getCountdownDetails(c.scheduled_for, currentTime);
+                                      return cd ? cd.label : getTimeRemainingText(c.scheduled_for);
+                                    })()
+                                  : (c.status === 'queued' ? 'Ready to Dispatch' : 'In Queue')}
+                              </span>
                             </div>
 
                             <div className="flex items-center gap-2">
