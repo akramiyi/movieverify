@@ -17,6 +17,31 @@ import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messagi
 
 let appInstance = null;
 let messagingInstance = null;
+let lastFcmError = null;
+
+/**
+ * Returns the most recent FCM token error, if any
+ * @returns {Error|null}
+ */
+export function getLastFcmError() {
+  return lastFcmError;
+}
+
+/**
+ * Detects whether the current browser context is an embedded in-app WebView
+ * (e.g. WhatsApp, Instagram, Facebook, Telegram, TikTok, WeChat, etc.)
+ * In-app browsers do not support Web Push / PushManager OS background routing.
+ * @param {string} [customUserAgent] Optional user agent override (useful for testing)
+ * @returns {boolean}
+ */
+export function isInAppBrowser(customUserAgent = null) {
+  if (customUserAgent && typeof customUserAgent === 'string') {
+    return /FBAN|FBAV|Instagram|WhatsApp|Line|musical_ly|Bytedance|TikTok|MicroMessenger|Snapchat|Telegram|Twitter|LinkedIn|Pinterest|GSA|GSA\//i.test(customUserAgent);
+  }
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || (typeof window !== 'undefined' && window.opera) || '';
+  return /FBAN|FBAV|Instagram|WhatsApp|Line|musical_ly|Bytedance|TikTok|MicroMessenger|Snapchat|Telegram|Twitter|LinkedIn|Pinterest|GSA|GSA\//i.test(ua);
+}
 
 /**
  * Retrieves the Firebase Web client configuration from Vite environment variables
@@ -166,26 +191,56 @@ export async function requestNotificationPermission() {
  */
 export async function getDeviceFcmToken(options = {}) {
   const { vapidKey: explicitVapid, serviceWorkerRegistration: explicitReg, customConfig } = options;
+  lastFcmError = null;
+
+  if (isInAppBrowser()) {
+    lastFcmError = new Error('Push notifications are not supported inside in-app browsers (WhatsApp/Telegram/Instagram). Please open this link in Google Chrome or your default device browser.');
+    lastFcmError.code = 'in-app-browser';
+    console.warn('[FCMClient] In-app browser detected; push notifications are unavailable in embedded webviews.');
+    return null;
+  }
+
   const config = getFirebaseWebConfig(customConfig);
   const vapidKey = explicitVapid || config.vapidKey;
 
   const messaging = await getMessagingInstance(customConfig);
   if (!messaging) {
+    lastFcmError = new Error('Push notification service is not configured or unsupported in this browser.');
     return null;
   }
 
   let swReg = explicitReg;
   if (!swReg && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
     try {
-      swReg = await navigator.serviceWorker.getRegistration('/sw.js');
+      // 1. Resolve registration at root scope or existing registration
+      swReg = await navigator.serviceWorker.getRegistration('/').catch(() => null);
       if (!swReg) {
-        swReg = await navigator.serviceWorker.register('/sw.js');
+        swReg = await navigator.serviceWorker.getRegistration().catch(() => null);
       }
+      if (!swReg) {
+        swReg = await navigator.serviceWorker.getRegistration('/sw.js').catch(() => null);
+      }
+      if (!swReg) {
+        swReg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      }
+
+      // 2. Wait until the service worker registration is active
       if (swReg && !swReg.active) {
-        await Promise.race([
+        const readyReg = await Promise.race([
           navigator.serviceWorker.ready,
-          new Promise((resolve) => setTimeout(resolve, 3000)),
+          new Promise((resolve) => {
+            const incoming = swReg.installing || swReg.waiting;
+            if (incoming) {
+              incoming.addEventListener('statechange', () => {
+                if (incoming.state === 'activated' || swReg.active) resolve(swReg);
+              });
+            }
+            setTimeout(() => resolve(swReg), 3500);
+          }),
         ]);
+        if (readyReg) {
+          swReg = readyReg;
+        }
       }
     } catch (swErr) {
       console.warn('[FCMClient] Service worker ready check failed:', swErr.message);
@@ -194,15 +249,36 @@ export async function getDeviceFcmToken(options = {}) {
 
   const tokenParams = {};
   if (vapidKey) tokenParams.vapidKey = vapidKey;
-  if (swReg) tokenParams.serviceWorkerRegistration = swReg;
-
-  try {
-    const currentToken = await getToken(messaging, tokenParams);
-    return currentToken || null;
-  } catch (tokenErr) {
-    console.error('[FCMClient] Error generating FCM device token:', tokenErr.message);
-    return null;
+  if (swReg && swReg.active) {
+    tokenParams.serviceWorkerRegistration = swReg;
   }
+
+  // Attempt token generation with automatic retry for fresh registrations
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const currentToken = await getToken(messaging, tokenParams);
+      if (currentToken) {
+        lastFcmError = null;
+        return currentToken;
+      }
+    } catch (tokenErr) {
+      lastFcmError = tokenErr;
+      console.warn(`[FCMClient] FCM token attempt ${attempt} failed:`, tokenErr.message);
+
+      if (attempt === 1 && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        // Wait 800ms and re-check ready service worker before second attempt
+        await new Promise((r) => setTimeout(r, 800));
+        try {
+          const freshReg = await navigator.serviceWorker.ready;
+          if (freshReg && freshReg.active) {
+            tokenParams.serviceWorkerRegistration = freshReg;
+          }
+        } catch {}
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -372,5 +448,6 @@ export function setupForegroundMessageHandler(messaging, onPayload) {
 export function resetFirebaseClient() {
   appInstance = null;
   messagingInstance = null;
+  lastFcmError = null;
 }
 

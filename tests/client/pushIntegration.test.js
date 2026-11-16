@@ -32,6 +32,8 @@ import {
   registerTokenWithBackend,
   revokeTokenWithBackend,
   resetFirebaseClient,
+  isInAppBrowser,
+  getLastFcmError,
 } from '../../src/services/firebaseClient.js';
 
 test('1. Firebase Web Initialization Suite', async (t) => {
@@ -371,5 +373,45 @@ test('15. Authentication Integration Regression Suite', async (t) => {
     // Session tracking in App.jsx
     assert.match(appCode, /supabase\.auth\.getSession\(\)/);
     assert.match(appCode, /supabase\.auth\.onAuthStateChange/);
+  });
+});
+
+test('16. In-App Browser & Service Worker Token Resilience Suite', async (t) => {
+  t.afterEach(() => {
+    resetFirebaseClient();
+  });
+
+  await t.test('isInAppBrowser identifies WhatsApp, Instagram, Telegram webviews correctly', () => {
+    // WhatsApp user-agent
+    const whatsappUa = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 WhatsApp/2.24.1.6';
+    assert.equal(isInAppBrowser(whatsappUa), true, 'WhatsApp webview must be detected as in-app browser');
+
+    // Instagram user-agent
+    const instagramUa = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 Instagram 300.0';
+    assert.equal(isInAppBrowser(instagramUa), true, 'Instagram webview must be detected as in-app browser');
+
+    // Telegram user-agent
+    const telegramUa = 'Mozilla/5.0 (Linux; Android 13; SM-G998B) Telegram-Android/10.2.0';
+    assert.equal(isInAppBrowser(telegramUa), true, 'Telegram webview must be detected as in-app browser');
+
+    // Standard Chrome on Android
+    const chromeAndroidUa = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36';
+    assert.equal(isInAppBrowser(chromeAndroidUa), false, 'Standard Chrome on Android must not be classified as in-app browser');
+
+    // Standard Desktop Chrome
+    const desktopChromeUa = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    assert.equal(isInAppBrowser(desktopChromeUa), false, 'Standard Desktop Chrome must not be classified as in-app browser');
+  });
+
+  await t.test('Canonical firebase-messaging-sw.js exists and bridges to /sw.js', () => {
+    const fcmSwPath = path.resolve('public/firebase-messaging-sw.js');
+    assert.ok(fs.existsSync(fcmSwPath), 'public/firebase-messaging-sw.js must exist to prevent 404 HTML fallback');
+    const fcmSwCode = fs.readFileSync(fcmSwPath, 'utf-8');
+    assert.match(fcmSwCode, /importScripts\(['"]\/sw\.js['"]\)/, 'Must bridge directly to canonical /sw.js');
+  });
+
+  await t.test('resetFirebaseClient clears lastFcmError state safely', () => {
+    resetFirebaseClient();
+    assert.equal(getLastFcmError(), null, 'lastFcmError must be null after reset');
   });
 });

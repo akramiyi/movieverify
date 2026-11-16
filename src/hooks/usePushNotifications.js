@@ -15,6 +15,8 @@ import {
   revokeTokenWithBackend,
   getMessagingInstance,
   setupForegroundMessageHandler,
+  getLastFcmError,
+  isInAppBrowser,
 } from '../services/firebaseClient';
 
 const STORAGE_REGISTERED_KEY = 'movieverify_push_registered';
@@ -149,20 +151,45 @@ export function usePushNotifications(options = {}) {
     setError(null);
 
     try {
+      if (isInAppBrowser()) {
+        setIsLoading(false);
+        const inAppMsg = 'Push notifications cannot be enabled inside in-app browsers (WhatsApp/Telegram/Instagram). Please open this link in Google Chrome or your default device browser.';
+        setError(inAppMsg);
+        return { success: false, error: inAppMsg };
+      }
+
       const permResult = await requestNotificationPermission();
       setPermission(permResult);
 
       if (permResult !== 'granted') {
         setIsLoading(false);
-        return { success: false, permission: permResult, error: 'Permission denied or dismissed' };
+        const permError = permResult === 'denied'
+          ? 'Notification permission was denied. Please allow notifications in site permissions.'
+          : 'Notification permission was dismissed.';
+        setError(permError);
+        return { success: false, permission: permResult, error: permError };
       }
 
-      // Generate FCM Token
+      // Generate FCM Token with auto-retry & active SW resolution
       const token = await getDeviceFcmToken({ vapidKey });
       if (!token) {
+        const lastErr = getLastFcmError();
+        let userMsg = 'Failed to generate device token.';
+        if (lastErr?.code === 'in-app-browser') {
+          userMsg = 'Push notifications cannot be enabled inside in-app browsers (WhatsApp/Telegram/Instagram). Please open this link in Google Chrome or your default device browser.';
+        } else if (lastErr?.message) {
+          if (lastErr.message.includes('default service worker') || lastErr.message.includes('not registered') || lastErr.message.includes('no active Service Worker')) {
+            userMsg = 'Service worker is still activating on your device. Please wait a second and tap Enable again.';
+          } else if (lastErr.message.includes('indexedDb') || lastErr.message.includes('IndexedDB')) {
+            userMsg = 'Push notifications are not supported in Private/Incognito browsing mode.';
+          } else {
+            userMsg = lastErr.message;
+          }
+        }
+
         setIsLoading(false);
-        setError('Failed to generate device token.');
-        return { success: false, error: 'Token generation failed' };
+        setError(userMsg);
+        return { success: false, error: userMsg };
       }
 
       tokenRef.current = token;

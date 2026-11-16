@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Settings, Bell, BellOff, Loader2, Moon, Smartphone, AlertCircle, Send, CheckCircle2, ChevronDown, ChevronUp, Radio } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { isInAppBrowser } from '../services/firebaseClient';
 
 const CANONICAL_TOGGLES = [
   {
@@ -278,7 +279,9 @@ export default function NotificationPreferences({ onClose }) {
             <div>
               <p className="text-white text-sm font-semibold">This Device Push Alerts</p>
               <p className="text-gray-400 text-xs mt-0.5">
-                {!isPushSupported
+                {isInAppBrowser()
+                  ? 'In-app browser detected (WhatsApp/Telegram). Tap the 3 dots and choose "Open in Chrome" to enable alerts.'
+                  : !isPushSupported
                   ? 'Push notifications are not supported in this browser.'
                   : pushPermission === 'denied'
                   ? 'Blocked by browser settings. Allow notifications in site permissions.'
