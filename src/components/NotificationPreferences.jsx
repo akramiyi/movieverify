@@ -1,13 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, Bell, BellOff, Loader2, Moon, Smartphone, AlertCircle, Send, CheckCircle2, ChevronDown, ChevronUp, Radio, Volume2, VolumeX, Play } from 'lucide-react';
+import { Settings, Bell, BellOff, Loader2, Moon, Smartphone, AlertCircle, Send, CheckCircle2, ChevronDown, ChevronUp, Radio } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { isInAppBrowser } from '../services/firebaseClient';
-import {
-  isNotificationSoundEnabled,
-  setNotificationSoundEnabled,
-  playNotificationSound,
-} from '../utils/notificationSound';
+import { playNotificationSound } from '../utils/notificationSound';
 
 const CANONICAL_TOGGLES = [
   {
@@ -72,28 +68,6 @@ export default function NotificationPreferences({ onClose }) {
   const [testPushResult, setTestPushResult] = useState(null);
   const [deviceDiagnostics, setDeviceDiagnostics] = useState(null);
   const [showAndroidGuide, setShowAndroidGuide] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(() => isNotificationSoundEnabled());
-  const [isPlayingSound, setIsPlayingSound] = useState(false);
-
-  const handleToggleSound = () => {
-    const nextVal = !soundEnabled;
-    setSoundEnabled(nextVal);
-    setNotificationSoundEnabled(nextVal);
-    if (nextVal) {
-      handlePreviewSound();
-    }
-  };
-
-  const handlePreviewSound = () => {
-    setIsPlayingSound(true);
-    const audio = playNotificationSound(true);
-    if (audio) {
-      audio.onended = () => setIsPlayingSound(false);
-      audio.onerror = () => setIsPlayingSound(false);
-    } else {
-      setIsPlayingSound(false);
-    }
-  };
 
   const {
     isSupported: isPushSupported,
@@ -424,39 +398,6 @@ export default function NotificationPreferences({ onClose }) {
             {pushError}
           </p>
         )}
-      </div>
-
-      {/* Custom Notification Sound Control - Directly Active */}
-      <div
-        data-testid="notification-sound-control"
-        className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2 shadow-sm"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-start gap-2.5">
-            <Volume2 className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-white text-sm font-semibold">Custom Notification Tone</p>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  ● Directly Active
-                </span>
-              </div>
-              <p className="text-gray-300 text-xs mt-0.5">
-                Aapka custom tune har naye movie, web series, link update aur push alert par automatically bina kisi approval ke bajta hai.
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handlePreviewSound}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition cursor-pointer shrink-0 shadow-sm"
-            title="Play notification tune preview"
-          >
-            <Play className={`w-3.5 h-3.5 text-amber-400 fill-amber-400 ${isPlayingSound ? 'animate-pulse' : ''}`} />
-            <span>{isPlayingSound ? 'Playing...' : 'Test Sound'}</span>
-          </button>
-        </div>
       </div>
 
       {statusMessage && (

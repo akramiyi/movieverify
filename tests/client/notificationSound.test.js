@@ -25,7 +25,7 @@ test('Custom Notification Sound Suite', async (t) => {
     assert.ok(aacStat.size > 1000, 'public/notification.aac size must be valid (>1KB)');
   });
 
-  await t.test('2. Service Worker (public/sw.js) registers custom notification sound in showNotification options', () => {
+  await t.test('2. Service Worker (public/sw.js) registers custom notification sound in showNotification options & broadcasts to open tabs', () => {
     const swPath = path.resolve('public/sw.js');
     const swCode = fs.readFileSync(swPath, 'utf8');
 
@@ -33,6 +33,11 @@ test('Custom Notification Sound Suite', async (t) => {
       swCode,
       /sound:\s*['"]\/notification\.mp3['"]/,
       'public/sw.js must configure sound: /notification.mp3 in notification options'
+    );
+    assert.match(
+      swCode,
+      /type:\s*['"]NOTIFICATION_RECEIVED['"]/,
+      'public/sw.js must broadcast NOTIFICATION_RECEIVED to open window clients'
     );
   });
 
@@ -130,28 +135,25 @@ test('Custom Notification Sound Suite', async (t) => {
     }
   });
 
-  await t.test('5. NotificationPreferences.jsx renders sound controls with preview and mute toggles', () => {
+  await t.test('5. NotificationPreferences.jsx triggers sound on test push without UI clutter', () => {
     const prefPath = path.resolve('src/components/NotificationPreferences.jsx');
     const prefCode = fs.readFileSync(prefPath, 'utf8');
 
-    assert.match(
+    // UI card is removed to keep UI clean and minimalist
+    assert.doesNotMatch(
       prefCode,
       /data-testid=["']notification-sound-control["']/,
-      'NotificationPreferences must render notification-sound-control container'
+      'NotificationPreferences UI should not have unnecessary sound widget clutter'
     );
+    // Sound still triggers automatically on test alert
     assert.match(
       prefCode,
-      /handlePreviewSound/,
-      'NotificationPreferences must support previewing the notification sound'
-    );
-    assert.match(
-      prefCode,
-      /handleToggleSound/,
-      'NotificationPreferences must support toggling notification sound'
+      /playNotificationSound\(true\)/,
+      'NotificationPreferences must trigger sound directly on test alert'
     );
   });
 
-  await t.test('6. App.jsx calls playNotificationSound on incoming foreground messages', () => {
+  await t.test('6. App.jsx calls playNotificationSound on incoming foreground messages and SW broadcast', () => {
     const appPath = path.resolve('src/App.jsx');
     const appCode = fs.readFileSync(appPath, 'utf8');
 
@@ -164,6 +166,11 @@ test('Custom Notification Sound Suite', async (t) => {
       appCode,
       /playNotificationSound\(\)/,
       'App.jsx must invoke playNotificationSound inside handleForegroundMessage'
+    );
+    assert.match(
+      appCode,
+      /NOTIFICATION_RECEIVED/,
+      'App.jsx must listen for NOTIFICATION_RECEIVED message from service worker'
     );
   });
 });
