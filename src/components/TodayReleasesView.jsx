@@ -302,7 +302,7 @@ export default function TodayReleasesView({ onRequireAuth }) {
 
               return (
                 <div
-                  key={`${item.media_type || 'movie'}_${item.id}`}
+                  key={`${item.media_type || 'movie'}_${item.id}_${item.target_season || item.release_date}`}
                   onClick={() => setSelectedRelease(item)}
                   className="group relative bg-[#16161b] rounded-2xl overflow-hidden border border-white/10 hover:border-white/30 transition-all duration-300 flex flex-col justify-between shadow-xl hover:-translate-y-1.5 cursor-pointer"
                 >
@@ -338,7 +338,7 @@ export default function TodayReleasesView({ onRequireAuth }) {
                             {catConfig ? catConfig.label : item.industry_name || 'Release'}
                           </span>
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full backdrop-blur-md bg-black/60 text-gray-300 border border-white/10">
-                            {isTv ? '📺 Series' : '🎬 Movie'}
+                            {isTv ? (item.season_name ? `📺 ${item.season_name}` : '📺 Series') : '🎬 Movie'}
                           </span>
                         </div>
 

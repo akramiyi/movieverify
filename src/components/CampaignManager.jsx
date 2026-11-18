@@ -709,6 +709,7 @@ export default function CampaignManager({ initialView = 'form' }) {
           series_id: String(item.id),
           tmdb_id: String(item.id),
           media_type: isTv ? 'tv' : 'movie',
+          season_number: item.target_season || 1,
           release_category: releaseCat,
           idempotency_key: `auto_rel_${isTv ? 'tv' : 'movie'}_${item.id}_${releaseDate}`,
           release_slot: slotInfo.slot_time,
@@ -2419,7 +2420,7 @@ export default function CampaignManager({ initialView = 'form' }) {
 
                 return (
                   <div
-                    key={`${item.media_type || 'movie'}_${item.id}`}
+                    key={`${item.media_type || 'movie'}_${item.id}_${item.target_season || item.release_date}`}
                     className={`glass-card rounded-2xl overflow-hidden border transition-all flex flex-col justify-between group hover:-translate-y-1 shadow-xl ${
                       isCategoryMuted ? 'border-red-500/20 opacity-80 hover:opacity-100' : 'border-white/10 hover:border-white/25'
                     }`}
@@ -2472,7 +2473,7 @@ export default function CampaignManager({ initialView = 'form' }) {
                               {catInfo ? catInfo.label : item.industry_name || 'Release'}
                             </span>
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full backdrop-blur-md bg-black/60 text-gray-300 border border-white/10">
-                              {isTv ? '📺 Series' : '🎬 Movie'}
+                              {isTv ? (item.season_name ? `📺 ${item.season_name}` : '📺 Series') : '🎬 Movie'}
                             </span>
                             {isCategoryMuted && (
                               <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full backdrop-blur-md bg-red-600/90 text-white border border-red-500/50 shadow-sm flex items-center gap-1">

@@ -460,18 +460,21 @@ export async function fetchServerUpcomingReleases(options = {}) {
       mediaType: 'movie',
       cat: 'hollywood_movie',
       label: 'Hollywood',
+      isTv: false,
     },
     {
-      endpoint: `/discover/tv?with_original_language=hi&first_air_date.gte=${today}&first_air_date.lte=${future}&sort_by=first_air_date.asc&page=1`,
+      endpoint: `/discover/tv?with_original_language=hi&air_date.gte=${today}&air_date.lte=${future}&without_genres=10766,10767,10763,10764&sort_by=popularity.desc&page=1`,
       mediaType: 'tv',
       cat: 'hindi_series',
       label: 'Hindi Web Series',
+      isTv: true,
     },
     {
-      endpoint: `/discover/tv?with_original_language=en&first_air_date.gte=${today}&first_air_date.lte=${future}&sort_by=first_air_date.asc&page=1`,
+      endpoint: `/discover/tv?with_original_language=en&air_date.gte=${today}&air_date.lte=${future}&without_genres=10766,10767,10763,10764&sort_by=popularity.desc&page=1`,
       mediaType: 'tv',
       cat: 'hollywood_series',
       label: 'Hollywood Series',
+      isTv: true,
     },
   ];
 
@@ -479,13 +482,92 @@ export async function fetchServerUpcomingReleases(options = {}) {
     const results = await Promise.all(
       queries.map(async (q) => {
         const data = await fetchJson(q.endpoint);
-        return (data.results || []).map((item) => ({
-          ...item,
-          media_type: q.mediaType,
-          release_category: q.cat,
-          industry_label: q.label,
-          release_date: item.release_date || item.first_air_date,
-        }));
+        const rawResults = data.results || [];
+        if (!q.isTv) {
+          return rawResults.map((item) => ({
+            ...item,
+            media_type: q.mediaType,
+            release_category: q.cat,
+            industry_label: q.label,
+            release_date: item.release_date || item.first_air_date,
+          }));
+        }
+
+        // For TV shows: resolve returning seasons (e.g. Panchayat Season 5) and filter daily soaps
+        const tvResolved = await Promise.all(
+          rawResults.map(async (item) => {
+            if (item.first_air_date && item.first_air_date >= today) {
+              return {
+                ...item,
+                media_type: 'tv',
+                release_category: q.cat,
+                industry_label: q.label,
+                release_date: item.first_air_date,
+                target_season: 1,
+                season_name: 'Season 1',
+              };
+            }
+
+            try {
+              const show = await fetchJson(`/tv/${item.id}`);
+              if (!show) return null;
+
+              const isSoap =
+                (show.number_of_episodes && show.number_of_episodes > 150) ||
+                (show.next_episode_to_air && show.next_episode_to_air.episode_number > 50) ||
+                (Array.isArray(show.genres) && show.genres.some((g) => [10766, 10767, 10763, 10764].includes(g.id)));
+
+              if (isSoap) return null;
+
+              let upcomingSeason = null;
+              if (Array.isArray(show.seasons)) {
+                upcomingSeason = show.seasons.find(
+                  (s) => s.season_number > 0 && s.air_date >= today && s.air_date <= future
+                );
+              }
+              if (
+                !upcomingSeason &&
+                show.next_episode_to_air &&
+                show.next_episode_to_air.air_date >= today &&
+                show.next_episode_to_air.air_date <= future
+              ) {
+                upcomingSeason = {
+                  season_number: show.next_episode_to_air.season_number,
+                  name: `Season ${show.next_episode_to_air.season_number}`,
+                  air_date: show.next_episode_to_air.air_date,
+                };
+              }
+
+              if (!upcomingSeason) return null;
+
+              const seasonNum = upcomingSeason.season_number;
+              const seasonName = upcomingSeason.name || `Season ${seasonNum}`;
+              const baseTitle = item.name || item.title || show.name;
+              const formattedTitle = `${baseTitle} - ${seasonName}`;
+
+              return {
+                ...item,
+                id: item.id,
+                title: formattedTitle,
+                name: formattedTitle,
+                release_date: upcomingSeason.air_date,
+                first_air_date: upcomingSeason.air_date,
+                target_season: seasonNum,
+                season_name: seasonName,
+                media_type: 'tv',
+                release_category: q.cat,
+                industry_label: q.label,
+                overview: upcomingSeason.overview || item.overview || show.overview || '',
+                poster_path: upcomingSeason.poster_path || item.poster_path || show.poster_path,
+                backdrop_path: item.backdrop_path || show.backdrop_path,
+              };
+            } catch {
+              return null;
+            }
+          })
+        );
+
+        return tvResolved.filter(Boolean);
       })
     );
 
@@ -494,7 +576,8 @@ export async function fetchServerUpcomingReleases(options = {}) {
     const deduped = [];
 
     for (const item of flat) {
-      const key = `${item.media_type}_${item.id}`;
+      if (!item) continue;
+      const key = `${item.media_type}_${item.id}${item.target_season ? `_s${item.target_season}` : ''}`;
       if (item.id && !seen.has(key) && (item.title || item.name) && item.release_date) {
         seen.add(key);
         deduped.push({
@@ -504,6 +587,8 @@ export async function fetchServerUpcomingReleases(options = {}) {
           media_type: item.media_type,
           release_category: item.release_category,
           industry_label: item.industry_label,
+          target_season: item.target_season || 1,
+          season_name: item.season_name || (item.target_season ? `Season ${item.target_season}` : null),
           overview: item.overview || '',
           poster_path: item.poster_path,
           backdrop_path: item.backdrop_path,
@@ -663,6 +748,7 @@ export async function autoIngestUpcomingReleases(customSupabase = null, options 
         movie_id: itemId,
         series_id: itemId,
         media_type: mediaType,
+        season_number: item.target_season || 1,
         release_category: category,
         industry_label: catLabel,
         idempotency_key: idempotencyKey,

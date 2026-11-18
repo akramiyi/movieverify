@@ -984,19 +984,105 @@ export const fetchUpcomingReleases = async () => {
             try {
               let endpoint = '';
               if (q.isTv) {
-                endpoint = `/discover/tv?with_original_language=${lang}&first_air_date.gte=${today}&first_air_date.lte=${ninetyDaysFromNow}&sort_by=popularity.desc&page=1`;
+                // Use air_date to detect both brand new debuts and returning series seasons (e.g. Panchayat Season 5)
+                endpoint = `/discover/tv?with_original_language=${lang}&air_date.gte=${today}&air_date.lte=${ninetyDaysFromNow}&without_genres=10766,10767,10763,10764&sort_by=popularity.desc&page=1`;
               } else {
                 endpoint = `/discover/movie?with_original_language=${lang}${q.region ? `&region=${q.region}` : ''}&primary_release_date.gte=${today}&primary_release_date.lte=${ninetyDaysFromNow}&sort_by=popularity.desc&page=1`;
               }
               const data = await fetchTMDB(endpoint);
               if (data && Array.isArray(data.results)) {
-                return data.results.map((item) => ({
-                  ...item,
-                  original_lang_code: lang,
-                  release_category: q.category,
-                  industry_name: q.industry,
-                  resolved_media_type: q.mediaType,
-                }));
+                if (!q.isTv) {
+                  return data.results.map((item) => ({
+                    ...item,
+                    original_lang_code: lang,
+                    release_category: q.category,
+                    industry_name: q.industry,
+                    resolved_media_type: q.mediaType,
+                  }));
+                }
+
+                // Resolve web series: returning seasons (e.g. Panchayat Season 5) + new series debuts while filtering daily soaps
+                const resolvedTvItems = await Promise.all(
+                  data.results.map(async (item) => {
+                    // Case 1: Brand new web series premiering in the 90-day radar window
+                    if (item.first_air_date && item.first_air_date >= today) {
+                      return {
+                        ...item,
+                        original_lang_code: lang,
+                        release_category: q.category,
+                        industry_name: q.industry,
+                        resolved_media_type: 'tv',
+                        target_season: 1,
+                        season_name: 'Season 1',
+                        release_date: item.first_air_date,
+                      };
+                    }
+
+                    // Case 2: Returning web series (e.g. Panchayat Season 5, Dhindora Season 2)
+                    try {
+                      const show = await fetchTMDB(`/tv/${item.id}`);
+                      if (!show) return null;
+
+                      // Filter daily TV soap operas and endless syndications (e.g. 1000+ daily soap episodes)
+                      const isSoap =
+                        (show.number_of_episodes && show.number_of_episodes > 150) ||
+                        (show.next_episode_to_air && show.next_episode_to_air.episode_number > 50) ||
+                        (Array.isArray(show.genres) && show.genres.some((g) => [10766, 10767, 10763, 10764].includes(g.id)));
+
+                      if (isSoap) return null;
+
+                      // Find the upcoming season premiering in the 90-day radar window
+                      let upcomingSeason = null;
+                      if (Array.isArray(show.seasons)) {
+                        upcomingSeason = show.seasons.find(
+                          (s) => s.season_number > 0 && s.air_date >= today && s.air_date <= ninetyDaysFromNow
+                        );
+                      }
+                      if (
+                        !upcomingSeason &&
+                        show.next_episode_to_air &&
+                        show.next_episode_to_air.air_date >= today &&
+                        show.next_episode_to_air.air_date <= ninetyDaysFromNow
+                      ) {
+                        upcomingSeason = {
+                          season_number: show.next_episode_to_air.season_number,
+                          name: `Season ${show.next_episode_to_air.season_number}`,
+                          air_date: show.next_episode_to_air.air_date,
+                        };
+                      }
+
+                      if (!upcomingSeason) return null;
+
+                      const seasonNum = upcomingSeason.season_number;
+                      const seasonName = upcomingSeason.name || `Season ${seasonNum}`;
+                      const baseName = item.name || item.title || show.name;
+                      const formattedTitle = `${baseName} - ${seasonName}`;
+
+                      return {
+                        ...item,
+                        id: item.id,
+                        title: formattedTitle,
+                        name: formattedTitle,
+                        release_date: upcomingSeason.air_date,
+                        first_air_date: upcomingSeason.air_date,
+                        target_season: seasonNum,
+                        season_name: seasonName,
+                        poster_path: upcomingSeason.poster_path || item.poster_path || show.poster_path,
+                        backdrop_path: item.backdrop_path || show.backdrop_path,
+                        overview: upcomingSeason.overview || item.overview || show.overview,
+                        original_lang_code: lang,
+                        release_category: q.category,
+                        industry_name: q.industry,
+                        resolved_media_type: 'tv',
+                      };
+                    } catch (err) {
+                      console.warn(`Returning TV resolution failed for ${item.id}:`, err.message);
+                      return null;
+                    }
+                  })
+                );
+
+                return resolvedTvItems.filter(Boolean);
               }
             } catch (err) {
               console.warn(`TMDB fetch failed for ${q.category} [${lang}]:`, err.message);
@@ -1013,9 +1099,10 @@ export const fetchUpcomingReleases = async () => {
     const unique = [];
 
     for (const item of flat) {
+      if (!item) continue;
       const relDate = item.release_date || item.first_air_date;
       const title = item.title || item.name;
-      const uniqueKey = `${item.resolved_media_type}_${item.id}`;
+      const uniqueKey = `${item.resolved_media_type}_${item.id}${item.target_season ? `_s${item.target_season}` : ''}`;
 
       if (item && item.id && !seen.has(uniqueKey) && title && relDate) {
         seen.add(uniqueKey);
@@ -1027,6 +1114,8 @@ export const fetchUpcomingReleases = async () => {
           ...item,
           ...formatted,
           id: item.id,
+          target_season: item.target_season || 1,
+          season_name: item.season_name || (item.target_season ? `Season ${item.target_season}` : null),
           title,
           name: title,
           release_date: relDate,
