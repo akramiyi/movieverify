@@ -30,6 +30,7 @@ import { useDownloadHistory } from './hooks/useDownloadHistory';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { resolveNotificationTargetUrl, parseNotificationMovieLink } from './utils/notificationLinks';
 import { reportNotificationTelemetry } from './utils/notificationTelemetry';
+import { playNotificationSound } from './utils/notificationSound';
 
 // Lazy-loaded routes and heavy modal components for optimal initial bundle performance
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
@@ -133,6 +134,9 @@ function App() {
 
   const handleForegroundMessage = useCallback(
     (payload) => {
+      // Play custom notification sound
+      playNotificationSound();
+
       const notification = payload?.notification || {};
       const data = payload?.data || {};
       const title = notification.title || data.title || 'New MovieVerify Alert';

@@ -166,6 +166,7 @@ self.addEventListener('push', (e) => {
         body,
         icon: '/logo192.png',
         badge: '/badge.png',
+        sound: '/notification.mp3',
         vibrate: [200, 100, 200, 100, 200],
         silent: false,
         renotify: true,
