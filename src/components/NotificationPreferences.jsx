@@ -171,6 +171,8 @@ export default function NotificationPreferences({ onClose }) {
 
       const json = await res.json().catch(() => ({}));
       if (res.ok && json.success) {
+        // Play custom notification sound directly on test alert
+        playNotificationSound(true);
         setTestPushResult({
           type: 'success',
           text: '🔔 Test alert sent! Check your notification bar or drawer.',
@@ -424,49 +426,36 @@ export default function NotificationPreferences({ onClose }) {
         )}
       </div>
 
-      {/* Custom Notification Sound Control */}
+      {/* Custom Notification Sound Control - Directly Active */}
       <div
         data-testid="notification-sound-control"
-        className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-2"
+        className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2 shadow-sm"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-start gap-2.5">
-            {soundEnabled ? (
-              <Volume2 className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-            ) : (
-              <VolumeX className="w-4 h-4 text-gray-500 mt-0.5 shrink-0" />
-            )}
+            <Volume2 className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
             <div>
-              <p className="text-white text-sm font-semibold">Custom Notification Tone</p>
-              <p className="text-gray-400 text-xs mt-0.5">
-                Signature movie alert tune plays on new releases, series episodes, and link updates.
+              <div className="flex items-center gap-2">
+                <p className="text-white text-sm font-semibold">Custom Notification Tone</p>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  ● Directly Active
+                </span>
+              </div>
+              <p className="text-gray-300 text-xs mt-0.5">
+                Aapka custom tune har naye movie, web series, link update aur push alert par automatically bina kisi approval ke bajta hai.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handlePreviewSound}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 text-gray-200 hover:text-white transition cursor-pointer"
-              title="Test notification tune"
-            >
-              <Play className={`w-3 h-3 text-amber-400 fill-amber-400 ${isPlayingSound ? 'animate-pulse' : ''}`} />
-              <span>{isPlayingSound ? 'Playing...' : 'Test Sound'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleToggleSound}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                soundEnabled
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
-                  : 'bg-white/5 text-gray-400 border border-white/10 hover:text-white'
-              }`}
-            >
-              {soundEnabled ? 'Tone ON' : 'Muted'}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handlePreviewSound}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition cursor-pointer shrink-0 shadow-sm"
+            title="Play notification tune preview"
+          >
+            <Play className={`w-3.5 h-3.5 text-amber-400 fill-amber-400 ${isPlayingSound ? 'animate-pulse' : ''}`} />
+            <span>{isPlayingSound ? 'Playing...' : 'Test Sound'}</span>
+          </button>
         </div>
       </div>
 

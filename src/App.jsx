@@ -179,6 +179,21 @@ function App() {
 
   usePushNotifications({ onForegroundMessage: handleForegroundMessage });
 
+  // Listen for push broadcasts from Service Worker so custom sound plays directly in active tabs
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      const handleSwMessage = (e) => {
+        if (e.data && e.data.type === 'NOTIFICATION_RECEIVED') {
+          playNotificationSound(true);
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      };
+    }
+  }, []);
+
   useEffect(() => {
     const triggerWelcomeForSession = async (session, eventName = 'initial') => {
       const userId = session?.user?.id;

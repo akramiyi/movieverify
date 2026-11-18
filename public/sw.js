@@ -187,6 +187,20 @@ self.addEventListener('push', (e) => {
       }
 
       await self.registration.showNotification(title, options);
+
+      // Broadcast to active tab clients so custom notification tone plays directly on the page
+      try {
+        const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of clientList) {
+          client.postMessage({
+            type: 'NOTIFICATION_RECEIVED',
+            delivery_id: deliveryId,
+            title,
+            body,
+            sound: '/notification.mp3',
+          });
+        }
+      } catch {}
     })()
   );
 });
