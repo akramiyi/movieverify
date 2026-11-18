@@ -19,7 +19,6 @@ import {
   ChevronRight,
   Camera,
 } from 'lucide-react';
-import { movies } from '../data/movies';
 import { fetchTMDBDetails, getDownloadLinks, getMediaTypeFromId } from '../hooks/useTMDB';
 import ImageWithFallback from './ImageWithFallback';
 import ReportProblemButton from './ReportProblemButton';
@@ -45,6 +44,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
   const [downloadingState, setDownloadingState] = useState(null);
   const [isLiked, setIsLiked] = useState(false);
   const downloadTimerRef = useRef([]);
+  const scrollContainerRef = useRef(null);
   const [details, setDetails] = useState({
     cast: 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
     trailerUrl: '',
@@ -53,7 +53,15 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
     poster: null,
     title: null,
     images: [],
+    similarMovies: [],
   });
+
+  // Auto-scroll modal content back to top when switching movies (e.g. via More Like This)
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [movie?.id]);
 
   const clearDownloadTimers = () => {
     downloadTimerRef.current.forEach((t) => clearTimeout(t));
@@ -114,6 +122,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
             poster: res.poster || movie.poster || null,
             title: res.title || null,
             images: Array.isArray(res.images) && res.images.length > 0 ? res.images : (Array.isArray(movie.images) ? movie.images : []),
+            similarMovies: Array.isArray(res.similarMovies) ? res.similarMovies : [],
           });
         });
       } else {
@@ -125,6 +134,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
           poster: movie.poster || null,
           title: movie.title || null,
           images: Array.isArray(movie.images) ? movie.images : [],
+          similarMovies: Array.isArray(movie.similarMovies) ? movie.similarMovies : [],
         });
       }
     }
@@ -279,10 +289,10 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
     .replace(/\s+—\s+Season\s+\d+\s+Out Now!.*$/i, '')
     .trim() || movie.title;
 
-  // Get similar movies based on genre intersection (excluding current movie itself)
-  const similarMovies = movies
-    .filter(m => m.id !== movie.id && (m.genre || '').split(',').some(g => (movie.genre || '').includes(g.trim())))
-    .slice(0, 3);
+  // Genuine dynamic TMDB recommendations matching exact franchise, genre, and language
+  const similarMovies = (Array.isArray(details.similarMovies) && details.similarMovies.length > 0)
+    ? details.similarMovies.slice(0, 6)
+    : (Array.isArray(movie.similarMovies) && movie.similarMovies.length > 0 ? movie.similarMovies.slice(0, 6) : []);
 
   const handleDownload = (quality, link, customLabel, size) => {
     if (!link || link === '#') {
@@ -375,7 +385,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
             </button>
 
             {/* Scrollable Content Wrapper */}
-            <div className="overflow-y-auto overscroll-contain flex-1 hide-scrollbar">
+            <div ref={scrollContainerRef} className="overflow-y-auto overscroll-contain flex-1 hide-scrollbar">
               {/* Top Banner Area with 2-4 Photo Slider */}
               <div
                 className="relative w-full aspect-video sm:h-[300px] md:h-[440px] flex-none overflow-hidden group/banner select-none"

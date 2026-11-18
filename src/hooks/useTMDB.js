@@ -740,7 +740,8 @@ export const fetchTMDBDetails = async (id, mediaType) => {
       cast: 'Placeholder Actor 1, Placeholder Actor 2',
       trailerUrl: '',
       images: [],
-      backdrops: []
+      backdrops: [],
+      similarMovies: []
     };
   }
 
@@ -762,12 +763,13 @@ export const fetchTMDBDetails = async (id, mediaType) => {
       cast: 'Placeholder Actor 1, Placeholder Actor 2',
       trailerUrl: '',
       images: [],
-      backdrops: []
+      backdrops: [],
+      similarMovies: []
     };
   }
 
   try {
-    const endpoint = `/${resolvedType}/${parsedId}?append_to_response=credits,videos,images&include_video_language=en,hi,te,ta,ml,null&include_image_language=en,hi,null`;
+    const endpoint = `/${resolvedType}/${parsedId}?append_to_response=credits,videos,images,recommendations,similar&include_video_language=en,hi,te,ta,ml,null&include_image_language=en,hi,null`;
 
     const res = await fetchTMDB(endpoint);
     if (!res) {
@@ -776,7 +778,8 @@ export const fetchTMDBDetails = async (id, mediaType) => {
         cast: 'Placeholder Actor 1, Placeholder Actor 2',
         trailerUrl: '',
         images: [],
-        backdrops: []
+        backdrops: [],
+        similarMovies: []
       };
     }
 
@@ -817,6 +820,87 @@ export const fetchTMDBDetails = async (id, mediaType) => {
       }
     }
 
+    // Extract genuine similar & recommended movies matching exact franchise, genre, and language
+    const targetLang = (res.original_language || '').toLowerCase();
+    const isRegional = targetLang && targetLang !== 'en';
+    const genreIds = Array.isArray(res.genres) ? res.genres.map(g => g.id).filter(Boolean) : [];
+
+    const directRecs = Array.isArray(res.recommendations?.results) ? res.recommendations.results : [];
+    const directSimilar = Array.isArray(res.similar?.results) ? res.similar.results : [];
+
+    let regionalDiscoverResults = [];
+    if (isRegional && ['hi', 'te', 'ta', 'ml', 'kn', 'pa', 'bn', 'mr', 'ko', 'ja'].includes(targetLang)) {
+      const sameLangInDirect = directRecs.filter(m => m.original_language === targetLang).length;
+      if (sameLangInDirect < 4) {
+        try {
+          let discoverUrl = `/discover/${resolvedType}?with_original_language=${targetLang}&sort_by=vote_count.desc`;
+          if (resolvedType === 'tv') {
+            discoverUrl += `&without_genres=10766`; // exclude daily soaps
+          }
+          if (genreIds.length > 0) {
+            const genreQuery = genreIds.slice(0, 2).join(',');
+            discoverUrl += `&with_genres=${genreQuery}`;
+          }
+          const discoverRes = await fetchTMDB(discoverUrl);
+          if (discoverRes && Array.isArray(discoverRes.results)) {
+            regionalDiscoverResults = discoverRes.results;
+          }
+        } catch (discErr) {
+          console.warn('Regional discover fetch fallback error:', discErr);
+        }
+      }
+    }
+
+    const seenIds = new Set([parsedId]);
+    const seenTitles = new Set();
+    const currentTitle = (res.title || res.name || '').toLowerCase().trim();
+    if (currentTitle) seenTitles.add(currentTitle);
+
+    const rankedCandidates = [];
+
+    const addCandidate = (item) => {
+      if (!item || !item.id || seenIds.has(item.id)) return;
+      const title = (item.title || item.name || '').trim();
+      if (!title) return;
+      const normTitle = title.toLowerCase();
+      if (seenTitles.has(normTitle)) return;
+      if (!item.poster_path && !item.backdrop_path) return;
+      seenIds.add(item.id);
+      seenTitles.add(normTitle);
+      rankedCandidates.push(item);
+    };
+
+    if (isRegional) {
+      for (const m of directRecs) {
+        if (m.original_language === targetLang) addCandidate(m);
+      }
+      for (const m of regionalDiscoverResults) {
+        addCandidate(m);
+      }
+      for (const m of directSimilar) {
+        if (m.original_language === targetLang) addCandidate(m);
+      }
+    }
+
+    for (const m of directRecs) {
+      addCandidate(m);
+    }
+    for (const m of directSimilar) {
+      addCandidate(m);
+    }
+
+    const formattedSimilar = rankedCandidates.slice(0, 6).map((m) => {
+      const formatted = formatMovie({
+        ...m,
+        media_type: m.media_type || resolvedType
+      });
+      return {
+        ...formatted,
+        mediaType: m.media_type || resolvedType,
+        media_type: m.media_type || resolvedType
+      };
+    });
+
     return {
       runtime: res.runtime || (res.episode_run_time ? res.episode_run_time[0] : null),
       cast: castList,
@@ -827,6 +911,7 @@ export const fetchTMDBDetails = async (id, mediaType) => {
       poster: res.poster_path ? `${IMG_BASE}/w780${res.poster_path}` : null,
       images: galleryImages,
       backdrops: galleryImages,
+      similarMovies: formattedSimilar,
     };
   } catch (err) {
     console.error('Error fetching TMDB details:', err);
@@ -839,7 +924,8 @@ export const fetchTMDBDetails = async (id, mediaType) => {
       backdrop: null,
       poster: null,
       images: [],
-      backdrops: []
+      backdrops: [],
+      similarMovies: []
     };
   }
 };
