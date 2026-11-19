@@ -240,7 +240,13 @@ export async function getDeviceFcmToken(options = {}) {
   // Attempt token generation with automatic self-healing retry (up to 3 attempts)
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const currentToken = await getToken(messaging, tokenParams);
+      // On attempt 2, if vapidKey failed with push service error, try without explicit vapidKey
+      // allowing Firebase to fallback to project sender ID key
+      const currentParams = (attempt === 2 && tokenParams.vapidKey)
+        ? { serviceWorkerRegistration: tokenParams.serviceWorkerRegistration }
+        : tokenParams;
+
+      const currentToken = await getToken(messaging, currentParams);
       if (currentToken) {
         lastFcmError = null;
         return currentToken;
@@ -251,19 +257,21 @@ export async function getDeviceFcmToken(options = {}) {
       console.warn(`[FCMClient] FCM token attempt ${attempt} failed:`, errMsg);
 
       if (attempt < 3 && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-        // Heal push service error, AbortError, or stale subscription conflicts
+        // Heal push service error, AbortError, or stale subscription conflicts across all registrations
         if (
           errMsg.toLowerCase().includes('push service error') ||
           errMsg.toLowerCase().includes('aborterror') ||
           errMsg.toLowerCase().includes('subscription')
         ) {
           try {
-            const targetReg = tokenParams.serviceWorkerRegistration || await navigator.serviceWorker.ready.catch(() => null);
-            if (targetReg && targetReg.pushManager) {
-              const existingSub = await targetReg.pushManager.getSubscription().catch(() => null);
-              if (existingSub) {
-                console.warn('[FCMClient] Healing push service error by clearing stale subscription...');
-                await existingSub.unsubscribe().catch(() => {});
+            const allRegs = await navigator.serviceWorker.getRegistrations().catch(() => []);
+            for (const r of allRegs) {
+              if (r.pushManager) {
+                const existingSub = await r.pushManager.getSubscription().catch(() => null);
+                if (existingSub) {
+                  console.warn('[FCMClient] Healing push service error by clearing stale subscription...');
+                  await existingSub.unsubscribe().catch(() => {});
+                }
               }
             }
           } catch (healErr) {
@@ -299,29 +307,44 @@ export async function repairPushRegistration() {
   }
 
   try {
-    // 1. Unsubscribe any stale push subscription
-    try {
-      const reg = await navigator.serviceWorker.getRegistration('/').catch(() => null);
-      if (reg && reg.pushManager) {
-        const sub = await reg.pushManager.getSubscription().catch(() => null);
-        if (sub) {
-          await sub.unsubscribe().catch(() => {});
-        }
-      }
-    } catch {}
-
-    // 2. Unregister any secondary service workers
+    // 1. Unsubscribe any stale push subscription across all registrations
     const allRegs = await navigator.serviceWorker.getRegistrations().catch(() => []);
-    for (const r of allRegs) {
-      if (r.scope && r.scope.includes('firebase-cloud-messaging-push-scope')) {
-        await r.unregister().catch(() => {});
+    for (const reg of allRegs) {
+      try {
+        if (reg && reg.pushManager) {
+          const sub = await reg.pushManager.getSubscription().catch(() => null);
+          if (sub) {
+            console.warn('[FCMClient] repair: clearing stale subscription:', sub.endpoint);
+            await sub.unsubscribe().catch(() => {});
+          }
+        }
+      } catch {}
+
+      // 2. Unregister any secondary service workers
+      if (reg.scope && reg.scope.includes('firebase-cloud-messaging-push-scope')) {
+        await reg.unregister().catch(() => {});
       }
     }
 
     // 3. Re-register canonical /sw.js at root scope
-    await navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => null);
+    if (reg) {
+      if (!reg.active) {
+        await new Promise((resolve) => {
+          const incoming = reg.installing || reg.waiting;
+          if (incoming) {
+            incoming.addEventListener('statechange', () => {
+              if (incoming.state === 'activated' || reg.active) resolve();
+            });
+          }
+          setTimeout(resolve, 800);
+        });
+      }
+    }
     await navigator.serviceWorker.ready.catch(() => {});
 
+    // Allow browser push daemon brief pause to settle
+    await new Promise((r) => setTimeout(r, 600));
     return true;
   } catch (err) {
     console.warn('[FCMClient] repairPushRegistration warning:', err?.message);

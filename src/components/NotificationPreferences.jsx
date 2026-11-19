@@ -407,31 +407,41 @@ export default function NotificationPreferences({ onClose }) {
         </div>
 
         {pushError && (
-          <div className="space-y-2 pt-1 border-t border-white/5">
-            <p className="text-xs text-rose-400 flex items-center gap-1.5">
+          <div className="space-y-2.5 pt-2 border-t border-white/5">
+            <p className="text-xs text-rose-400 flex items-center gap-1.5 font-medium">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
               <span>{pushError}</span>
             </p>
             {(pushError.toLowerCase().includes('push service') || pushError.toLowerCase().includes('google play') || pushError.toLowerCase().includes('fix connection')) && (
-              <button
-                type="button"
-                onClick={handleRepairPush}
-                disabled={isPushLoading}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition cursor-pointer disabled:opacity-50"
-              >
-                {isPushLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-3.5 h-3.5" />
-                )}
-                <span>{isPushLoading ? 'Repairing Connection...' : '🔄 Fix & Re-enable Connection'}</span>
-              </button>
+              <div className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-500/20 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-gray-300 font-semibold">1-Tap Auto Repair:</span>
+                  <button
+                    type="button"
+                    onClick={handleRepairPush}
+                    disabled={isPushLoading}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500 hover:bg-rose-600 text-white transition cursor-pointer disabled:opacity-50 shadow"
+                  >
+                    {isPushLoading ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" />
+                    )}
+                    <span>{isPushLoading ? 'Repairing Connection...' : '🔄 Fix & Re-enable Connection'}</span>
+                  </button>
+                </div>
+                <div className="text-[11px] text-gray-400 pt-1 border-t border-white/5 space-y-1">
+                  <p className="text-amber-300/90 font-medium">Agar "Fix" tap karne ke baad bhi yeh aaye (Xiaomi/Redmi/Android OS Setting):</p>
+                  <p>1. Chrome icon par long-press karein &gt; <strong>App Info &gt; Notifications</strong> &gt; <em>"All Chrome notifications"</em> ON karein.</p>
+                  <p>2. Phir yahan <strong>"Fix & Re-enable"</strong> tap karein, notifications instantly connect ho jayenge!</p>
+                </div>
+              </div>
             )}
           </div>
         )}
       </div>
 
-      {statusMessage && (
+      {statusMessage && (!pushError || statusMessage.text !== pushError) && (
         <div
           className={`text-xs px-3 py-2 rounded-lg border space-y-2 ${
             statusMessage.type === 'error'
@@ -440,21 +450,6 @@ export default function NotificationPreferences({ onClose }) {
           }`}
         >
           <p>{statusMessage.text}</p>
-          {statusMessage.type === 'error' && (statusMessage.text.toLowerCase().includes('push service') || statusMessage.text.toLowerCase().includes('google play') || statusMessage.text.toLowerCase().includes('fix connection')) && (
-            <button
-              type="button"
-              onClick={handleRepairPush}
-              disabled={isPushLoading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/30 hover:bg-rose-500/40 text-rose-200 border border-rose-500/40 transition cursor-pointer disabled:opacity-50"
-            >
-              {isPushLoading ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <RefreshCw className="w-3 h-3" />
-              )}
-              <span>{isPushLoading ? 'Repairing Connection...' : '🔄 Fix & Re-enable Connection'}</span>
-            </button>
-          )}
         </div>
       )}
 
