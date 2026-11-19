@@ -430,10 +430,11 @@ export default function NotificationPreferences({ onClose }) {
                     <span>{isPushLoading ? 'Repairing Connection...' : '🔄 Fix & Re-enable Connection'}</span>
                   </button>
                 </div>
-                <div className="text-[11px] text-gray-400 pt-1 border-t border-white/5 space-y-1">
-                  <p className="text-amber-300/90 font-medium">Agar "Fix" tap karne ke baad bhi yeh aaye (Xiaomi/Redmi/Android OS Setting):</p>
-                  <p>1. Chrome icon par long-press karein &gt; <strong>App Info &gt; Notifications</strong> &gt; <em>"All Chrome notifications"</em> ON karein.</p>
-                  <p>2. Phir yahan <strong>"Fix & Re-enable"</strong> tap karein, notifications instantly connect ho jayenge!</p>
+                <div className="text-[11px] text-gray-400 pt-1.5 border-t border-white/5 space-y-1">
+                  <p className="text-amber-300/90 font-medium">Agar "Fix" tap karne ke baad bhi stale endpoint rahe (Chrome Site Reset 5 sec):</p>
+                  <p>1. Upar address bar me <strong>movieverify.vercel.app ke bagal me tune/lock icon</strong> par tap karein.</p>
+                  <p>2. <strong>Permissions / Site data</strong> par tap karke <em>"Delete data" / "Reset permissions"</em> karein.</p>
+                  <p>3. Page reload karke 'Enable Push' dabayein — turant fresh token ban jayega!</p>
                 </div>
               </div>
             )}

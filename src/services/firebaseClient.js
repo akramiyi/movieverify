@@ -257,38 +257,34 @@ export async function getDeviceFcmToken(options = {}) {
       console.warn(`[FCMClient] FCM token attempt ${attempt} failed:`, errMsg);
 
       if (attempt < 3 && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-        // Heal push service error, AbortError, or stale subscription conflicts across all registrations
+        // If push service error, AbortError, or stale subscription conflict, heal by running repairPushRegistration
         if (
           errMsg.toLowerCase().includes('push service error') ||
           errMsg.toLowerCase().includes('aborterror') ||
           errMsg.toLowerCase().includes('subscription')
         ) {
           try {
-            const allRegs = await navigator.serviceWorker.getRegistrations().catch(() => []);
-            for (const r of allRegs) {
-              if (r.pushManager) {
-                const existingSub = await r.pushManager.getSubscription().catch(() => null);
-                if (existingSub) {
-                  console.warn('[FCMClient] Healing push service error by clearing stale subscription...');
-                  await existingSub.unsubscribe().catch(() => {});
-                }
-              }
+            console.warn('[FCMClient] Auto-healing push service error via complete registration purge...');
+            await repairPushRegistration();
+            const freshReg = await navigator.serviceWorker.ready.catch(() => null);
+            if (freshReg) {
+              tokenParams.serviceWorkerRegistration = freshReg;
             }
           } catch (healErr) {
             console.warn('[FCMClient] Subscription healing warning:', healErr?.message);
           }
+        } else {
+          // Stagger retry: 1000ms on first attempt, 1800ms on second attempt
+          const delay = attempt === 1 ? 1000 : 1800;
+          await new Promise((r) => setTimeout(r, delay));
+
+          try {
+            const freshReg = await navigator.serviceWorker.ready;
+            if (freshReg) {
+              tokenParams.serviceWorkerRegistration = freshReg;
+            }
+          } catch {}
         }
-
-        // Stagger retry: 1000ms on first attempt, 1800ms on second attempt (to give Android Play Services socket time to reconnect)
-        const delay = attempt === 1 ? 1000 : 1800;
-        await new Promise((r) => setTimeout(r, delay));
-
-        try {
-          const freshReg = await navigator.serviceWorker.ready;
-          if (freshReg) {
-            tokenParams.serviceWorkerRegistration = freshReg;
-          }
-        } catch {}
       }
     }
   }
@@ -307,26 +303,40 @@ export async function repairPushRegistration() {
   }
 
   try {
-    // 1. Unsubscribe any stale push subscription across all registrations
+    // 1. Unsubscribe any push subscriptions across all registrations and UNREGISTER ALL service workers
+    // This wipes the ghost push channel from Android OS and Chromium's PushMessagingService
     const allRegs = await navigator.serviceWorker.getRegistrations().catch(() => []);
     for (const reg of allRegs) {
       try {
         if (reg && reg.pushManager) {
-          const sub = await reg.pushManager.getSubscription().catch(() => null);
-          if (sub) {
-            console.warn('[FCMClient] repair: clearing stale subscription:', sub.endpoint);
-            await sub.unsubscribe().catch(() => {});
+          const existingSub = await reg.pushManager.getSubscription().catch(() => null);
+          if (existingSub) {
+            console.warn('[FCMClient] repair: clearing stale subscription:', existingSub.endpoint);
+            await existingSub.unsubscribe().catch(() => {});
           }
         }
       } catch {}
 
-      // 2. Unregister any secondary service workers
-      if (reg.scope && reg.scope.includes('firebase-cloud-messaging-push-scope')) {
+      try {
         await reg.unregister().catch(() => {});
-      }
+      } catch {}
     }
 
-    // 3. Re-register canonical /sw.js at root scope
+    // 2. Clear Firebase Messaging IndexedDB databases so FCM starts fresh
+    try {
+      if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
+        indexedDB.deleteDatabase('firebase-messaging-database');
+        indexedDB.deleteDatabase('fcm_token_details_db');
+      }
+    } catch {}
+
+    // 3. Clear stored push registration keys
+    try {
+      localStorage.removeItem('movieverify_push_registered');
+      localStorage.removeItem('movieverify_push_last_token');
+    } catch {}
+
+    // 4. Re-register canonical /sw.js at root scope fresh
     const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => null);
     if (reg) {
       if (!reg.active) {
@@ -337,7 +347,7 @@ export async function repairPushRegistration() {
               if (incoming.state === 'activated' || reg.active) resolve();
             });
           }
-          setTimeout(resolve, 800);
+          setTimeout(resolve, 1000);
         });
       }
     }
