@@ -17,6 +17,7 @@ import {
   setupForegroundMessageHandler,
   getLastFcmError,
   isInAppBrowser,
+  repairPushRegistration,
 } from '../services/firebaseClient';
 
 const STORAGE_REGISTERED_KEY = 'movieverify_push_registered';
@@ -178,7 +179,9 @@ export function usePushNotifications(options = {}) {
         if (lastErr?.code === 'in-app-browser') {
           userMsg = 'Push notifications cannot be enabled inside in-app browsers (WhatsApp/Telegram/Instagram). Please open this link in Google Chrome or your default device browser.';
         } else if (lastErr?.message) {
-          if (lastErr.message.includes('default service worker') || lastErr.message.includes('not registered') || lastErr.message.includes('no active Service Worker')) {
+          if (lastErr.message.toLowerCase().includes('push service error')) {
+            userMsg = 'Push service temporarily unavailable (Google Play Services / Android background sync). "Fix Connection" par tap karein ya page refresh karein.';
+          } else if (lastErr.message.includes('default service worker') || lastErr.message.includes('not registered') || lastErr.message.includes('no active Service Worker')) {
             userMsg = 'Service worker is still activating on your device. Please wait a second and tap Enable again.';
           } else if (lastErr.message.includes('indexedDb') || lastErr.message.includes('IndexedDB')) {
             userMsg = 'Push notifications are not supported in Private/Incognito browsing mode.';
@@ -262,7 +265,23 @@ export function usePushNotifications(options = {}) {
     }
   }, []);
 
-  // 5. Synchronize Token Registration on Auth State Change and Page Load
+  // 5. Explicit Repair & Resubscribe Action (Clears stale subscriptions to fix push service errors)
+  const repairPush = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await repairPushRegistration();
+      const res = await subscribe();
+      return res;
+    } catch (err) {
+      const msg = err?.message || 'Failed to repair push connection';
+      setError(msg);
+      setIsLoading(false);
+      return { success: false, error: msg };
+    }
+  }, [subscribe]);
+
+  // 6. Synchronize Token Registration on Auth State Change and Page Load
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
@@ -373,6 +392,7 @@ export function usePushNotifications(options = {}) {
     error,
     subscribe,
     unsubscribe,
+    repairPush,
   };
 }
 

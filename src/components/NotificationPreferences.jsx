@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, Bell, BellOff, Loader2, Moon, Smartphone, AlertCircle, Send, CheckCircle2, ChevronDown, ChevronUp, Radio } from 'lucide-react';
+import { Settings, Bell, BellOff, Loader2, Moon, Smartphone, AlertCircle, Send, CheckCircle2, ChevronDown, ChevronUp, Radio, RefreshCw } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { isInAppBrowser } from '../services/firebaseClient';
@@ -77,6 +77,7 @@ export default function NotificationPreferences({ onClose }) {
     error: pushError,
     subscribe: subscribePush,
     unsubscribe: unsubscribePush,
+    repairPush,
   } = usePushNotifications();
 
   const fetchPrefs = useCallback(async () => {
@@ -227,6 +228,18 @@ export default function NotificationPreferences({ onClose }) {
         setStatusMessage({ type: 'success', text: 'Push notifications enabled for this device.' });
       } else {
         setStatusMessage({ type: 'error', text: res?.error || 'Could not enable push alerts.' });
+      }
+    }
+  };
+
+  const handleRepairPush = async () => {
+    setStatusMessage(null);
+    if (repairPush) {
+      const res = await repairPush();
+      if (res?.success) {
+        setStatusMessage({ type: 'success', text: '🔔 Push connection fixed! Notifications enabled for this device.' });
+      } else {
+        setStatusMessage({ type: 'error', text: res?.error || 'Could not auto-repair push connection.' });
       }
     }
   };
@@ -386,6 +399,7 @@ export default function NotificationPreferences({ onClose }) {
                 <li><strong>Chrome Notification:</strong> Chrome icon par long-press karein &gt; App Info &gt; Notifications &gt; Sites &gt; MovieVerify par click karke <em>"Pop on screen / Allow Sound"</em> on karein.</li>
                 <li><strong>Status Bar Icon (MIUI / HyperOS):</strong> Chrome App Info &gt; Notifications &gt; Sites &gt; MovieVerify &gt; <em>"Show in status bar / Badge"</em> ON karein taaki top status bar me icon dikhe.</li>
                 <li><strong>Battery Saver:</strong> App Info &gt; Battery / Battery Saver &gt; <em>"No restrictions" (Unrestricted)</em> select karein taaki Android Chrome ko freeze na kare.</li>
+                <li><strong>Push Service Sync Error:</strong> Agar "Registration failed - push service error" ya temporary issue dikhe, toh niche <em>"Fix & Re-enable Connection"</em> button par click karein. Yeh connection ko instantly heal kar deta hai.</li>
                 <li><strong>Install App (PWA):</strong> Niche <em>"Install App"</em> button se PWA install karein. Isse MovieVerify standalone Android app ban jati hai aur Flipkart/X ki tarah direct native status bar icon aata hai.</li>
               </ol>
             </div>
@@ -393,23 +407,55 @@ export default function NotificationPreferences({ onClose }) {
         </div>
 
         {pushError && (
-          <p className="text-xs text-rose-400 flex items-center gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            {pushError}
-          </p>
+          <div className="space-y-2 pt-1 border-t border-white/5">
+            <p className="text-xs text-rose-400 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>{pushError}</span>
+            </p>
+            {(pushError.toLowerCase().includes('push service') || pushError.toLowerCase().includes('google play') || pushError.toLowerCase().includes('fix connection')) && (
+              <button
+                type="button"
+                onClick={handleRepairPush}
+                disabled={isPushLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition cursor-pointer disabled:opacity-50"
+              >
+                {isPushLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3.5 h-3.5" />
+                )}
+                <span>{isPushLoading ? 'Repairing Connection...' : '🔄 Fix & Re-enable Connection'}</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
       {statusMessage && (
-        <p
-          className={`text-xs px-3 py-2 rounded-lg border ${
+        <div
+          className={`text-xs px-3 py-2 rounded-lg border space-y-2 ${
             statusMessage.type === 'error'
               ? 'bg-rose-950/40 border-rose-500/30 text-rose-300'
               : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
           }`}
         >
-          {statusMessage.text}
-        </p>
+          <p>{statusMessage.text}</p>
+          {statusMessage.type === 'error' && (statusMessage.text.toLowerCase().includes('push service') || statusMessage.text.toLowerCase().includes('google play') || statusMessage.text.toLowerCase().includes('fix connection')) && (
+            <button
+              type="button"
+              onClick={handleRepairPush}
+              disabled={isPushLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-500/30 hover:bg-rose-500/40 text-rose-200 border border-rose-500/40 transition cursor-pointer disabled:opacity-50"
+            >
+              {isPushLoading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+              <span>{isPushLoading ? 'Repairing Connection...' : '🔄 Fix & Re-enable Connection'}</span>
+            </button>
+          )}
+        </div>
       )}
 
       {loading ? (

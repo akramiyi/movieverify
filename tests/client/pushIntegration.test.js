@@ -34,6 +34,7 @@ import {
   resetFirebaseClient,
   isInAppBrowser,
   getLastFcmError,
+  repairPushRegistration,
 } from '../../src/services/firebaseClient.js';
 
 test('1. Firebase Web Initialization Suite', async (t) => {
@@ -413,5 +414,69 @@ test('16. In-App Browser & Service Worker Token Resilience Suite', async (t) => 
   await t.test('resetFirebaseClient clears lastFcmError state safely', () => {
     resetFirebaseClient();
     assert.equal(getLastFcmError(), null, 'lastFcmError must be null after reset');
+  });
+});
+
+test('17. Push Service Error Self-Healing & Repair Suite', async (t) => {
+  const firebaseClientSrc = fs.readFileSync(path.resolve('src/services/firebaseClient.js'), 'utf8');
+  const hookSrc = fs.readFileSync(path.resolve('src/hooks/usePushNotifications.js'), 'utf8');
+  const prefSrc = fs.readFileSync(path.resolve('src/components/NotificationPreferences.jsx'), 'utf8');
+
+  await t.test('repairPushRegistration is exported and callable', () => {
+    assert.equal(typeof repairPushRegistration, 'function', 'repairPushRegistration must be an exported function');
+  });
+
+  await t.test('firebaseClient implements secondary scope unregistration and stale subscription healing', () => {
+    assert.match(
+      firebaseClientSrc,
+      /firebase-cloud-messaging-push-scope/,
+      'Must detect and unregister conflicting secondary push scopes'
+    );
+    assert.match(
+      firebaseClientSrc,
+      /existingSub\.unsubscribe/,
+      'Must heal push service errors by unsubscribing stale subscription'
+    );
+    assert.match(
+      firebaseClientSrc,
+      /attempt\s*<=\s*3/,
+      'Must support up to 3 self-healing retry attempts with backoff'
+    );
+  });
+
+  await t.test('usePushNotifications translates push service error and exposes repairPush', () => {
+    assert.match(
+      hookSrc,
+      /push service error/,
+      'Must detect push service error in lastErr message'
+    );
+    assert.match(
+      hookSrc,
+      /repairPush\s*=\s*useCallback/,
+      'Must define repairPush callback'
+    );
+    assert.match(
+      hookSrc,
+      /repairPush,/,
+      'Must return repairPush in hook result'
+    );
+  });
+
+  await t.test('NotificationPreferences wires handleRepairPush and renders Fix Connection button', () => {
+    assert.match(
+      prefSrc,
+      /repairPush,/,
+      'Must destructure repairPush from usePushNotifications'
+    );
+    assert.match(
+      prefSrc,
+      /handleRepairPush/,
+      'Must implement handleRepairPush handler'
+    );
+    assert.match(
+      prefSrc,
+      /Fix & Re-enable Connection/,
+      'Must render Fix & Re-enable Connection button on push service error'
+    );
   });
 });
