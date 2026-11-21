@@ -3,12 +3,16 @@ import { supabase } from '../data/supabaseClient';
 import staticDownloadLinks from '../data/downloadLinks';
 import { movies as localMovies } from '../data/movies';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
+const API_URL = (typeof window !== 'undefined' && window.location.origin)
+  ? ''
+  : (import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com');
 const BASE_URL = `${API_URL}/api/tmdb`;
 // Support optional Backend/Cloudflare Image Proxy or direct TMDB CDN
-const IMG_BASE = import.meta.env.VITE_USE_IMAGE_PROXY === 'true'
-  ? `${API_URL}/api/image`
-  : 'https://image.tmdb.org/t/p';
+const IMG_BASE = (import.meta.env.VITE_USE_IMAGE_PROXY === 'true' && typeof window !== 'undefined' && window.location.origin)
+  ? '/api/image'
+  : (import.meta.env.VITE_USE_IMAGE_PROXY === 'true'
+    ? `${API_URL}/api/image`
+    : 'https://image.tmdb.org/t/p');
 
 const GENRE_MAP = {
   28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
@@ -106,16 +110,20 @@ export const formatMovie = (m) => {
   const title = m.title || m.name || 'Untitled';
 
   const poster = m.poster_path
-    ? `${IMG_BASE}/w342${m.poster_path}`
+    ? `${IMG_BASE}/w500${m.poster_path}`
+    : null;
+
+  const original_poster = m.poster_path
+    ? `${IMG_BASE}/w780${m.poster_path}`
     : null;
 
   const backdrop = m.backdrop_path
     ? `${IMG_BASE}/w1280${m.backdrop_path}`
-    : null;
+    : (m.poster_path ? `${IMG_BASE}/w780${m.poster_path}` : null);
 
   const original_backdrop = m.backdrop_path
-    ? `${IMG_BASE}/w1280${m.backdrop_path}`
-    : null;
+    ? `${IMG_BASE}/original${m.backdrop_path}`
+    : (m.poster_path ? `${IMG_BASE}/original${m.poster_path}` : null);
 
   const year =
     m.release_date?.slice(0, 4) ||
@@ -162,6 +170,7 @@ export const formatMovie = (m) => {
     id,
     title,
     poster,
+    original_poster,
     backdrop,
     original_backdrop,
     year,
@@ -727,7 +736,14 @@ export const searchTMDB = async (query) => {
 
   } catch (error) {
     console.error('TMDB search request failed:', error);
-    return [];
+    // Graceful catalog fallback if TMDB network fails
+    const q = query.toLowerCase().trim();
+    const localMatches = localMovies.filter(m =>
+      (m.title && m.title.toLowerCase().includes(q)) ||
+      (m.description && m.description.toLowerCase().includes(q)) ||
+      (m.genre && m.genre.toLowerCase().includes(q))
+    ).map(formatMovie);
+    return prioritizeDownloads(localMatches);
   }
 };
 
@@ -1009,6 +1025,60 @@ export const fetchMovieOrTVById = async (id, requestedType = null) => {
   };
 };
 
+// Curated resilient upcoming fallback releases if TMDB network fails
+const FALLBACK_UPCOMING_RADAR = [
+  {
+    id: 1144947,
+    title: 'Toxic: A Fairy Tale for Grown-ups',
+    release_date: '2025-04-10',
+    poster_path: '/g7n6Yk0d0uD3j2xGzV1qO1zW4rK.jpg',
+    backdrop_path: '/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg',
+    original_lang_code: 'kn',
+    release_category: 'south_movie',
+    industry_name: 'South Indian',
+    resolved_media_type: 'movie',
+    overview: 'An action-packed journey starring Yash directed by Geetu Mohandas.'
+  },
+  {
+    id: 1184918,
+    title: 'War 2',
+    release_date: '2025-08-14',
+    poster_path: '/x4GkUo292v1m1F8c983kI7eX.jpg',
+    backdrop_path: '/4fLZUr1e65hKPPVw0R3PmKFKxj1.jpg',
+    original_lang_code: 'hi',
+    release_category: 'bollywood_movie',
+    industry_name: 'Bollywood',
+    resolved_media_type: 'movie',
+    overview: 'The YRF Spy Universe returns with Major Kabir Dhaliwal and an epic showdown.'
+  },
+  {
+    id: 1072790,
+    title: 'Panchayat - Season 4',
+    release_date: '2025-05-15',
+    poster_path: '/7mGg23M7U3O8mJ1yNq7rO.jpg',
+    backdrop_path: '/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg',
+    original_lang_code: 'hi',
+    release_category: 'hindi_series',
+    industry_name: 'Hindi Web Series',
+    resolved_media_type: 'tv',
+    target_season: 4,
+    season_name: 'Season 4',
+    overview: 'Abhishek Tripathi navigates elections and Phulera politics in the much-awaited Season 4.'
+  },
+  {
+    id: 8358,
+    title: 'Avatar: Fire and Ash',
+    release_date: '2025-12-19',
+    poster_path: '/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg',
+    backdrop_path: '/4fLZUr1e65hKPPVw0R3PmKFKxj1.jpg',
+    original_lang_code: 'en',
+    release_category: 'hollywood_movie',
+    industry_name: 'Hollywood',
+    resolved_media_type: 'movie',
+    overview: 'Jake Sully and Neytiri encounter the Ash People, a volcanic clan of Na\'vi.'
+  }
+];
+
 // Auto-Scanner: Fetch upcoming South, Bollywood, Hollywood movies, and Web Series releases from TMDB
 export const fetchUpcomingReleases = async () => {
   const today = new Date().toISOString().split('T')[0];
@@ -1088,8 +1158,10 @@ export const fetchUpcomingReleases = async () => {
                 }
 
                 // Resolve web series: returning seasons (e.g. Panchayat Season 5) + new series debuts while filtering daily soaps
+                // Cap returning TV inspection to top 6 to prevent network storms
+                const tvCandidates = data.results.slice(0, 6);
                 const resolvedTvItems = await Promise.all(
-                  data.results.map(async (item) => {
+                  tvCandidates.map(async (item) => {
                     // Case 1: Brand new web series premiering in the 90-day radar window
                     if (item.first_air_date && item.first_air_date >= today) {
                       return {
@@ -1179,8 +1251,10 @@ export const fetchUpcomingReleases = async () => {
       }
     }
 
-    const settled = await Promise.all(promises);
-    const flat = settled.flat();
+    const settled = await Promise.allSettled(promises);
+    const flat = settled
+      .filter((r) => r.status === 'fulfilled' && Array.isArray(r.value))
+      .flatMap((r) => r.value);
     const seen = new Set();
     const unique = [];
 
@@ -1213,7 +1287,7 @@ export const fetchUpcomingReleases = async () => {
           mediaType: item.resolved_media_type,
           poster_path: item.poster_path || null,
           backdrop_path: item.backdrop_path || null,
-          poster: formatted.poster || (item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : null),
+          poster: formatted.poster || (item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null),
           backdrop: formatted.backdrop || (item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : null),
           overview: item.overview || formatted.description || '',
           vote_average: item.vote_average ?? 0,
@@ -1221,11 +1295,28 @@ export const fetchUpcomingReleases = async () => {
       }
     }
 
+    // If live queries returned zero (e.g. rate limit, offline), use resilient curated fallbacks
+    if (unique.length === 0) {
+      FALLBACK_UPCOMING_RADAR.forEach((fb) => {
+        const formatted = formatMovie(fb);
+        unique.push({
+          ...fb,
+          ...formatted,
+          poster: formatted.poster,
+          backdrop: formatted.backdrop,
+          original_backdrop: formatted.original_backdrop
+        });
+      });
+    }
+
     // Sort by release date ascending (nearest release first)
     return unique.sort((a, b) => new Date(a.release_date) - new Date(b.release_date));
   } catch (err) {
     console.error('fetchUpcomingReleases error:', err);
-    return [];
+    return FALLBACK_UPCOMING_RADAR.map(fb => ({
+      ...fb,
+      ...formatMovie(fb)
+    }));
   }
 };
 

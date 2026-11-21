@@ -70,19 +70,16 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  // Preload next movie's backdrop and poster to eliminate blank box / image pop flash
+  // Preload next movie's high-res backdrop and poster to eliminate blank box / image pop flash
   useEffect(() => {
     if (totalMovies <= 1) return;
     const nextIdx = (safeIndex + 1) % totalMovies;
     const nextItem = movies[nextIdx];
     if (nextItem) {
-      if (nextItem.backdrop) {
+      const bannerSrc = nextItem.original_backdrop || nextItem.backdrop || nextItem.original_poster || nextItem.poster;
+      if (bannerSrc) {
         const img = new Image();
-        img.src = nextItem.backdrop;
-      }
-      if (nextItem.poster) {
-        const posterImg = new Image();
-        posterImg.src = nextItem.poster;
+        img.src = bannerSrc;
       }
     }
   }, [safeIndex, totalMovies, movies]);
@@ -176,8 +173,8 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
           >
             <ImageWithFallback 
               className="w-full h-full object-cover object-center"
-              src={currentMovie.backdrop}
-              backdropSrc={currentMovie.poster}
+              src={currentMovie.original_backdrop || currentMovie.backdrop || currentMovie.original_poster || currentMovie.poster}
+              backdropSrc={currentMovie.backdrop || currentMovie.original_poster || currentMovie.poster}
               alt={currentMovie.title}
               lazy={false}
               priority={true}

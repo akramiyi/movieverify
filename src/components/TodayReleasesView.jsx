@@ -43,7 +43,20 @@ export default function TodayReleasesView({ onRequireAuth }) {
     setLoading(true);
     try {
       const data = await fetchUpcomingReleases();
-      setReleases(data || []);
+      const list = data || [];
+      setReleases(list);
+
+      // Smart filter: if there are releases today, show 'today', otherwise default to 'all' so radar is never empty
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const hasToday = list.some((m) => {
+        const itemDate = new Date(m.release_date + 'T00:00:00');
+        const diffDays = Math.ceil((itemDate - today) / (1000 * 60 * 60 * 24));
+        return diffDays <= 0 || m.release_date === todayStr;
+      });
+      if (!hasToday && list.length > 0) {
+        setTimeFilter('all');
+      }
     } catch (err) {
       console.warn('Failed to load upcoming releases for user view:', err.message);
     } finally {

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Coffee } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
+const API_URL = (typeof window !== 'undefined' && window.location.origin)
+  ? ''
+  : (import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com');
 
 const SupportSection = () => {
   const [selectedAmount, setSelectedAmount] = useState(10);

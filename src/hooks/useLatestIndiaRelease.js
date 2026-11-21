@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { formatMovie, fetchHomeFeed } from './useTMDB';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
+const API_URL = (typeof window !== 'undefined' && window.location.origin)
+  ? ''
+  : (import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com');
 const BASE_URL = `${API_URL}/api/tmdb`;
 const ROTATION_DAYS = 7;
 

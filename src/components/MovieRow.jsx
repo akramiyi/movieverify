@@ -2,20 +2,24 @@ import React, { useState, useRef, useEffect } from 'react';
 import MovieCard from './MovieCard';
 import SkeletonCard from './SkeletonCard';
 
-const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyList, onSeeAll }) => {
+const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyList, onSeeAll, priority = false }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [multiplier, setMultiplier] = useState(2);
   const rowRef = useRef(null);
-  const [isInView, setIsInView] = useState(true);
+  const [hasEnteredView, setHasEnteredView] = useState(priority);
+  const [isInView, setIsInView] = useState(priority);
 
-  // Performance: Only run continuous marquee animation when row is visible in viewport
+  // Performance: Lazy-load row assets & pause off-screen marquees
   useEffect(() => {
     if (!rowRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasEnteredView(true);
+        }
         setIsInView(entry.isIntersecting);
       },
-      { root: null, rootMargin: '300px 0px 300px 0px', threshold: 0 }
+      { root: null, rootMargin: '350px 0px 350px 0px', threshold: 0 }
     );
     observer.observe(rowRef.current);
     return () => observer.disconnect();
@@ -102,6 +106,8 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
                   myList={myList}
                   onToggleMyList={onToggleMyList}
                   index={idx}
+                  rowInView={hasEnteredView}
+                  isRowPriority={priority}
                 />
               </div>
             ))

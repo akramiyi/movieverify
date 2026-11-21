@@ -10,13 +10,13 @@ const getMatchPercent = (rating) => {
   return isNaN(num) ? 'N/A' : `${Math.round(num * 10)}%`;
 };
 
-const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100 }) => {
+const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100, rowInView = true, isRowPriority = false }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [cardPos, setCardPos] = useState(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const cardRef = useRef(null);
   const isNearViewport = useViewportIntersection(cardRef);
-  const shouldLoad = isNearViewport || index < 6;
+  const shouldLoad = rowInView && (isNearViewport || (isRowPriority && index < 5));
   
   const isAddedToList = myList.some((m) => m.id === movie.id);
 

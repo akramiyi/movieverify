@@ -1051,6 +1051,7 @@ function App() {
                     </div>
                   ) : (
                     <MovieRow
+                      priority={true}
                       title={
                         <span className="flex items-center gap-2">
                           Download Available
@@ -1099,6 +1100,7 @@ function App() {
                 {/* Trending Now (Home, Movies, Popular) */}
                 {(activeTab === 'home' || activeTab === 'movies' || activeTab === 'popular') && (
                   <MovieRow
+                    priority={true}
                     title={activeTab === 'popular' ? 'Top 10 Trending Now' : 'Trending Now'}
                     movies={displayTrending}
                     onMovieClick={handleMovieSelect}

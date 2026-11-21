@@ -1,20 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ActorMovieCard from './ActorMovieCard';
 
-const ActorsRow = ({ title, actors, onActorSelect, onSeeAll }) => {
+const ActorsRow = ({ title, actors, onActorSelect, onSeeAll, priority = false }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [multiplier, setMultiplier] = useState(2);
   const rowRef = useRef(null);
-  const [isInView, setIsInView] = useState(true);
+  const [hasEnteredView, setHasEnteredView] = useState(priority);
+  const [isInView, setIsInView] = useState(priority);
 
-  // Performance: Only run marquee animation when row is visible in viewport
+  // Performance: Only run marquee animation and load actors when row is near viewport
   useEffect(() => {
     if (!rowRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasEnteredView(true);
+        }
         setIsInView(entry.isIntersecting);
       },
-      { root: null, rootMargin: '300px 0px 300px 0px', threshold: 0 }
+      { root: null, rootMargin: '350px 0px 350px 0px', threshold: 0 }
     );
     observer.observe(rowRef.current);
     return () => observer.disconnect();
@@ -72,13 +76,19 @@ const ActorsRow = ({ title, actors, onActorSelect, onSeeAll }) => {
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
-          {marqueeActors.map((actor, index) => (
-            <ActorMovieCard
-              key={`${actor.id}-${index}`}
-              actor={actor}
-              onActorClick={onActorSelect}
-            />
-          ))}
+          {!hasEnteredView ? (
+            Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className="flex-none w-[100px] md:w-[150px] aspect-[2/3] rounded-lg bg-[#222] animate-pulse" />
+            ))
+          ) : (
+            marqueeActors.map((actor, index) => (
+              <ActorMovieCard
+                key={`${actor.id}-${index}`}
+                actor={actor}
+                onActorClick={onActorSelect}
+              />
+            ))
+          )}
         </div>
       </div>
     </div>

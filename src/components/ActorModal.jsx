@@ -5,7 +5,9 @@ import { useSubscriptions } from '../hooks/useSubscriptions';
 import { formatMovie } from '../hooks/useTMDB';
 import useScrollLock from '../hooks/useScrollLock';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com';
+const API_URL = (typeof window !== 'undefined' && window.location.origin)
+  ? ''
+  : (import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com');
 const BASE_URL = `${API_URL}/api/tmdb`;
 
 const ActorModal = ({ actor, isOpen, onClose, onMovieClick }) => {
