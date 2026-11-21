@@ -15,8 +15,6 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100, r
   const [cardPos, setCardPos] = useState(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const cardRef = useRef(null);
-  const isNearViewport = useViewportIntersection(cardRef);
-  const shouldLoad = rowInView && (index < 5 || isNearViewport);
   
   const isAddedToList = myList.some((m) => m.id === movie.id);
 
@@ -88,9 +86,8 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100, r
           src={movie.poster}
           backdropSrc={movie.backdrop}
           alt={movie.title}
-          lazy={index >= 4}
-          priority={index < 4}
-          shouldLoad={shouldLoad}
+          lazy={!isRowPriority && index >= 4}
+          priority={isRowPriority || index < 4}
           onLoad={() => setImageLoaded(true)}
           className={`w-full h-full object-cover object-top rounded-md transition-opacity duration-300 z-10 relative ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         />

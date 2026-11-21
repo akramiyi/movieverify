@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DEFAULT_POSTER } from '../hooks/useTMDB';
 
 const ImageWithFallback = ({
@@ -26,6 +26,13 @@ const ImageWithFallback = ({
     currentSrc = DEFAULT_POSTER;
   }
 
+  // Trigger onLoad immediately for inline SVG data URI to unblock parent skeletons
+  useEffect(() => {
+    if (currentSrc && currentSrc.startsWith('data:') && onLoad) {
+      onLoad();
+    }
+  }, [currentSrc, onLoad]);
+
   // Generate responsive srcSet for image proxy/TMDB images
   const getSrcSet = (url) => {
     if (!url || typeof url !== 'string' || url.startsWith('data:') || !url.includes('/w500/')) {
@@ -38,18 +45,6 @@ const ImageWithFallback = ({
 
   const srcSet = getSrcSet(currentSrc);
   const sizes = srcSet ? '(max-width: 640px) 120px, (max-width: 1024px) 180px, 240px' : undefined;
-
-  // Defer image download until card is scrolled near viewport
-  if (!shouldLoad && !priority) {
-    return (
-      <div 
-        className={`${className || ''} bg-[#1a1a1a]`} 
-        style={style} 
-        onClick={onClick}
-        {...props}
-      />
-    );
-  }
 
   return (
     <img

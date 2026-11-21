@@ -792,11 +792,12 @@ function App() {
   useEffect(() => {
     if (displayFeatured && displayFeatured.length > 0) {
       displayFeatured.slice(0, 2).forEach((item) => {
-        if (item.backdrop && !document.querySelector(`link[href="${item.backdrop}"]`)) {
+        const backdropUrl = item.original_backdrop || item.backdrop;
+        if (backdropUrl && !document.querySelector(`link[href="${backdropUrl}"]`)) {
           const link = document.createElement('link');
           link.rel = 'preload';
           link.as = 'image';
-          link.href = item.backdrop;
+          link.href = backdropUrl;
           document.head.appendChild(link);
         }
       });
