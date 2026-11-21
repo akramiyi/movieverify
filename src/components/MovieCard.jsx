@@ -16,7 +16,7 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100, r
   const [imageLoaded, setImageLoaded] = useState(false);
   const cardRef = useRef(null);
   const isNearViewport = useViewportIntersection(cardRef);
-  const shouldLoad = rowInView && (isNearViewport || (isRowPriority && index < 5));
+  const shouldLoad = rowInView && (index < 5 || isNearViewport);
   
   const isAddedToList = myList.some((m) => m.id === movie.id);
 

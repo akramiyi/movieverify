@@ -1,45 +1,49 @@
-import React, { useState, useEffect } from 'react';
-import { imageManager } from '../utils/imageManager';
+import React, { useState } from 'react';
+import { DEFAULT_POSTER } from '../hooks/useTMDB';
 
-const ImageWithFallback = ({ src, backdropSrc, alt, className, style, onClick, lazy = true, shouldLoad = true, priority = false, ...props }) => {
+const ImageWithFallback = ({
+  src,
+  backdropSrc,
+  alt,
+  className,
+  style,
+  onClick,
+  lazy = true,
+  shouldLoad = true,
+  priority = false,
+  onLoad,
+  ...props
+}) => {
   const [errorLevel, setErrorLevel] = useState(0);
-  const [imageState, setImageState] = useState('NOT_REQUESTED');
 
-  const isFallback = errorLevel >= 2 || (!src && !backdropSrc);
-  const combinedClassName = `${className || ''} ${isFallback ? 'bg-[#1a1a1a]' : ''}`.trim();
-
-  const currentSrc = errorLevel === 0 && src ? src : backdropSrc;
-
-  useEffect(() => {
-    if (shouldLoad && currentSrc) {
-      return imageManager.subscribe(currentSrc, (state) => {
-        setImageState(state);
-      });
-    }
-  }, [shouldLoad, currentSrc]);
-
-  useEffect(() => {
-    if (shouldLoad && currentSrc) {
-      imageManager.requestImage(currentSrc);
-    }
-  }, [shouldLoad, currentSrc]);
-
-  if (isFallback) {
-    return (
-      <div 
-        className={combinedClassName} 
-        style={style} 
-        onClick={onClick}
-        {...props}
-      />
-    );
+  // Fallback progression: src -> backdropSrc -> DEFAULT_POSTER (guarantees no grey boxes)
+  let currentSrc = DEFAULT_POSTER;
+  if (errorLevel === 0) {
+    currentSrc = src || backdropSrc || DEFAULT_POSTER;
+  } else if (errorLevel === 1) {
+    currentSrc = (backdropSrc && backdropSrc !== src) ? backdropSrc : DEFAULT_POSTER;
+  } else {
+    currentSrc = DEFAULT_POSTER;
   }
 
-  // If not supposed to load yet and not globally loaded, show placeholder structure
-  if (!shouldLoad && imageState !== 'LOADED') {
+  // Generate responsive srcSet for image proxy/TMDB images
+  const getSrcSet = (url) => {
+    if (!url || typeof url !== 'string' || url.startsWith('data:') || !url.includes('/w500/')) {
+      return undefined;
+    }
+    const w342Url = url.replace('/w500/', '/w342/');
+    const w780Url = url.replace('/w500/', '/w780/');
+    return `${w342Url} 342w, ${url} 500w, ${w780Url} 780w`;
+  };
+
+  const srcSet = getSrcSet(currentSrc);
+  const sizes = srcSet ? '(max-width: 640px) 120px, (max-width: 1024px) 180px, 240px' : undefined;
+
+  // Defer image download until card is scrolled near viewport
+  if (!shouldLoad && !priority) {
     return (
       <div 
-        className={combinedClassName} 
+        className={`${className || ''} bg-[#1a1a1a]`} 
         style={style} 
         onClick={onClick}
         {...props}
@@ -50,16 +54,24 @@ const ImageWithFallback = ({ src, backdropSrc, alt, className, style, onClick, l
   return (
     <img
       src={currentSrc}
-      alt={alt}
-      className={combinedClassName}
+      srcSet={srcSet}
+      sizes={sizes}
+      alt={alt || 'Movie'}
+      className={className}
       style={style}
       onClick={onClick}
       loading={lazy && !priority ? "lazy" : "eager"}
-      decoding={lazy && !priority ? "async" : "auto"}
+      decoding="async"
       fetchpriority={priority ? "high" : "auto"}
+      onLoad={(e) => {
+        if (onLoad) onLoad(e);
+      }}
       onError={() => {
-        if (errorLevel < 2) {
-          setErrorLevel(prev => prev + 1);
+        if (errorLevel === 0 && backdropSrc && backdropSrc !== src) {
+          setErrorLevel(1);
+        } else if (errorLevel < 2) {
+          setErrorLevel(2);
+          if (onLoad) onLoad(); // unblock parent skeleton so crisp fallback is visible
         }
       }}
       {...props}

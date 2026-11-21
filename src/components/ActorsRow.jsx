@@ -32,7 +32,7 @@ const ActorsRow = ({ title, actors, onActorSelect, onSeeAll, priority = false })
       const viewportWidth = window.innerWidth;
       
       const minSets = Math.max(1, Math.ceil(viewportWidth / singleSetWidth));
-      setMultiplier(minSets * 2);
+      setMultiplier(Math.min(2, minSets * 2));
     };
     
     updateMultiplier();

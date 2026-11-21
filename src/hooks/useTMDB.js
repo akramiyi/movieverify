@@ -7,12 +7,15 @@ const API_URL = (typeof window !== 'undefined' && window.location.origin)
   ? ''
   : (import.meta.env.VITE_API_URL || 'https://movieverify-backend.onrender.com');
 const BASE_URL = `${API_URL}/api/tmdb`;
-// Support optional Backend/Cloudflare Image Proxy or direct TMDB CDN
-const IMG_BASE = (import.meta.env.VITE_USE_IMAGE_PROXY === 'true' && typeof window !== 'undefined' && window.location.origin)
+// Robust, high-speed Image Proxy via Cloudflare Edge / Backend or direct TMDB CDN
+export const IMG_BASE = (typeof window !== 'undefined' && window.location.origin && import.meta.env.VITE_USE_IMAGE_PROXY !== 'false')
   ? '/api/image'
   : (import.meta.env.VITE_USE_IMAGE_PROXY === 'true'
     ? `${API_URL}/api/image`
     : 'https://image.tmdb.org/t/p');
+
+// Crisp, zero-latency vector placeholder for movies without TMDB posters (guarantees no grey boxes)
+export const DEFAULT_POSTER = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20300%20450%22%20width%3D%22300%22%20height%3D%22450%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23262626%22%2F%3E%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%23141414%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22300%22%20height%3D%22450%22%20fill%3D%22url(%23g)%22%2F%3E%3Crect%20x%3D%2218%22%20y%3D%2218%22%20width%3D%22264%22%20height%3D%22414%22%20rx%3D%2212%22%20fill%3D%22none%22%20stroke%3D%22%23383838%22%20stroke-width%3D%222%22%20stroke-dasharray%3D%226%2C6%22%2F%3E%3Ccircle%20cx%3D%22150%22%20cy%3D%22190%22%20r%3D%2246%22%20fill%3D%22%23E50914%22%20fill-opacity%3D%220.15%22%2F%3E%3Ccircle%20cx%3D%22150%22%20cy%3D%22190%22%20r%3D%2234%22%20fill%3D%22none%22%20stroke%3D%22%23E50914%22%20stroke-width%3D%223%22%2F%3E%3Ccircle%20cx%3D%22150%22%20cy%3D%22190%22%20r%3D%2212%22%20fill%3D%22%23E50914%22%2F%3E%3Ccircle%20cx%3D%22150%22%20cy%3D%22165%22%20r%3D%225%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%22175%22%20cy%3D%22190%22%20r%3D%225%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%22150%22%20cy%3D%22215%22%20r%3D%225%22%20fill%3D%22%23fff%22%2F%3E%3Ccircle%20cx%3D%22125%22%20cy%3D%22190%22%20r%3D%225%22%20fill%3D%22%23fff%22%2F%3E%3Ctext%20x%3D%22150%22%20y%3D%22275%22%20text-anchor%3D%22middle%22%20fill%3D%22%23FFFFFF%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2218%22%20font-weight%3D%22800%22%20letter-spacing%3D%222%22%3EMOVIEX%3C%2Ftext%3E%3Ctext%20x%3D%22150%22%20y%3D%22300%22%20text-anchor%3D%22middle%22%20fill%3D%22%23888888%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2212%22%20font-weight%3D%22500%22%3EPOSTER%20PENDING%3C%2Ftext%3E%3C%2Fsvg%3E";
 
 const GENRE_MAP = {
   28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
@@ -109,21 +112,26 @@ export const formatMovie = (m) => {
   const id = m.id;
   const title = m.title || m.name || 'Untitled';
 
-  const poster = m.poster_path
+  const rawPoster = m.poster_path
     ? `${IMG_BASE}/w500${m.poster_path}`
-    : null;
+    : (m.poster || null);
+
+  const rawBackdrop = m.backdrop_path
+    ? `${IMG_BASE}/w1280${m.backdrop_path}`
+    : (m.backdrop || (m.poster_path ? `${IMG_BASE}/w780${m.poster_path}` : null));
+
+  // High-reliability poster fallback chain: poster_path -> m.poster -> backdrop -> DEFAULT_POSTER
+  const poster = rawPoster || (m.backdrop_path ? `${IMG_BASE}/w500${m.backdrop_path}` : null) || rawBackdrop || DEFAULT_POSTER;
 
   const original_poster = m.poster_path
     ? `${IMG_BASE}/w780${m.poster_path}`
-    : null;
+    : (m.poster || poster);
 
-  const backdrop = m.backdrop_path
-    ? `${IMG_BASE}/w1280${m.backdrop_path}`
-    : (m.poster_path ? `${IMG_BASE}/w780${m.poster_path}` : null);
+  const backdrop = rawBackdrop || (rawPoster ? `${IMG_BASE}/w1280${m.poster_path || ''}` : null) || null;
 
   const original_backdrop = m.backdrop_path
     ? `${IMG_BASE}/original${m.backdrop_path}`
-    : (m.poster_path ? `${IMG_BASE}/original${m.poster_path}` : null);
+    : (m.backdrop || (m.poster_path ? `${IMG_BASE}/original${m.poster_path}` : backdrop));
 
   const year =
     m.release_date?.slice(0, 4) ||
@@ -346,37 +354,18 @@ const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
     }
   }
 
-  // Guard: Cap external individual metadata fetches to at most 6 to prevent N+1 network storms on homepage
-  const cappedBatch = idsToFetch.slice(0, 6);
-
-  if (cappedBatch.length > 0) {
-    const batchResults = await Promise.all(
-      cappedBatch.map(async (idStr) => {
-        const parsedId = parseInt(idStr.split('-')[0], 10);
-        const mediaType = idStr.includes('-tv')
-          ? 'tv'
-          : (idStr.includes('-movie')
-            ? 'movie'
-            : getMediaTypeFromId(parsedId));
-
-        if (!mediaType) {
-          return null;
-        }
-
-        try {
-          let item = await fetchTMDB(`/${mediaType}/${parsedId}`);
-          if (item) {
-            item.media_type = mediaType;
-            return formatMovie(item);
-          }
-        } catch (e) {
-          console.warn(`Failed to fetch metadata for TMDB ID: ${parsedId} (${mediaType})`, e.message);
-        }
-        return null;
-      })
-    );
-
-    results.push(...batchResults.filter(Boolean));
+  // Eliminate N+1 requests on initial home feed: resolve remaining IDs locally from activeLinks/catalog
+  for (const idStr of idsToFetch) {
+    const parsedId = parseInt(idStr.split('-')[0], 10);
+    const link = activeLinks[idStr] || activeLinks[parsedId];
+    if (link) {
+      results.push(formatMovie({
+        id: parsedId,
+        title: link.title || `Movie ${parsedId}`,
+        overview: link.description || '',
+        media_type: idStr.includes('-tv') ? 'tv' : 'movie'
+      }));
+    }
   }
 
   return results;

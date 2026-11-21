@@ -36,7 +36,7 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
       // Therefore, the multiplier must be EVEN.
       // And 50% of the container (minSets) must be >= viewport width so it doesn't show empty space.
       const minSets = Math.max(1, Math.ceil(viewportWidth / singleSetWidth));
-      setMultiplier(minSets * 2);
+      setMultiplier(Math.min(2, minSets * 2));
     };
     
     updateMultiplier();
