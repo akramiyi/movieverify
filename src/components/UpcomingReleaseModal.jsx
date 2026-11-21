@@ -50,7 +50,7 @@ export default function UpcomingReleaseModal({
   });
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isPlayingTrailer, setIsPlayingTrailer] = useState(false);
-  const [videoSource, setVideoSource] = useState('youtube');
+  const [videoSource, setVideoSource] = useState('piped');
   const [subscribing, setSubscribing] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
 
@@ -87,10 +87,12 @@ export default function UpcomingReleaseModal({
     } catch {}
   };
 
+  const isPakistaniOrRestricted = item?.original_lang_code === 'ur' || item?.release_category === 'turkish_pakistani_drama';
+
   useEffect(() => {
     if (!isOpen || !item) {
       setIsPlayingTrailer(false);
-      setVideoSource('youtube');
+      setVideoSource(isPakistaniOrRestricted ? 'piped' : 'youtube');
       return;
     }
 
@@ -175,11 +177,11 @@ export default function UpcomingReleaseModal({
               <iframe
                 key={videoSource}
                 src={
-                  videoSource === 'youtube'
-                    ? `https://www.youtube-nocookie.com/embed/${youtubeKey}?autoplay=1&rel=0`
-                    : videoSource === 'global_mirror'
-                    ? `https://inv.nadeko.net/embed/${youtubeKey}?autoplay=1`
-                    : `https://yewtu.be/embed/${youtubeKey}?autoplay=1`
+                  videoSource === 'piped'
+                    ? `https://piped.video/embed/${youtubeKey}`
+                    : videoSource === 'yewtube'
+                    ? `https://yewtu.be/embed/${youtubeKey}?autoplay=1`
+                    : `https://www.youtube-nocookie.com/embed/${youtubeKey}?autoplay=1&rel=0`
                 }
                 title={`${item.title} Trailer`}
                 className="w-full h-full border-0"
@@ -188,12 +190,12 @@ export default function UpcomingReleaseModal({
               />
 
               {/* Overlaid Top Controls */}
-              <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5 pointer-events-auto z-20">
+              <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5 pointer-events-auto z-20 flex-wrap">
                 <button
                   type="button"
                   onClick={() => {
                     setIsPlayingTrailer(false);
-                    setVideoSource('youtube');
+                    setVideoSource(isPakistaniOrRestricted ? 'piped' : 'youtube');
                   }}
                   className="px-2.5 py-1 rounded-full bg-black/80 hover:bg-black text-white text-[11px] font-semibold backdrop-blur-md border border-white/20 flex items-center gap-1 shadow-lg transition cursor-pointer"
                 >
@@ -201,61 +203,61 @@ export default function UpcomingReleaseModal({
                   <span>Close</span>
                 </button>
 
-                {/* Geo-Bypass & Mirror switcher */}
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setVideoSource((prev) => (prev === 'youtube' ? 'global_mirror' : 'youtube'))}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold backdrop-blur-md border flex items-center gap-1 shadow-lg transition cursor-pointer ${
-                      videoSource !== 'youtube'
-                        ? 'bg-emerald-600 text-white border-emerald-400'
-                        : 'bg-black/80 hover:bg-white/20 text-amber-300 border-amber-500/40'
-                    }`}
-                    title="Bypass YouTube Indian Government geo-blocking using overseas proxy mirror"
-                  >
-                    <Globe className="w-3 h-3" />
-                    <span>{videoSource === 'youtube' ? 'Bypass Geo-Block' : 'Active: Global Mirror'}</span>
-                  </button>
-
-                  <a
-                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(item.title + ' official trailer')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-2 py-1 rounded-full bg-black/80 hover:bg-white/20 text-gray-200 text-[11px] font-semibold backdrop-blur-md border border-white/20 flex items-center gap-1 shadow-lg transition cursor-pointer"
-                    title="Search alternative uploads on YouTube"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    <span className="hidden sm:inline">Search Mirror</span>
-                  </a>
+                {/* Multi-Server Bypass Controls */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="flex items-center bg-black/85 rounded-full p-0.5 border border-white/20 backdrop-blur-md shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => setVideoSource('piped')}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                        videoSource === 'piped'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-emerald-300 hover:text-white'
+                      }`}
+                      title="Server 1: Piped Video Global Proxy (Ultra Fast & No Bot Wall)"
+                    >
+                      <Zap className="w-2.5 h-2.5" />
+                      <span>Server 1 (Bypass)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVideoSource('yewtube')}
+                      className={`px-2 py-1 rounded-full text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                        videoSource === 'yewtube'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-gray-300 hover:text-white'
+                      }`}
+                      title="Server 2: Yewtube Europe Privacy Server"
+                    >
+                      <Globe className="w-2.5 h-2.5" />
+                      <span>Server 2</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVideoSource('youtube')}
+                      className={`px-2 py-1 rounded-full text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                        videoSource === 'youtube'
+                          ? 'bg-red-600 text-white shadow'
+                          : 'text-gray-300 hover:text-white'
+                      }`}
+                      title="Direct YouTube"
+                    >
+                      <Play className="w-2.5 h-2.5 fill-current" />
+                      <span>YouTube</span>
+                    </button>
+                  </div>
 
                   <a
                     href={`https://www.dailymotion.com/search/${encodeURIComponent(item.title + ' trailer')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-2 py-1 rounded-full bg-black/80 hover:bg-white/20 text-cyan-300 text-[11px] font-semibold backdrop-blur-md border border-cyan-500/30 flex items-center gap-1 shadow-lg transition cursor-pointer"
+                    className="px-2.5 py-1 rounded-full bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 text-[10px] font-bold border border-cyan-500/40 flex items-center gap-1 shadow transition cursor-pointer"
                     title="Watch on Dailymotion (Free & Unblocked in India)"
                   >
                     <span>Dailymotion</span>
                   </a>
                 </div>
               </div>
-
-              {/* Bottom Geo-Block Notification Helper */}
-              {videoSource === 'youtube' && (
-                <div className="absolute bottom-2 left-2.5 right-2.5 bg-black/85 backdrop-blur-md border border-amber-500/40 rounded-xl px-2.5 py-1.5 flex items-center justify-between text-[11px] text-amber-200 pointer-events-auto z-20 shadow-xl">
-                  <span className="flex items-center gap-1.5 truncate mr-2">
-                    <span className="text-sm">⚠️</span>
-                    <span className="truncate">"Video unavailable / Govt order" error? Click <strong>Bypass Geo-Block</strong></span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setVideoSource('global_mirror')}
-                    className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] shrink-0 cursor-pointer shadow transition"
-                  >
-                    Bypass Now
-                  </button>
-                </div>
-              )}
             </div>
           ) : (
             <>
@@ -393,6 +395,55 @@ export default function UpcomingReleaseModal({
               </p>
             </div>
           )}
+
+          {/* Stream & Full Episodes Online Options */}
+          <div className="bg-gradient-to-r from-purple-950/40 via-black/40 to-emerald-950/30 border border-purple-500/30 rounded-2xl p-3.5 space-y-2.5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <span className="text-sm">🎬</span>
+                <span>Watch Online / Stream Full Episodes</span>
+              </span>
+              <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                100% Unblocked
+              </span>
+            </div>
+
+            <p className="text-[11px] text-gray-400 leading-relaxed">
+              Geo-restricted series aur dramas ke full episodes dekhne ke liye direct verified unblocked streams use karein:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              <a
+                href={`https://www.dailymotion.com/search/${encodeURIComponent(item.title + ' full episode')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 hover:text-white text-xs font-bold transition shadow active:scale-95"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Dailymotion HD</span>
+              </a>
+
+              <a
+                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(item.title + ' episode 1 full')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-950/70 hover:bg-red-900 border border-red-500/40 text-red-300 hover:text-white text-xs font-bold transition shadow active:scale-95"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>YouTube Mirrors</span>
+              </a>
+
+              <a
+                href={`https://www.google.com/search?q=${encodeURIComponent(item.title + ' watch full episodes online free')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-gray-200 hover:text-white text-xs font-bold transition shadow active:scale-95"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Google Streams</span>
+              </a>
+            </div>
+          </div>
 
           {/* Conditional Action Card: Admin Dispatcher OR User Subscription Card */}
           {onAutoSchedule ? (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Film, AlertCircle, Globe, ExternalLink } from 'lucide-react';
+import { X, Film, AlertCircle, Globe, ExternalLink, Zap } from 'lucide-react';
 import useScrollLock from '../hooks/useScrollLock';
 
 /**
@@ -14,7 +14,7 @@ function extractYouTubeId(url) {
 }
 
 const TrailerModal = ({ isOpen, onClose, trailerUrl, movieTitle }) => {
-  const [videoSource, setVideoSource] = useState('youtube');
+  const [videoSource, setVideoSource] = useState('piped');
   useScrollLock(isOpen);
 
   // Close modal on Escape key press
@@ -29,7 +29,7 @@ const TrailerModal = ({ isOpen, onClose, trailerUrl, movieTitle }) => {
 
   useEffect(() => {
     if (isOpen) {
-      setVideoSource('youtube');
+      setVideoSource('piped');
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
@@ -40,13 +40,13 @@ const TrailerModal = ({ isOpen, onClose, trailerUrl, movieTitle }) => {
   if (!isOpen) return null;
 
   const ytId = extractYouTubeId(trailerUrl);
-  // Uses youtube-nocookie.com by default, with overseas proxy mirror for geo-blocked Indian govt order videos
+  // Uses piped.video by default for fast, geo-block free streaming without bot walls
   const embedUrl = ytId
-    ? videoSource === 'youtube'
-      ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1&enablejsapi=1`
-      : videoSource === 'global_mirror'
-      ? `https://inv.nadeko.net/embed/${ytId}?autoplay=1`
-      : `https://yewtu.be/embed/${ytId}?autoplay=1`
+    ? videoSource === 'piped'
+      ? `https://piped.video/embed/${ytId}`
+      : videoSource === 'yewtube'
+      ? `https://yewtu.be/embed/${ytId}?autoplay=1`
+      : `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1&enablejsapi=1`
     : null;
 
   return (
@@ -87,40 +87,57 @@ const TrailerModal = ({ isOpen, onClose, trailerUrl, movieTitle }) => {
               </div>
             </div>
 
-            {/* Quick Geo-Bypass & Mirror Actions */}
-            <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
+            {/* Multi-Server Bypass Controls */}
+            <div className="flex items-center gap-1.5 ml-auto flex-wrap">
               {ytId && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => setVideoSource((prev) => (prev === 'youtube' ? 'global_mirror' : 'youtube'))}
-                    className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md border flex items-center gap-1.5 transition cursor-pointer ${
-                      videoSource !== 'youtube'
-                        ? 'bg-emerald-600 text-white border-emerald-400'
-                        : 'bg-white/10 hover:bg-white/20 text-amber-300 border-amber-500/40'
-                    }`}
-                    title="Bypass YouTube Indian Government geo-blocking using overseas proxy mirror"
-                  >
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>{videoSource === 'youtube' ? 'Bypass Geo-Block' : 'Active: Global Mirror'}</span>
-                  </button>
-
-                  <a
-                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent((movieTitle || '') + ' official trailer')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hidden sm:flex px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 text-xs font-semibold border border-white/10 items-center gap-1 transition"
-                    title="Search alternative uploads on YouTube"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    <span>Search Mirror</span>
-                  </a>
+                  <div className="flex items-center bg-black/60 rounded-full p-0.5 border border-white/20 backdrop-blur-md shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => setVideoSource('piped')}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                        videoSource === 'piped'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-emerald-300 hover:text-white'
+                      }`}
+                      title="Server 1: Piped Video Global Proxy (Ultra Fast & No Bot Wall)"
+                    >
+                      <Zap className="w-2.5 h-2.5" />
+                      <span>Server 1 (Bypass)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVideoSource('yewtube')}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                        videoSource === 'yewtube'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-gray-300 hover:text-white'
+                      }`}
+                      title="Server 2: Yewtube Europe Privacy Server"
+                    >
+                      <Globe className="w-2.5 h-2.5" />
+                      <span>Server 2</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVideoSource('youtube')}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                        videoSource === 'youtube'
+                          ? 'bg-red-600 text-white shadow'
+                          : 'text-gray-300 hover:text-white'
+                      }`}
+                      title="Direct YouTube"
+                    >
+                      <Film className="w-2.5 h-2.5" />
+                      <span>YouTube</span>
+                    </button>
+                  </div>
 
                   <a
                     href={`https://www.dailymotion.com/search/${encodeURIComponent((movieTitle || '') + ' trailer')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="hidden sm:flex px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-cyan-300 text-xs font-semibold border border-cyan-500/30 items-center gap-1 transition"
+                    className="hidden sm:flex px-2.5 py-1 rounded-full bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 text-xs font-bold border border-cyan-500/40 items-center gap-1 transition"
                     title="Watch on Dailymotion (Free & Unblocked in India)"
                   >
                     <span>Dailymotion</span>
@@ -156,11 +173,11 @@ const TrailerModal = ({ isOpen, onClose, trailerUrl, movieTitle }) => {
                   <div className="absolute bottom-2 left-3 right-3 bg-black/85 backdrop-blur-md border border-amber-500/40 rounded-xl px-3 py-2 flex items-center justify-between text-[11px] text-amber-200 pointer-events-auto shadow-xl z-20">
                     <span className="flex items-center gap-1.5 truncate mr-2">
                       <span className="text-sm">⚠️</span>
-                      <span className="truncate">"Video unavailable in India / Govt order"? Click <strong>Bypass Geo-Block</strong></span>
+                      <span className="truncate">"Video unavailable in India / Govt order"? Click <strong>Server 1 Bypass</strong></span>
                     </span>
                     <button
                       type="button"
-                      onClick={() => setVideoSource('global_mirror')}
+                      onClick={() => setVideoSource('piped')}
                       className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 cursor-pointer shadow transition"
                     >
                       Bypass Now
