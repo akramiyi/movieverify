@@ -206,6 +206,13 @@ export const DEFAULT_CATEGORY_SETTINGS = Object.freeze({
   hollywood_movie: true,
   hindi_series: true,
   hollywood_series: true,
+  anime: true,
+  korean_drama: true,
+  south_series: true,
+  punjabi_movie: true,
+  animated_family: true,
+  turkish_pakistani_drama: true,
+  documentary: true,
 });
 
 /**
@@ -475,6 +482,55 @@ export async function fetchServerUpcomingReleases(options = {}) {
       cat: 'hollywood_series',
       label: 'Hollywood Series',
       isTv: true,
+    },
+    {
+      endpoint: `/discover/tv?with_original_language=ja&air_date.gte=${today}&air_date.lte=${future}&sort_by=popularity.desc&page=1`,
+      mediaType: 'tv',
+      cat: 'anime',
+      label: 'Anime & Animation',
+      isTv: true,
+    },
+    {
+      endpoint: `/discover/tv?with_original_language=ko&air_date.gte=${today}&air_date.lte=${future}&without_genres=10766,10767,10763,10764&sort_by=popularity.desc&page=1`,
+      mediaType: 'tv',
+      cat: 'korean_drama',
+      label: 'Korean Dramas',
+      isTv: true,
+    },
+    {
+      endpoint: `/discover/tv?with_original_language=te&air_date.gte=${today}&air_date.lte=${future}&without_genres=10766,10767,10763,10764&sort_by=popularity.desc&page=1`,
+      mediaType: 'tv',
+      cat: 'south_series',
+      label: 'South Series',
+      isTv: true,
+    },
+    {
+      endpoint: `/discover/movie?with_original_language=pa&region=IN&primary_release_date.gte=${today}&primary_release_date.lte=${future}&sort_by=primary_release_date.asc&page=1`,
+      mediaType: 'movie',
+      cat: 'punjabi_movie',
+      label: 'Punjabi Movies',
+      isTv: false,
+    },
+    {
+      endpoint: `/discover/movie?with_genres=16&primary_release_date.gte=${today}&primary_release_date.lte=${future}&sort_by=popularity.desc&page=1`,
+      mediaType: 'movie',
+      cat: 'animated_family',
+      label: 'Kids & Family',
+      isTv: false,
+    },
+    {
+      endpoint: `/discover/tv?with_original_language=tr&air_date.gte=${today}&air_date.lte=${future}&sort_by=popularity.desc&page=1`,
+      mediaType: 'tv',
+      cat: 'turkish_pakistani_drama',
+      label: 'Turkish & Pakistani',
+      isTv: true,
+    },
+    {
+      endpoint: `/discover/movie?with_genres=99&primary_release_date.gte=${today}&primary_release_date.lte=${future}&sort_by=popularity.desc&page=1`,
+      mediaType: 'movie',
+      cat: 'documentary',
+      label: 'Documentary',
+      isTv: false,
     },
   ];
 

@@ -1125,6 +1125,65 @@ export const fetchUpcomingReleases = async () => {
       languages: ['en'],
       isTv: true,
     },
+    // 6. Anime & Japanese Animation
+    {
+      category: 'anime',
+      industry: 'Anime',
+      mediaType: 'tv',
+      languages: ['ja'],
+      isTv: true,
+    },
+    // 7. Korean Dramas (K-Drama)
+    {
+      category: 'korean_drama',
+      industry: 'K-Drama',
+      mediaType: 'tv',
+      languages: ['ko'],
+      isTv: true,
+    },
+    // 8. South Indian Web Series
+    {
+      category: 'south_series',
+      industry: 'South Series',
+      mediaType: 'tv',
+      languages: ['te', 'ta'],
+      isTv: true,
+    },
+    // 9. Punjabi Movies (Pollywood)
+    {
+      category: 'punjabi_movie',
+      industry: 'Pollywood',
+      mediaType: 'movie',
+      languages: ['pa'],
+      region: 'IN',
+      isTv: false,
+    },
+    // 10. Kids & Family Animated
+    {
+      category: 'animated_family',
+      industry: 'Animation',
+      mediaType: 'movie',
+      languages: ['en'],
+      withGenres: '16',
+      isTv: false,
+    },
+    // 11. Turkish & Pakistani Dramas
+    {
+      category: 'turkish_pakistani_drama',
+      industry: 'Turkish & Pakistani',
+      mediaType: 'tv',
+      languages: ['tr', 'ur'],
+      isTv: true,
+    },
+    // 12. Documentaries & True Crime
+    {
+      category: 'documentary',
+      industry: 'Documentary',
+      mediaType: 'movie',
+      languages: ['en'],
+      withGenres: '99',
+      isTv: false,
+    },
   ];
 
   try {
@@ -1136,11 +1195,12 @@ export const fetchUpcomingReleases = async () => {
           (async () => {
             try {
               let endpoint = '';
+              const genreParam = q.withGenres ? `&with_genres=${q.withGenres}` : '';
               if (q.isTv) {
                 // Use air_date to detect both brand new debuts and returning series seasons (e.g. Panchayat Season 5)
-                endpoint = `/discover/tv?with_original_language=${lang}&air_date.gte=${today}&air_date.lte=${ninetyDaysFromNow}&without_genres=10766,10767,10763,10764&sort_by=popularity.desc&page=1`;
+                endpoint = `/discover/tv?with_original_language=${lang}&air_date.gte=${today}&air_date.lte=${ninetyDaysFromNow}&without_genres=10766,10767,10763,10764${genreParam}&sort_by=popularity.desc&page=1`;
               } else {
-                endpoint = `/discover/movie?with_original_language=${lang}${q.region ? `&region=${q.region}` : ''}&primary_release_date.gte=${today}&primary_release_date.lte=${ninetyDaysFromNow}&sort_by=popularity.desc&page=1`;
+                endpoint = `/discover/movie?with_original_language=${lang}${q.region ? `&region=${q.region}` : ''}&primary_release_date.gte=${today}&primary_release_date.lte=${ninetyDaysFromNow}${genreParam}&sort_by=popularity.desc&page=1`;
               }
               const data = await fetchTMDB(endpoint);
               if (data && Array.isArray(data.results)) {

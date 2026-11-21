@@ -79,6 +79,13 @@ export const RELEASE_CATEGORIES = [
   { id: 'hollywood_movie', label: 'Hollywood Movies', sub: 'English Cinema', icon: '🎬', color: 'text-blue-400 bg-blue-500/15 border-blue-500/30' },
   { id: 'hindi_series', label: 'Hindi Web Series', sub: 'Indian OTT Series', icon: '📺', color: 'text-purple-400 bg-purple-500/15 border-purple-500/30' },
   { id: 'hollywood_series', label: 'Hollywood Web Series', sub: 'Global OTT Series', icon: '📺', color: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' },
+  { id: 'anime', label: 'Anime & Animation', sub: 'Japanese Anime & Films', icon: '🎌', color: 'text-pink-400 bg-pink-500/15 border-pink-500/30' },
+  { id: 'korean_drama', label: 'Korean Dramas', sub: 'K-Drama & Series', icon: '🫰', color: 'text-violet-400 bg-violet-500/15 border-violet-500/30' },
+  { id: 'south_series', label: 'South Web Series', sub: 'Regional Indian OTT', icon: '📺', color: 'text-lime-400 bg-lime-500/15 border-lime-500/30' },
+  { id: 'punjabi_movie', label: 'Punjabi Movies', sub: 'Pollywood Cinema', icon: '👳', color: 'text-yellow-400 bg-yellow-500/15 border-yellow-500/30' },
+  { id: 'animated_family', label: 'Kids & Family', sub: 'Animated Adventures', icon: '🧸', color: 'text-sky-400 bg-sky-500/15 border-sky-500/30' },
+  { id: 'turkish_pakistani_drama', label: 'Turkish & Pakistani', sub: 'Urdu & Turkish Dramas', icon: '🌙', color: 'text-teal-400 bg-teal-500/15 border-teal-500/30' },
+  { id: 'documentary', label: 'Documentaries', sub: 'True Crime & Biopics', icon: '🕵️', color: 'text-zinc-400 bg-zinc-500/15 border-zinc-500/30' },
 ];
 
 export const INDIAN_LANGUAGES = [
