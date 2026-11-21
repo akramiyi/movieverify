@@ -26,6 +26,7 @@ import ShareButton from './ShareButton';
 import ReviewSection from './ReviewSection';
 import { useSubscriptions } from '../hooks/useSubscriptions';
 import useScrollLock from '../hooks/useScrollLock';
+import TrailerModal from './TrailerModal';
 
 const getMatchPercent = (rating) => {
   const num = parseFloat(rating);
@@ -43,6 +44,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
   const [notifyFeedback, setNotifyFeedback] = useState(null);
   const [downloadingState, setDownloadingState] = useState(null);
   const [isLiked, setIsLiked] = useState(false);
+  const [isTrailerOpen, setIsTrailerOpen] = useState(false);
   const downloadTimerRef = useRef([]);
   const scrollContainerRef = useRef(null);
   const [details, setDetails] = useState({
@@ -78,6 +80,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
     if (!isOpen) {
       clearDownloadTimers();
       setDownloadingState(null);
+      setIsTrailerOpen(false);
     }
   }, [isOpen, movie?.id]);
 
@@ -494,7 +497,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                     {details.trailerUrl && (
                       <button
                         type="button"
-                        onClick={() => window.open(details.trailerUrl, '_blank')}
+                        onClick={() => setIsTrailerOpen(true)}
                         className="flex items-center gap-2 bg-white/20 hover:bg-white/30 active:scale-95 text-white px-5 py-2.5 rounded-lg text-base font-semibold backdrop-blur-md transition border border-white/10 cursor-pointer"
                       >
                         <Play className="w-4 h-4 fill-current" />
@@ -558,7 +561,7 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                     {details.trailerUrl && (
                       <button
                         type="button"
-                        onClick={() => window.open(details.trailerUrl, '_blank')}
+                        onClick={() => setIsTrailerOpen(true)}
                         className="flex-1 flex items-center justify-center gap-2 bg-white/15 hover:bg-white/25 active:scale-[0.99] text-white py-2 px-3 rounded-lg font-semibold text-xs border border-white/10 transition cursor-pointer"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
@@ -668,6 +671,14 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                                   <span className="font-mono font-bold text-white">
                                     {downloadingState.progress}%
                                   </span>
+                                </div>
+
+                                {/* Ad-Shield Protection Tip */}
+                                <div className="mt-2.5 p-2 rounded-lg bg-black/40 border border-amber-500/30 text-[11px] text-amber-200/90 flex items-start gap-2">
+                                  <span className="text-sm leading-none">🛡️</span>
+                                  <div>
+                                    <strong className="text-white">Ad-Shield Tip:</strong> Agar koi fake ad ya pop-up tab khule, toh use <strong>turant close</strong> karein aur main download page par rahein.
+                                  </div>
                                 </div>
                               </motion.div>
                             )}
@@ -783,6 +794,14 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                                   <span className="font-mono font-bold text-white">
                                     {downloadingState.progress}%
                                   </span>
+                                </div>
+
+                                {/* Ad-Shield Protection Tip */}
+                                <div className="mt-2.5 p-2 rounded-lg bg-black/40 border border-amber-500/30 text-[11px] text-amber-200/90 flex items-start gap-2">
+                                  <span className="text-sm leading-none">🛡️</span>
+                                  <div>
+                                    <strong className="text-white">Ad-Shield Tip:</strong> Agar koi fake ad ya pop-up tab khule, toh use <strong>turant close</strong> karein aur main download page par rahein.
+                                  </div>
                                 </div>
 
                                 <div className="mt-2 text-right">
@@ -1055,6 +1074,14 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
       </motion.div>
     </motion.div>
       )}
+
+      {/* In-App Cinema Trailer Modal */}
+      <TrailerModal
+        isOpen={isTrailerOpen}
+        onClose={() => setIsTrailerOpen(false)}
+        trailerUrl={details.trailerUrl}
+        movieTitle={cleanTitle || movie?.title}
+      />
     </AnimatePresence>
   );
 };

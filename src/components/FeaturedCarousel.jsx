@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchTMDBDetails } from '../hooks/useTMDB';
 import ImageWithFallback from './ImageWithFallback';
+import TrailerModal from './TrailerModal';
 
 const getMatchPercent = (rating) => {
   const num = parseFloat(rating);
@@ -23,6 +24,7 @@ const getTitleClass = (title = '') => {
 const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [activeTrailer, setActiveTrailer] = useState(null);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const pauseTimeoutRef = useRef(null);
@@ -231,11 +233,11 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
                 <button 
                   onClick={async () => {
                     if (currentMovie.trailerUrl && currentMovie.trailerUrl !== '#') {
-                      window.open(currentMovie.trailerUrl, '_blank');
+                      setActiveTrailer({ url: currentMovie.trailerUrl, title: currentMovie.title });
                     } else if (currentMovie.id) {
                       const res = await fetchTMDBDetails(currentMovie.id, currentMovie.mediaType);
-                      if (res.trailerUrl) {
-                        window.open(res.trailerUrl, '_blank');
+                      if (res && res.trailerUrl) {
+                        setActiveTrailer({ url: res.trailerUrl, title: currentMovie.title });
                       } else {
                         alert('Trailer link is not available yet.');
                       }
@@ -308,6 +310,14 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
 
       {/* Bottom fade into the rows */}
       <div className="absolute bottom-0 w-full h-32 bg-gradient-to-t from-[#141414] to-transparent z-10 pointer-events-none" />
+
+      {/* In-App Cinema Trailer Modal */}
+      <TrailerModal
+        isOpen={Boolean(activeTrailer)}
+        onClose={() => setActiveTrailer(null)}
+        trailerUrl={activeTrailer?.url}
+        movieTitle={activeTrailer?.title}
+      />
     </div>
   );
 };
