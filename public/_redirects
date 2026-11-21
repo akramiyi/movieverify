@@ -1,10 +1,2 @@
-# 1. Proxy Vercel Serverless Function APIs (Notifications, Site-Lock, Share Previews)
-/api/notifications/*  https://movieverify.vercel.app/api/notifications/:splat  200
-/api/site-lock/*       https://movieverify.vercel.app/api/site-lock/:splat       200
-/share/*               https://movieverify.vercel.app/share/:splat               200
-
-# 2. Proxy Render Backend APIs (TMDB proxy, Home-feed bundle, Image proxy, Razorpay)
-/api/*                 https://movieverify-backend.onrender.com/api/:splat      200
-
-# 3. Cloudflare Pages SPA Routing Fallback for React Router (must be at the bottom)
-/*                     /index.html                                              200
+# Cloudflare Pages SPA Routing Fallback for React Router
+/*  /index.html  200
