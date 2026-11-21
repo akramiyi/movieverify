@@ -620,8 +620,8 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
 
     try {
       const redirectUri = 
-        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-          ? window.location.origin
+        (typeof window !== 'undefined' && window.location.origin)
+          ? `${window.location.origin}/`
           : 'https://movieverify.vercel.app/';
 
       const { error } = await supabase.auth.signInWithOAuth({
