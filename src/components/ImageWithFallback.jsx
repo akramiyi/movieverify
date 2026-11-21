@@ -38,9 +38,10 @@ const ImageWithFallback = ({
     if (!url || typeof url !== 'string' || url.startsWith('data:') || !url.includes('/w500/')) {
       return undefined;
     }
-    const w342Url = url.replace('/w500/', '/w342/');
-    const w780Url = url.replace('/w500/', '/w780/');
-    return `${w342Url} 342w, ${url} 500w, ${w780Url} 780w`;
+    const cleanUrl = url.replace(/([^:]\/)\/+/g, '$1');
+    const w342Url = cleanUrl.replace('/w500/', '/w342/');
+    const w780Url = cleanUrl.replace('/w500/', '/w780/');
+    return `${w342Url} 342w, ${cleanUrl} 500w, ${w780Url} 780w`;
   };
 
   const srcSet = getSrcSet(currentSrc);

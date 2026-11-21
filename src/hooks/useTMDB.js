@@ -112,26 +112,34 @@ export const formatMovie = (m) => {
   const id = m.id;
   const title = m.title || m.name || 'Untitled';
 
-  const rawPoster = m.poster_path
-    ? `${IMG_BASE}/w500${m.poster_path}`
+  const cleanImgPath = (p) => {
+    if (!p || typeof p !== 'string') return '';
+    return '/' + p.replace(/^\/+/, '');
+  };
+
+  const posterPath = cleanImgPath(m.poster_path);
+  const backdropPath = cleanImgPath(m.backdrop_path);
+
+  const rawPoster = posterPath
+    ? `${IMG_BASE}/w500${posterPath}`
     : (m.poster || null);
 
-  const rawBackdrop = m.backdrop_path
-    ? `${IMG_BASE}/w1280${m.backdrop_path}`
-    : (m.backdrop || (m.poster_path ? `${IMG_BASE}/w780${m.poster_path}` : null));
+  const rawBackdrop = backdropPath
+    ? `${IMG_BASE}/w1280${backdropPath}`
+    : (m.backdrop || (posterPath ? `${IMG_BASE}/w780${posterPath}` : null));
 
   // High-reliability poster fallback chain: poster_path -> m.poster -> backdrop -> DEFAULT_POSTER
-  const poster = rawPoster || (m.backdrop_path ? `${IMG_BASE}/w500${m.backdrop_path}` : null) || rawBackdrop || DEFAULT_POSTER;
+  const poster = rawPoster || (backdropPath ? `${IMG_BASE}/w500${backdropPath}` : null) || rawBackdrop || DEFAULT_POSTER;
 
-  const original_poster = m.poster_path
-    ? `${IMG_BASE}/w780${m.poster_path}`
+  const original_poster = posterPath
+    ? `${IMG_BASE}/w780${posterPath}`
     : (m.poster || poster);
 
-  const backdrop = rawBackdrop || (rawPoster ? `${IMG_BASE}/w1280${m.poster_path || ''}` : null) || null;
+  const backdrop = rawBackdrop || (rawPoster ? `${IMG_BASE}/w1280${posterPath}` : null) || null;
 
-  const original_backdrop = m.backdrop_path
-    ? `${IMG_BASE}/original${m.backdrop_path}`
-    : (m.backdrop || (m.poster_path ? `${IMG_BASE}/original${m.poster_path}` : backdrop));
+  const original_backdrop = backdropPath
+    ? `${IMG_BASE}/original${backdropPath}`
+    : (m.backdrop || (posterPath ? `${IMG_BASE}/original${posterPath}` : backdrop));
 
   const year =
     m.release_date?.slice(0, 4) ||

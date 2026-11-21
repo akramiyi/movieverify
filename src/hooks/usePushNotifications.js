@@ -62,6 +62,9 @@ export async function revokePushTokenBeforeSignOut() {
   return { success: true, revoked };
 }
 
+let globalLastSyncedKey = null;
+let activeSyncPromise = null;
+
 export function usePushNotifications(options = {}) {
   const { onForegroundMessage = null, vapidKey = null } = options;
 
@@ -305,57 +308,68 @@ export function usePushNotifications(options = {}) {
 
       if (storedToken) {
         const syncKey = `${session.user?.id || ''}:${storedToken}`;
-        if (syncKey === lastSyncedKeyRef.current) return;
+        if (syncKey === globalLastSyncedKey || syncKey === lastSyncedKeyRef.current) return;
+        globalLastSyncedKey = syncKey;
         lastSyncedKeyRef.current = syncKey;
 
-        // Passive auth-sync registration MUST NEVER silently reauthorize a revoked endpoint (reauthorize: false)
-        try {
-          const syncRes = await registerTokenWithBackend({
-            token: storedToken,
-            accessToken: session.access_token,
-            reauthorize: false,
-          });
-          if (syncRes?.success) {
-            localStorage.setItem(STORAGE_REGISTERED_KEY, 'true');
-            setIsSubscribed(true);
-            return;
-          }
+        if (activeSyncPromise) {
+          await activeSyncPromise;
+          return;
+        }
 
-          // If the token was revoked on server (e.g. UNREGISTERED / permissions reset), automatically re-register a fresh FCM token
-          if (syncRes?.status === 409) {
-            console.log('[usePushNotifications] Stored device token was revoked or expired; reauthorizing endpoint...');
-            const directReauth = await registerTokenWithBackend({
+        // Passive auth-sync registration MUST NEVER silently reauthorize a revoked endpoint (reauthorize: false)
+        activeSyncPromise = (async () => {
+          try {
+            const syncRes = await registerTokenWithBackend({
               token: storedToken,
               accessToken: session.access_token,
-              reauthorize: true,
+              reauthorize: false,
             });
-            if (directReauth?.success) {
+            if (syncRes?.success) {
               localStorage.setItem(STORAGE_REGISTERED_KEY, 'true');
               setIsSubscribed(true);
               return;
             }
 
-            const freshToken = await getDeviceFcmToken({ vapidKey });
-            if (freshToken) {
-              tokenRef.current = freshToken;
-              localStorage.setItem(STORAGE_LAST_TOKEN_KEY, freshToken);
-              const reauthRes = await registerTokenWithBackend({
-                token: freshToken,
+            // If the token was revoked on server (e.g. UNREGISTERED / permissions reset), automatically re-register a fresh FCM token
+            if (syncRes?.status === 409) {
+              console.log('[usePushNotifications] Stored device token was revoked or expired; reauthorizing endpoint...');
+              const directReauth = await registerTokenWithBackend({
+                token: storedToken,
                 accessToken: session.access_token,
                 reauthorize: true,
               });
-              if (reauthRes?.success) {
+              if (directReauth?.success) {
                 localStorage.setItem(STORAGE_REGISTERED_KEY, 'true');
                 setIsSubscribed(true);
                 return;
               }
+
+              const freshToken = await getDeviceFcmToken({ vapidKey });
+              if (freshToken) {
+                tokenRef.current = freshToken;
+                localStorage.setItem(STORAGE_LAST_TOKEN_KEY, freshToken);
+                const reauthRes = await registerTokenWithBackend({
+                  token: freshToken,
+                  accessToken: session.access_token,
+                  reauthorize: true,
+                });
+                if (reauthRes?.success) {
+                  localStorage.setItem(STORAGE_REGISTERED_KEY, 'true');
+                  setIsSubscribed(true);
+                  return;
+                }
+              }
+              localStorage.removeItem(STORAGE_REGISTERED_KEY);
+              setIsSubscribed(false);
             }
-            localStorage.removeItem(STORAGE_REGISTERED_KEY);
-            setIsSubscribed(false);
+          } catch (err) {
+            console.warn('[usePushNotifications] Auth sync register failed:', err?.message);
+          } finally {
+            activeSyncPromise = null;
           }
-        } catch (err) {
-          console.warn('[usePushNotifications] Auth sync register failed:', err?.message);
-        }
+        })();
+        await activeSyncPromise;
       } else {
         // Permission is granted but no token stored yet: automatically register fresh token
         try {
