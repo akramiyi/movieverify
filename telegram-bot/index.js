@@ -52,9 +52,34 @@ const tmdbCache = new NodeCache({ stdTTL: 21600, checkperiod: 1800, maxKeys: 300
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const FRONTEND_URL = process.env.FRONTEND_URL || '*'; // Configure securely in production
+// Allowed origins for CORS (production custom domains, vercel, cloudflare pages, and localhost)
+const allowedOrigins = [
+  'https://moviex.sbs',
+  'https://www.moviex.sbs',
+  'https://movieverify.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map((u) => u.trim()) : []),
+];
 
-app.use(cors({ origin: FRONTEND_URL }));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, or server-to-server)
+      if (!origin) return callback(null, true);
+      if (
+        allowedOrigins.includes('*') ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.pages.dev') ||
+        origin.endsWith('.vercel.app')
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 app.get('/', (req, res) => {
