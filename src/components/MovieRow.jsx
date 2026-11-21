@@ -93,7 +93,7 @@ const MovieRow = ({ title, movies, onMovieClick, isLoading, myList, onToggleMyLi
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
-          {isLoading ? (
+          {isLoading || (!hasEnteredView && !priority) ? (
             Array.from({ length: 6 }).map((_, index) => (
               <SkeletonCard key={index} />
             ))
