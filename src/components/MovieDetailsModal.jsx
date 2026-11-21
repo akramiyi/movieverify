@@ -987,6 +987,38 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                             {notifyFeedback.message}
                           </p>
                         )}
+
+                        {/* Stream / Watch Online Option when links pending */}
+                        <div className="mt-3 p-3 rounded-xl bg-purple-950/30 border border-purple-500/25 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-white flex items-center gap-1.5">
+                              <span>🎬</span> Watch Online / Stream Now
+                            </span>
+                            <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                              Unblocked
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <a
+                              href={`https://www.dailymotion.com/search/${encodeURIComponent(movie.title + (resolvedMediaType === 'tv' ? ' episode 1' : ' full movie'))}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 hover:text-white text-[11px] font-bold transition shadow"
+                            >
+                              <span>Dailymotion HD</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                            <a
+                              href={`https://www.youtube.com/results?search_query=${encodeURIComponent(movie.title + (resolvedMediaType === 'tv' ? ' full episodes' : ' full movie in hindi'))}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-950/70 hover:bg-red-900 border border-red-500/40 text-red-300 hover:text-white text-[11px] font-bold transition shadow"
+                            >
+                              <span>YouTube Mirrors</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        </div>
                       </div>
                     );
                   })()}

@@ -50,7 +50,7 @@ export default function UpcomingReleaseModal({
   });
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isPlayingTrailer, setIsPlayingTrailer] = useState(false);
-  const [videoSource, setVideoSource] = useState('piped');
+  const [videoSource, setVideoSource] = useState('unblocked');
   const [subscribing, setSubscribing] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
 
@@ -87,17 +87,21 @@ export default function UpcomingReleaseModal({
     } catch {}
   };
 
-  const isPakistaniOrRestricted = item?.original_lang_code === 'ur' || item?.release_category === 'turkish_pakistani_drama';
+  const isPakistaniOrRestricted =
+    item?.original_lang_code === 'ur' ||
+    item?.original_language === 'ur' ||
+    item?.release_category === 'turkish_pakistani_drama';
 
   useEffect(() => {
     if (!isOpen || !item) {
       setIsPlayingTrailer(false);
-      setVideoSource(isPakistaniOrRestricted ? 'piped' : 'youtube');
+      setVideoSource(isPakistaniOrRestricted ? 'unblocked' : 'youtube');
       return;
     }
 
     let isMounted = true;
     setLoadingDetails(true);
+    setVideoSource(isPakistaniOrRestricted ? 'unblocked' : 'youtube');
 
     const mType = item.media_type || (item.release_category?.includes('series') ? 'tv' : 'movie');
 
@@ -174,90 +178,174 @@ export default function UpcomingReleaseModal({
         <div className="relative aspect-video w-full bg-black shrink-0 overflow-hidden">
           {isPlayingTrailer && youtubeKey ? (
             <div className="relative w-full h-full bg-black">
-              <iframe
-                key={videoSource}
-                src={
-                  videoSource === 'piped'
-                    ? `https://piped.video/embed/${youtubeKey}`
-                    : videoSource === 'yewtube'
-                    ? `https://yewtu.be/embed/${youtubeKey}?autoplay=1`
-                    : `https://www.youtube-nocookie.com/embed/${youtubeKey}?autoplay=1&rel=0`
-                }
-                title={`${item.title} Trailer`}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
+              {videoSource === 'youtube' ? (
+                <>
+                  <iframe
+                    key="youtube-player"
+                    src={`https://www.youtube-nocookie.com/embed/${youtubeKey}?autoplay=1&rel=0&modestbranding=1`}
+                    title={`${item.title} Trailer`}
+                    className="w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
 
-              {/* Overlaid Top Controls */}
-              <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5 pointer-events-auto z-20 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsPlayingTrailer(false);
-                    setVideoSource(isPakistaniOrRestricted ? 'piped' : 'youtube');
-                  }}
-                  className="px-2.5 py-1 rounded-full bg-black/80 hover:bg-black text-white text-[11px] font-semibold backdrop-blur-md border border-white/20 flex items-center gap-1 shadow-lg transition cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Close</span>
-                </button>
+                  {/* Overlaid Top Controls */}
+                  <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5 pointer-events-auto z-20 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setIsPlayingTrailer(false)}
+                      className="px-2.5 py-1 rounded-full bg-black/80 hover:bg-black text-white text-[11px] font-semibold backdrop-blur-md border border-white/20 flex items-center gap-1 shadow-lg transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Close</span>
+                    </button>
 
-                {/* Multi-Server Bypass Controls */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <div className="flex items-center bg-black/85 rounded-full p-0.5 border border-white/20 backdrop-blur-md shadow-lg">
-                    <button
-                      type="button"
-                      onClick={() => setVideoSource('piped')}
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
-                        videoSource === 'piped'
-                          ? 'bg-emerald-600 text-white shadow'
-                          : 'text-emerald-300 hover:text-white'
-                      }`}
-                      title="Server 1: Piped Video Global Proxy (Ultra Fast & No Bot Wall)"
-                    >
-                      <Zap className="w-2.5 h-2.5" />
-                      <span>Server 1 (Bypass)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setVideoSource('yewtube')}
-                      className={`px-2 py-1 rounded-full text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
-                        videoSource === 'yewtube'
-                          ? 'bg-emerald-600 text-white shadow'
-                          : 'text-gray-300 hover:text-white'
-                      }`}
-                      title="Server 2: Yewtube Europe Privacy Server"
-                    >
-                      <Globe className="w-2.5 h-2.5" />
-                      <span>Server 2</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setVideoSource('youtube')}
-                      className={`px-2 py-1 rounded-full text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
-                        videoSource === 'youtube'
-                          ? 'bg-red-600 text-white shadow'
-                          : 'text-gray-300 hover:text-white'
-                      }`}
-                      title="Direct YouTube"
-                    >
-                      <Play className="w-2.5 h-2.5 fill-current" />
-                      <span>YouTube</span>
-                    </button>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setVideoSource('unblocked')}
+                        className="px-2.5 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold border border-emerald-400/40 flex items-center gap-1 shadow transition cursor-pointer"
+                        title="Open 100% Unblocked Streams (Dailymotion & Mirrors)"
+                      >
+                        <Zap className="w-2.5 h-2.5" />
+                        <span>🛡️ Unblocked Streams</span>
+                      </button>
+
+                      <a
+                        href={`https://www.dailymotion.com/search/${encodeURIComponent(item.title + ' trailer')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 rounded-full bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 text-[10px] font-bold border border-cyan-500/40 flex items-center gap-1 shadow transition cursor-pointer"
+                        title="Watch on Dailymotion (Free & Unblocked in India)"
+                      >
+                        <span>Dailymotion</span>
+                      </a>
+                    </div>
                   </div>
 
-                  <a
-                    href={`https://www.dailymotion.com/search/${encodeURIComponent(item.title + ' trailer')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-2.5 py-1 rounded-full bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 text-[10px] font-bold border border-cyan-500/40 flex items-center gap-1 shadow transition cursor-pointer"
-                    title="Watch on Dailymotion (Free & Unblocked in India)"
-                  >
-                    <span>Dailymotion</span>
-                  </a>
+                  {/* Bottom Geo-Block Notification Bar if YouTube throws error */}
+                  <div className="absolute bottom-2 left-2.5 right-2.5 bg-black/85 backdrop-blur-md border border-amber-500/40 rounded-xl px-3 py-1.5 flex items-center justify-between text-[11px] text-amber-200 pointer-events-auto shadow-xl z-20">
+                    <span className="flex items-center gap-1.5 truncate mr-2">
+                      <span>⚠️</span>
+                      <span className="truncate">"Video unavailable in India / Govt order"?</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setVideoSource('unblocked')}
+                      className="px-2.5 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] shrink-0 cursor-pointer shadow transition"
+                    >
+                      Switch to Unblocked Hub
+                    </button>
+                  </div>
+                </>
+              ) : (
+                /* Sleek, Guaranteed Unblocked Cinema Stream Hub */
+                <div className="relative w-full h-full flex flex-col justify-between p-3.5 sm:p-5 bg-gradient-to-t from-[#141419] via-[#141419]/90 to-black/80 overflow-hidden">
+                  {displayBackdrop && (
+                    <img
+                      src={displayBackdrop}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover opacity-20 filter blur-sm pointer-events-none"
+                    />
+                  )}
+
+                  {/* Overlaid Top Controls */}
+                  <div className="relative z-10 flex items-center justify-between gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setIsPlayingTrailer(false)}
+                      className="px-2.5 py-1 rounded-full bg-black/80 hover:bg-black text-white text-[11px] font-semibold backdrop-blur-md border border-white/20 flex items-center gap-1 shadow-lg transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Close</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-full flex items-center gap-1">
+                        <Zap className="w-2.5 h-2.5" /> Unblocked Mode
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setVideoSource('youtube')}
+                        className="px-2.5 py-1 rounded-full bg-black/70 hover:bg-red-600 text-gray-300 hover:text-white text-[10px] font-bold border border-white/20 flex items-center gap-1 transition cursor-pointer"
+                        title="Try Direct YouTube (For VPN or Overseas Users)"
+                      >
+                        <Play className="w-2.5 h-2.5 fill-current" />
+                        <span>Try YouTube (VPN)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Center Content Hub */}
+                  <div className="relative z-10 my-auto text-center space-y-2 max-w-lg mx-auto">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold">
+                      <span>🛡️ Indian Govt Channel Block Bypassed</span>
+                    </div>
+
+                    <h3 className="text-white text-base sm:text-lg font-black tracking-wide truncate">
+                      {item.title}
+                    </h3>
+                    <p className="text-gray-300 text-[11px] sm:text-xs leading-relaxed max-w-md mx-auto">
+                      Official YouTube channel par India me geo-restriction hai. Bina kisi VPN ya bot verification ke direct unblocked streams dekhein:
+                    </p>
+
+                    {/* Instant Stream Launch Buttons */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-left">
+                      <a
+                        href={`https://www.dailymotion.com/search/${encodeURIComponent(item.title + ' trailer')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-col p-2.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-200 hover:text-white transition shadow group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold flex items-center gap-1">
+                            <Play className="w-3 h-3 fill-current text-cyan-400" /> Dailymotion
+                          </span>
+                          <ExternalLink className="w-3 h-3 text-cyan-400 group-hover:translate-x-0.5 transition" />
+                        </div>
+                        <span className="text-[10px] text-cyan-300/80 mt-1 font-medium">Official & 100% Free</span>
+                      </a>
+
+                      <a
+                        href={`https://www.dailymotion.com/search/${encodeURIComponent(item.title + (isTv ? ' episode 1' : ' full movie'))}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-col p-2.5 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-500/40 text-purple-200 hover:text-white transition shadow group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold flex items-center gap-1">
+                            <span>🍿</span> {isTv ? 'All Episodes' : 'Full Movie'}
+                          </span>
+                          <ExternalLink className="w-3 h-3 text-purple-400 group-hover:translate-x-0.5 transition" />
+                        </div>
+                        <span className="text-[10px] text-purple-300/80 mt-1 font-medium">Watch Full Show in HD</span>
+                      </a>
+
+                      <a
+                        href={`https://www.youtube.com/results?search_query=${encodeURIComponent(item.title + ' official trailer')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-col p-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-500/40 text-red-200 hover:text-white transition shadow group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold flex items-center gap-1">
+                            <Play className="w-3 h-3 fill-current text-red-400" /> YT Mirrors
+                          </span>
+                          <ExternalLink className="w-3 h-3 text-red-400 group-hover:translate-x-0.5 transition" />
+                        </div>
+                        <span className="text-[10px] text-red-300/80 mt-1 font-medium">Fan & Review Uploads</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Bottom Status Tip */}
+                  <div className="relative z-10 text-center">
+                    <span className="text-[10px] text-gray-400">
+                      💡 Tip: Dailymotion par official Pakistani dramas & promos bina kisi VPN ke poore India me chalte hain.
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ) : (
             <>
