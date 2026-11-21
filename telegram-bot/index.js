@@ -52,10 +52,11 @@ const tmdbCache = new NodeCache({ stdTTL: 21600, checkperiod: 1800, maxKeys: 300
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Allowed origins for CORS (production custom domains, vercel, cloudflare pages, and localhost)
+// Allowed origins for CORS (Strict production domain lockdown)
 const allowedOrigins = [
   'https://moviex.sbs',
   'https://www.moviex.sbs',
+  'https://moviex-dl9.pages.dev',
   'https://movieverify.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000',
@@ -68,14 +69,12 @@ app.use(
       // Allow requests with no origin (e.g. mobile apps, curl, or server-to-server)
       if (!origin) return callback(null, true);
       if (
-        allowedOrigins.includes('*') ||
         allowedOrigins.includes(origin) ||
-        origin.endsWith('.pages.dev') ||
-        origin.endsWith('.vercel.app')
+        origin.endsWith('.moviex-dl9.pages.dev')
       ) {
         return callback(null, true);
       }
-      return callback(null, false);
+      return callback(new Error('CORS blocked by MovieVerify security policy'), false);
     },
     credentials: true,
   })
@@ -380,6 +379,113 @@ app.get('/api/image/:size/*path', async (req, res) => {
   } catch (error) {
     console.error('Image Proxy Error:', error);
     res.status(500).send('Image proxy error');
+  }
+});
+
+// ==============================================================================
+// Admin HMAC Authentication & Session Endpoint
+// ==============================================================================
+const adminLoginAttempts = new Map();
+
+function timingSafeCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const hashA = crypto.createHash('sha256').update(a).digest();
+  const hashB = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
+}
+
+// POST /api/admin-login: Server-side salted SHA-256 HMAC authentication
+app.post('/api/admin-login', express.json(), (req, res) => {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
+  const now = Date.now();
+
+  // Brute-force protection: Max 5 attempts per 15 minutes
+  const attemptRecord = adminLoginAttempts.get(ip) || { count: 0, blockedUntil: 0 };
+  if (attemptRecord.blockedUntil > now) {
+    const retryAfter = Math.ceil((attemptRecord.blockedUntil - now) / 1000);
+    return res.status(429).json({ error: `Too many failed attempts. Try again in ${retryAfter}s.` });
+  }
+
+  const { password } = req.body;
+  const adminSecret = process.env.ADMIN_MASTER_PASSWORD || process.env.SITE_LOCK_KEY;
+
+  if (!password || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Password is required' });
+  }
+
+  if (!adminSecret) {
+    return res.status(503).json({ error: 'Server authentication misconfigured: missing ADMIN_MASTER_PASSWORD' });
+  }
+
+  // Salted HMAC SHA-256 hash comparison
+  const salt = process.env.ADMIN_HMAC_SALT || 'movieverify-hmac-salt-2026';
+  const computedHash = crypto.createHmac('sha256', salt).update(password.trim()).digest('hex');
+  const expectedHash = crypto.createHmac('sha256', salt).update(adminSecret.trim()).digest('hex');
+
+  const isValid = timingSafeCompare(computedHash, expectedHash);
+
+  if (!isValid) {
+    attemptRecord.count += 1;
+    if (attemptRecord.count >= 5) {
+      attemptRecord.blockedUntil = now + (15 * 60 * 1000); // 15 min lock
+    }
+    adminLoginAttempts.set(ip, attemptRecord);
+    return res.status(401).json({
+      error: 'Invalid administrator credentials',
+      attemptsRemaining: Math.max(0, 5 - attemptRecord.count)
+    });
+  }
+
+  // Clear rate-limiting on success
+  adminLoginAttempts.delete(ip);
+
+  // Generate tamper-proof signed session token (24-hour expiration)
+  const payload = {
+    role: 'admin',
+    exp: Math.floor(now / 1000) + (24 * 60 * 60),
+    iat: Math.floor(now / 1000),
+  };
+  const tokenData = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', salt).update(tokenData).digest('base64url');
+  const sessionToken = `${tokenData}.${signature}`;
+
+  return res.json({
+    success: true,
+    token: sessionToken,
+    expiresIn: '24h'
+  });
+});
+
+// GET /api/admin-verify: Validate HMAC session token
+app.get('/api/admin-verify', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ authenticated: false, error: 'Bearer token required' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  const parts = token.split('.');
+  if (parts.length !== 2) {
+    return res.status(401).json({ authenticated: false, error: 'Malformed token structure' });
+  }
+
+  const [tokenData, signature] = parts;
+  const salt = process.env.ADMIN_HMAC_SALT || 'movieverify-hmac-salt-2026';
+  const expectedSignature = crypto.createHmac('sha256', salt).update(tokenData).digest('base64url');
+
+  if (!timingSafeCompare(signature, expectedSignature)) {
+    return res.status(401).json({ authenticated: false, error: 'Invalid token signature' });
+  }
+
+  try {
+    const payload = JSON.parse(Buffer.from(tokenData, 'base64url').toString('utf8'));
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < nowSec) {
+      return res.status(401).json({ authenticated: false, error: 'Token has expired' });
+    }
+    return res.json({ authenticated: true, role: payload.role });
+  } catch {
+    return res.status(401).json({ authenticated: false, error: 'Invalid token payload' });
   }
 });
 
