@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import NotificationPreferences from './NotificationPreferences';
+import useScrollLock from '../hooks/useScrollLock';
 import {
   resolveNotificationTargetUrl,
   parseNotificationMovieLink,
@@ -69,6 +70,9 @@ export default function NotificationCenter({
   onUnreadCountChange,
   refreshTrigger = 0,
 }) {
+  // Lock background body/window scroll while Notification Drawer is open
+  useScrollLock(isOpen);
+
   const [activeTab, setActiveTab] = useState('inbox'); // 'inbox' | 'preferences'
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
