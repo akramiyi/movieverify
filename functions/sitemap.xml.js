@@ -80,8 +80,7 @@ ${uniqueUrls.map(u => `  <url>
   return new Response(xml.trim(), {
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600, s-maxage=21600, stale-while-revalidate=1800',
-      'X-Robots-Tag': 'noindex, follow' // sitemap index rule
+      'Cache-Control': 'public, max-age=3600, s-maxage=21600, stale-while-revalidate=1800'
     }
   });
 }
