@@ -896,6 +896,58 @@ app.get('/api/admin/email-broadcast/stats', async (req, res) => {
   }
 });
 
+// GET /api/admin/links/health-check: Proactive dead link validator
+app.get('/api/admin/links/health-check', async (req, res) => {
+  try {
+    if (!supabase) return res.status(500).json({ error: 'Database client unavailable' });
+
+    const { data: links, error } = await supabase
+      .from('download_links')
+      .select('id, title, media_type, download480p, download720p, download1080p, updated_at')
+      .order('updated_at', { ascending: false })
+      .limit(30);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const results = [];
+    for (const item of (links || [])) {
+      const issues = [];
+      const checkUrls = [
+        { quality: '480p', url: item.download480p },
+        { quality: '720p', url: item.download720p },
+        { quality: '1080p', url: item.download1080p }
+      ];
+
+      for (const { quality, url } of checkUrls) {
+        if (!url || url === '#' || url.trim() === '') {
+          issues.push({ quality, status: 'missing', reason: 'Link is empty or #' });
+        } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          issues.push({ quality, status: 'invalid', reason: 'Malformed URL scheme' });
+        }
+      }
+
+      results.push({
+        id: item.id,
+        title: item.title,
+        healthy: issues.length === 0,
+        issues
+      });
+    }
+
+    const deadOrMissingCount = results.filter(r => !r.healthy).length;
+
+    return res.json({
+      success: true,
+      scannedCount: results.length,
+      healthyCount: results.length - deadOrMissingCount,
+      issuesCount: deadOrMissingCount,
+      report: results
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🌐 API Server running on port ${PORT} (Health Check & Payments)`);
 });

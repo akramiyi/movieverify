@@ -740,6 +740,51 @@ function App() {
     }
   });
 
+  // Sync My List with Supabase Cloud for authenticated users
+  useEffect(() => {
+    let isMounted = true;
+    const syncCloudWatchlist = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) return;
+
+        // Fetch cloud watchlist from movie_notify_requests (where category/scope is 'watchlist')
+        const { data: cloudRows } = await supabase
+          .from('movie_notify_requests')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .eq('media_type', 'watchlist');
+
+        if (isMounted && Array.isArray(cloudRows) && cloudRows.length > 0) {
+          setMyList((prev) => {
+            const merged = [...prev];
+            cloudRows.forEach((row) => {
+              const rowId = row.movie_id;
+              if (!merged.some((m) => String(m.id) === String(rowId))) {
+                merged.push({
+                  id: row.movie_id,
+                  title: row.title,
+                  poster: row.season_number ? `https://image.tmdb.org/t/p/w500${row.season_number}` : null,
+                  media_type: 'movie',
+                  year: new Date(row.created_at).getFullYear()
+                });
+              }
+            });
+            try {
+              localStorage.setItem('movieverify_mylist', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.warn('Watchlist cloud sync notice:', err.message);
+      }
+    };
+
+    syncCloudWatchlist();
+    return () => { isMounted = false; };
+  }, []);
+
   useEffect(() => {
     const query = searchQuery.trim();
 
@@ -807,12 +852,38 @@ function App() {
   const toggleMyList = (movie) => {
     if (!movie) return;
     setMyList((prev) => {
-      const exists = prev.some((m) => m.id === movie.id);
+      const exists = prev.some((m) => String(m.id) === String(movie.id));
       let updated;
       if (exists) {
-        updated = prev.filter((m) => m.id !== movie.id);
+        updated = prev.filter((m) => String(m.id) !== String(movie.id));
+        // Remove from cloud if user signed in
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user?.id) {
+            supabase
+              .from('movie_notify_requests')
+              .delete()
+              .eq('user_id', session.user.id)
+              .eq('movie_id', String(movie.id))
+              .eq('media_type', 'watchlist')
+              .catch(() => {});
+          }
+        });
       } else {
         updated = [...prev, movie];
+        // Save to cloud if user signed in
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user?.id) {
+            supabase
+              .from('movie_notify_requests')
+              .insert({
+                user_id: session.user.id,
+                movie_id: String(movie.id),
+                title: movie.title || 'Movie',
+                media_type: 'watchlist'
+              })
+              .catch(() => {});
+          }
+        });
       }
       try {
         localStorage.setItem('movieverify_mylist', JSON.stringify(updated));
