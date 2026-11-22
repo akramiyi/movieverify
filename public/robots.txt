@@ -1,0 +1,11 @@
+# robots.txt for MovieVerify (moviex.sbs)
+User-agent: *
+Allow: /
+
+# Disallow private user/admin routes
+Disallow: /admin
+Disallow: /api/admin/
+Disallow: /api/admin-login
+
+# Sitemaps
+Sitemap: https://moviex.sbs/sitemap.xml
