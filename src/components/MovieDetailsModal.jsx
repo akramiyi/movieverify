@@ -115,33 +115,41 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
 
   useEffect(() => {
     if (movie && movie.id) {
+      // Instantly reset details to current movie prop so old movie's backdrop/poster does not flash
+      setDetails({
+        cast: movie.cast || '',
+        trailerUrl: movie.trailerUrl || '',
+        runtime: movie.runtime || null,
+        backdrop: movie.backdrop || null,
+        poster: movie.poster || null,
+        title: movie.title || null,
+        images: Array.isArray(movie.images) ? movie.images : [],
+        similarMovies: Array.isArray(movie.similarMovies) ? movie.similarMovies : [],
+      });
+
+      let isCurrent = true;
+
       if (!isNaN(parsedId) && resolvedMediaType) {
         fetchTMDBDetails(parsedId, resolvedMediaType).then((res) => {
+          if (!isCurrent) return;
           setDetails({
-            cast: res.cast || movie.cast || 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
+            cast: res.cast || movie.cast || '',
             trailerUrl: res.trailerUrl || movie.trailerUrl || '',
             runtime: res.runtime || movie.runtime || null,
             backdrop: res.backdrop || movie.backdrop || null,
             poster: res.poster || movie.poster || null,
-            title: res.title || null,
+            title: res.title || movie.title || null,
             images: Array.isArray(res.images) && res.images.length > 0 ? res.images : (Array.isArray(movie.images) ? movie.images : []),
             similarMovies: Array.isArray(res.similarMovies) ? res.similarMovies : [],
           });
         });
-      } else {
-        setDetails({
-          cast: movie.cast || 'Placeholder Actor 1, Placeholder Actor 2, Placeholder Actor 3',
-          trailerUrl: movie.trailerUrl || '',
-          runtime: movie.runtime || null,
-          backdrop: movie.backdrop || null,
-          poster: movie.poster || null,
-          title: movie.title || null,
-          images: Array.isArray(movie.images) ? movie.images : [],
-          similarMovies: Array.isArray(movie.similarMovies) ? movie.similarMovies : [],
-        });
       }
+
+      return () => {
+        isCurrent = false;
+      };
     }
-  }, [movie, parsedId, resolvedMediaType]);
+  }, [movie?.id, parsedId, resolvedMediaType]);
 
   // Derive gallery photos (2-4 images) from details, movie backdrops, and posters
   const galleryPhotos = React.useMemo(() => {

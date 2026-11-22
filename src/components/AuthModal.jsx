@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, ShieldCheck, AlertCircle, Loader2, Lock, User, Mail, Eye, EyeOff, ShieldAlert, Clock } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import useScrollLock from '../hooks/useScrollLock';
+import LegalModal from './LegalModal';
 
 const MAX_ADMIN_ATTEMPTS = 5;
 const DEFAULT_ADMIN_LOCKOUT_SECONDS = 15 * 60; // 15 minutes
@@ -521,6 +522,8 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
   const [passVal, setPassVal] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [legalModalTab, setLegalModalTab] = useState('privacy');
 
   // Admin Rate Limiting / Lockout State
   const [adminAttemptsRemaining, setAdminAttemptsRemaining] = useState(MAX_ADMIN_ATTEMPTS);
@@ -945,13 +948,27 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
                 {/* Terms of Service notice */}
                 <p className="text-[11px] lg:text-xs text-gray-400 text-center leading-relaxed">
                   By continuing, you agree to our{' '}
-                  <a href="#" className="underline text-gray-300 hover:text-white transition">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLegalModalTab('privacy');
+                      setLegalModalOpen(true);
+                    }}
+                    className="underline text-gray-300 hover:text-white transition cursor-pointer font-medium"
+                  >
                     Privacy Policy
-                  </a>{' '}
+                  </button>{' '}
                   and{' '}
-                  <a href="#" className="underline text-gray-300 hover:text-white transition">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLegalModalTab('terms');
+                      setLegalModalOpen(true);
+                    }}
+                    className="underline text-gray-300 hover:text-white transition cursor-pointer font-medium"
+                  >
                     Terms of Service
-                  </a>
+                  </button>
                 </p>
               </div>
             ) : (
@@ -1072,6 +1089,13 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
           <MoviePosterCollage key={`collage-${animKey}`} columns={posterColumns} />
         </div>
       </div>
+
+      {/* Interactive Privacy Policy & Terms of Service Modal */}
+      <LegalModal
+        isOpen={legalModalOpen}
+        onClose={() => setLegalModalOpen(false)}
+        initialTab={legalModalTab}
+      />
     </div>
   );
 };

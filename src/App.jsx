@@ -467,7 +467,13 @@ function App() {
           return;
         }
 
-        // Open signup modal immediately on website open for unauthenticated visitor
+        // Check again right before showing popup: if user signed in or dismissed, don't popup
+        if (getCachedAuthUser()) {
+          setAuthPopupDismissed(true);
+          return;
+        }
+
+        // Open signup modal for unauthenticated visitor
         setShowAuthModal(true);
       } catch (err) {
         console.warn('Auth check error for immediate signup popup:', err?.message);
