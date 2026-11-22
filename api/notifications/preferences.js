@@ -49,7 +49,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   notify_system: true,
   channel_in_app: true,
   channel_push: true,
-  channel_email: false,
+  channel_email: true,
   quiet_hours_enabled: false,
   quiet_hours_start: null,
   quiet_hours_end: null,

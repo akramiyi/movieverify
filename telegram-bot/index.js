@@ -555,9 +555,25 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
     let recipientEmails = [];
 
     if (targetAudience === 'users') {
-      // Option A: Fetch all registered users from Supabase Auth
+      // Option A: Fetch registered users from Supabase Auth and respect email preference
       try {
         if (supabase) {
+          // 1. Fetch preferences to filter out users who explicitly disabled channel_email
+          const { data: prefRows } = await supabase
+            .from('user_notification_preferences')
+            .select('user_id, channel_email, opt_in_all');
+
+          const optOutUserIds = new Set();
+          if (Array.isArray(prefRows)) {
+            prefRows.forEach(pref => {
+              // If user explicitly turned off email channel or opted out of all notifications
+              if (pref.channel_email === false || pref.opt_in_all === false) {
+                optOutUserIds.add(pref.user_id);
+              }
+            });
+          }
+
+          // 2. Fetch all registered users from auth
           const { data: authUsersData, error: authErr } = await supabase.auth.admin.listUsers({
             page: 1,
             perPage: 1000
@@ -565,7 +581,8 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
 
           if (!authErr && authUsersData?.users) {
             authUsersData.users.forEach(u => {
-              if (u.email && !recipientEmails.includes(u.email)) {
+              // Only include users who have not disabled email alerts
+              if (u.email && !optOutUserIds.has(u.id) && !recipientEmails.includes(u.email)) {
                 recipientEmails.push(u.email);
               }
             });

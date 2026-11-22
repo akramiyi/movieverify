@@ -508,17 +508,25 @@ export default function NotificationPreferences({ onClose }) {
 
             <div
               data-testid="channel-email-status"
-              className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/10"
+              className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition"
             >
               <div className="pr-3">
-                <p className="text-gray-200 text-xs font-semibold">Email Channel</p>
+                <p className="text-white text-xs font-semibold flex items-center gap-1.5">
+                  <span>Email Channel</span>
+                  <span className="text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 px-1.5 py-0.2 rounded font-mono uppercase">
+                    Active
+                  </span>
+                </p>
                 <p className="text-gray-400 text-[11px] mt-0.5">
-                  Email delivery is not configured in this deployment; alerts arrive via in-app inbox and push.
+                  Receive daily release updates and trending alerts directly in your Gmail inbox.
                 </p>
               </div>
-              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-white/10 text-gray-300 border border-white/10">
-                Unavailable
-              </span>
+              {renderSwitch(
+                Boolean(preferences.channel_email),
+                () => updateCanonicalPreferences({ channel_email: !preferences.channel_email }, 'channel_email'),
+                updatingField === 'channel_email',
+                'pref-toggle-channel_email'
+              )}
             </div>
           </div>
 
