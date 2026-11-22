@@ -522,8 +522,8 @@ export default function NotificationPreferences({ onClose }) {
                 </p>
               </div>
               {renderSwitch(
-                Boolean(preferences.channel_email),
-                () => updateCanonicalPreferences({ channel_email: !preferences.channel_email }, 'channel_email'),
+                preferences.channel_email !== false,
+                () => updateCanonicalPreferences({ channel_email: preferences.channel_email === false }, 'channel_email'),
                 updatingField === 'channel_email',
                 'pref-toggle-channel_email'
               )}
