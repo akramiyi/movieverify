@@ -317,24 +317,43 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
 
           <div 
             onClick={() => handleTabSelect('home')}
-            className="flex items-center gap-1.5 cursor-pointer select-none font-black text-lg md:text-2xl"
+            className="flex items-center cursor-pointer select-none group"
+            title="MovieX — Home"
           >
-            <motion.div 
-              initial={logoAnimated ? { rotate: -360, opacity: 0, scale: 0.5 } : false}
-              animate={{ rotate: 0, opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="flex items-center justify-center w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-[#FF3445] to-[#E50914] rounded-md shadow-[0_0_12px_rgba(229,9,20,0.6)] text-white text-sm md:text-base font-black"
-            >
-              M
-            </motion.div>
-            <motion.span 
-              initial={logoAnimated ? { x: -20, opacity: 0 } : false}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.6, ease: "easeOut" }}
-              className="text-white tracking-tighter font-sans uppercase flex items-baseline"
-            >
-              <span>ovie</span><span className="text-[#E50914] text-xl md:text-3xl font-black ml-0.5 drop-shadow-[0_0_12px_rgba(229,9,20,0.8)]">X</span>
-            </motion.span>
+            {/* Cinematic Futuristic MovieX Logo matching uploaded design */}
+            <div className="flex items-center italic tracking-tighter font-black font-sans text-2xl sm:text-3xl md:text-4xl select-none relative">
+              {/* Giant Red Metallic Stylized M */}
+              <span className="bg-gradient-to-b from-[#FF2B44] via-[#E50914] to-[#99000A] bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(229,9,20,0.85)] filter font-black text-3xl sm:text-4xl md:text-5xl -mr-0.5 transform -skew-x-6">
+                M
+              </span>
+
+              {/* Chrome/Silver Metallic 'ovie' with dark bottom bevel */}
+              <span className="bg-gradient-to-b from-[#FFFFFF] via-[#E0E0E0] to-[#8E8E93] bg-clip-text text-transparent drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] text-xl sm:text-2xl md:text-3xl -ml-0.5 tracking-tight transform -skew-x-6">
+                ovie
+              </span>
+
+              {/* Prominent Glowing Cyberpunk Stylized X with Breathing Pulse Animation */}
+              <motion.span
+                animate={{
+                  textShadow: [
+                    '0 0 14px rgba(229,9,20,0.8), 0 0 28px rgba(229,9,20,0.4)',
+                    '0 0 24px rgba(255,43,68,1), 0 0 45px rgba(229,9,20,0.7)',
+                    '0 0 14px rgba(229,9,20,0.8), 0 0 28px rgba(229,9,20,0.4)'
+                  ],
+                  scale: [1, 1.05, 1]
+                }}
+                transition={{
+                  duration: 2.4,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+                className="relative inline-block font-black text-2xl sm:text-3xl md:text-4xl ml-0.5 px-0.5 bg-gradient-to-b from-[#FFFFFF] via-[#E50914] to-[#7A0007] bg-clip-text text-transparent transform -skew-x-12 origin-center"
+              >
+                X
+                {/* Under-glow flare beam */}
+                <span className="absolute -bottom-1 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#FF2B44] to-transparent rounded-full opacity-70 group-hover:opacity-100 transition duration-300" />
+              </motion.span>
+            </div>
           </div>
           
           <div className="hidden lg:flex items-center gap-4 text-sm font-medium text-gray-300">
