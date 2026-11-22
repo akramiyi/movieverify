@@ -247,37 +247,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://moviex.sbs/share/movie/1185344</loc>
-    <lastmod>2026-11-22</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://moviex.sbs/share/tv/247718</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://moviex.sbs/share/movie/1131943</loc>
-    <lastmod>2026-11-22</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://moviex.sbs/share/movie/1551025</loc>
-    <lastmod>2026-11-22</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://moviex.sbs/share/movie/969681</loc>
-    <lastmod>2026-11-22</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://moviex.sbs/share/tv/291507</loc>
+    <loc>https://moviex.sbs/share/movie/1185344</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
@@ -289,13 +265,37 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://moviex.sbs/share/movie/1551025</loc>
+    <lastmod>2026-11-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://moviex.sbs/share/movie/1131943</loc>
+    <lastmod>2026-11-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://moviex.sbs/share/movie/1381071</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://moviex.sbs/share/tv/291507</loc>
+    <lastmod>2026-11-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://moviex.sbs/share/movie/1595124</loc>
+    <lastmod>2026-11-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://moviex.sbs/share/movie/969681</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
@@ -325,6 +325,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://moviex.sbs/share/movie/1170608</loc>
+    <lastmod>2026-11-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://moviex.sbs/share/tv/259909</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>daily</changefreq>
@@ -332,12 +338,6 @@
   </url>
   <url>
     <loc>https://moviex.sbs/share/movie/1400837</loc>
-    <lastmod>2026-11-22</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://moviex.sbs/share/movie/1567605</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
@@ -361,13 +361,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://moviex.sbs/share/movie/1813355</loc>
+    <loc>https://moviex.sbs/share/movie/1507696</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://moviex.sbs/share/movie/1507696</loc>
+    <loc>https://moviex.sbs/share/movie/1813355</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
@@ -379,19 +379,7 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://moviex.sbs/share/movie/687163</loc>
-    <lastmod>2026-11-22</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://moviex.sbs/share/movie/656908</loc>
-    <lastmod>2026-11-22</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://moviex.sbs/share/movie/1294189</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
@@ -403,7 +391,19 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://moviex.sbs/share/movie/1294189</loc>
+    <lastmod>2026-11-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://moviex.sbs/share/movie/1422041</loc>
+    <lastmod>2026-11-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://moviex.sbs/share/movie/687163</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>

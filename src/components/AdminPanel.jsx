@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight, Calendar, RotateCcw, Database, BarChart3, FileText, Send, Sliders } from 'lucide-react';
+import { Search, Save, Trash2, Key, Lock, Film, AlertCircle, CheckCircle, ArrowLeft, LogOut, X, Clock, ExternalLink, RefreshCw, ShieldAlert, AlertTriangle, ArrowLeftRight, Calendar, RotateCcw, Database, BarChart3, FileText, Send, Sliders, Mail } from 'lucide-react';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, fetchMovieOrTVById, activeLinks } from '../hooks/useTMDB';
 import ReportsPanel from './ReportsPanel';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import CampaignManager from './CampaignManager';
+import EmailBroadcastManager from './EmailBroadcastManager';
 import { buildContentUpdateIdempotencyKey } from '../utils/notificationLinks';
 import useScrollLock from '../hooks/useScrollLock';
 
@@ -1286,6 +1287,18 @@ const AdminPanel = ({ onClose }) => {
             <span>Downloads DB</span>
           </button>
           <button 
+            onClick={() => setActiveTab(activeTab === 'email' ? 'manager' : 'email')}
+            className={`transition-all duration-200 text-xs font-bold px-3.5 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border whitespace-nowrap shrink-0 ${
+              activeTab === 'email'
+                ? 'bg-red-700 text-white border-red-500/60 shadow-[0_0_18px_rgba(185,28,28,0.45),inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.02]'
+                : 'bg-white/[0.05] hover:bg-white/[0.12] text-red-300 hover:text-white border-white/[0.10]'
+            }`}
+            title="Today Releases Daily Email Broadcast via Resend"
+          >
+            <Mail className="w-3.5 h-3.5 text-red-400" />
+            <span>✉️ Email Broadcast</span>
+          </button>
+          <button 
             onClick={() => setActiveTab(activeTab === 'campaigns' ? 'manager' : 'campaigns')}
             className={`transition-all duration-200 text-xs font-bold px-3.5 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border whitespace-nowrap shrink-0 ${
               activeTab === 'campaigns'
@@ -1358,7 +1371,11 @@ const AdminPanel = ({ onClose }) => {
 
         {/* Main Content Area */}
         <div className="flex flex-col md:flex-row gap-8 w-full relative z-10">
-          {activeTab === 'campaigns' ? (
+          {activeTab === 'email' ? (
+            <div className="w-full flex-1">
+              <EmailBroadcastManager />
+            </div>
+          ) : activeTab === 'campaigns' ? (
             <div className="w-full flex-1">
               <CampaignManager initialView="form" />
             </div>

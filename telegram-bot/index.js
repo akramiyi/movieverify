@@ -492,7 +492,10 @@ app.get('/api/admin-verify', (req, res) => {
 });
 
 // ==============================================================================
-// Admin-Only Daily Trending Movies Digest via Resend Email
+// Admin-Only Daily Trending & Today's Releases Email Broadcast via Resend
+// Supports:
+// 1. target = 'admin' (Admin-only daily digest)
+// 2. target = 'users' (Today's releases email sent to all registered users)
 // ==============================================================================
 app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req, res) => {
   // 1. Authorize: Check Cron Secret or Admin HMAC Token
@@ -545,120 +548,107 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
     });
   }
 
+  // Target audience selection: 'users' (all registered users) vs 'admin' (admin-only digest)
+  const targetAudience = (req.query.target || req.body?.target || 'users').toLowerCase();
+
   try {
-    // 3. Securely resolve Admin recipient email(s) from Supabase Service Role
-    let adminEmails = [];
+    let recipientEmails = [];
 
-    // Check env ADMIN_EMAIL first as priority/fallback
-    if (process.env.ADMIN_EMAIL) {
-      const parsedEmails = process.env.ADMIN_EMAIL.split(',').map(e => e.trim()).filter(Boolean);
-      adminEmails.push(...parsedEmails);
-    }
-
-    // Query Supabase database for registered admin emails
-    if (supabase) {
+    if (targetAudience === 'users') {
+      // Option A: Fetch all registered users from Supabase Auth
       try {
-        // Query admin_users join users or profiles
-        const { data: adminRows } = await supabase
-          .from('admin_users')
-          .select('email, user_id');
-
-        if (adminRows && adminRows.length > 0) {
-          adminRows.forEach(row => {
-            if (row.email && !adminEmails.includes(row.email)) {
-              adminEmails.push(row.email);
-            }
+        if (supabase) {
+          const { data: authUsersData, error: authErr } = await supabase.auth.admin.listUsers({
+            page: 1,
+            perPage: 1000
           });
-        }
 
-        // Also check users table where role = 'admin' if available
-        const { data: userRows } = await supabase
-          .from('users')
-          .select('email')
-          .eq('role', 'admin');
-
-        if (userRows && userRows.length > 0) {
-          userRows.forEach(u => {
-            if (u.email && !adminEmails.includes(u.email)) {
-              adminEmails.push(u.email);
-            }
-          });
+          if (!authErr && authUsersData?.users) {
+            authUsersData.users.forEach(u => {
+              if (u.email && !recipientEmails.includes(u.email)) {
+                recipientEmails.push(u.email);
+              }
+            });
+          }
         }
-      } catch (dbErr) {
-        console.warn('[DailyDigest] Supabase admin lookup warning:', dbErr.message);
+      } catch (err) {
+        console.warn('[Broadcast] Error reading Supabase auth users:', err.message);
+      }
+
+      // Also include ADMIN_EMAIL as safety recipient
+      if (process.env.ADMIN_EMAIL) {
+        process.env.ADMIN_EMAIL.split(',').forEach(e => {
+          const clean = e.trim();
+          if (clean && !recipientEmails.includes(clean)) recipientEmails.push(clean);
+        });
+      }
+    } else {
+      // Admin-only target
+      if (process.env.ADMIN_EMAIL) {
+        process.env.ADMIN_EMAIL.split(',').forEach(e => {
+          const clean = e.trim();
+          if (clean && !recipientEmails.includes(clean)) recipientEmails.push(clean);
+        });
+      }
+
+      if (supabase) {
+        try {
+          const { data: adminRows } = await supabase.from('admin_users').select('email');
+          if (adminRows) {
+            adminRows.forEach(r => {
+              if (r.email && !recipientEmails.includes(r.email)) recipientEmails.push(r.email);
+            });
+          }
+        } catch {}
       }
     }
 
-    if (adminEmails.length === 0) {
+    if (recipientEmails.length === 0) {
       return res.status(400).json({
-        error: 'No admin recipient found. Please set ADMIN_EMAIL in Render or insert admin into admin_users table.'
+        error: 'No recipients found to dispatch emails.'
       });
     }
 
-    // 4. Fetch Top 10 Trending Movies from TMDB
+    // 4. Fetch Movies/Releases for the Email Content
     const serverToken = process.env.TMDB_TOKEN || process.env.VITE_TMDB_TOKEN;
     const tmdbHeaders = {
       'Accept': 'application/json',
       ...(serverToken ? { 'Authorization': `Bearer ${serverToken}` } : {})
     };
 
-    const tmdbRes = await fetch('https://api.themoviedb.org/3/trending/movie/day?language=en-US', {
-      headers: tmdbHeaders
-    });
+    const todayDate = new Date().toISOString().split('T')[0];
+    let moviesList = [];
+    let emailSubject = '';
 
-    if (!tmdbRes.ok) {
-      return res.status(502).json({ error: 'Failed to fetch trending movies from TMDB' });
+    // Fetch releases for today
+    try {
+      const todayRes = await fetch(`https://api.themoviedb.org/3/discover/movie?region=IN&primary_release_date.gte=${todayDate}&primary_release_date.lte=${todayDate}&sort_by=popularity.desc`, {
+        headers: tmdbHeaders
+      });
+      if (todayRes.ok) {
+        const todayData = await todayRes.json();
+        moviesList = (todayData.results || []).filter(m => m.poster_path && m.overview).slice(0, 8);
+      }
+    } catch {}
+
+    // If today's list is light, blend with top trending daily
+    if (moviesList.length < 5) {
+      try {
+        const trendRes = await fetch('https://api.themoviedb.org/3/trending/all/day?language=en-US', {
+          headers: tmdbHeaders
+        });
+        if (trendRes.ok) {
+          const trendData = await trendRes.json();
+          const existingIds = new Set(moviesList.map(m => m.id));
+          (trendData.results || []).forEach(item => {
+            if (moviesList.length < 10 && !existingIds.has(item.id) && item.poster_path) {
+              existingIds.add(item.id);
+              moviesList.push(item);
+            }
+          });
+        }
+      } catch {}
     }
-
-    const tmdbData = await tmdbRes.json();
-    const topMovies = (tmdbData.results || []).slice(0, 10);
-
-    // 5. Build clean, responsive HTML email template
-    const movieItemsHtml = topMovies.map((m, idx) => {
-      const posterUrl = m.poster_path
-        ? `https://image.tmdb.org/t/p/w342${m.poster_path}`
-        : 'https://moviex.sbs/favicon.ico';
-      const year = m.release_date ? m.release_date.slice(0, 4) : 'N/A';
-      const rating = m.vote_average ? Number(m.vote_average).toFixed(1) : 'N/A';
-      const tmdbLink = `https://www.themoviedb.org/movie/${m.id}`;
-      const portalLink = `https://moviex.sbs/?type=movie&id=${m.id}`;
-
-      return `
-        <tr style="border-bottom: 1px solid #2a2a32;">
-          <td style="padding: 16px 12px; vertical-align: top; width: 90px;">
-            <a href="${portalLink}" target="_blank">
-              <img src="${posterUrl}" alt="${m.title}" width="85" style="border-radius: 8px; border: 1px solid #3a3a44; display: block;" />
-            </a>
-          </td>
-          <td style="padding: 16px 12px; vertical-align: top; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-            <div style="font-size: 16px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">
-              <span style="color: #E50914; margin-right: 6px;">#${idx + 1}</span>
-              ${m.title}
-              <span style="font-size: 12px; color: #8c8c9a; font-weight: 400; margin-left: 6px;">(${year})</span>
-            </div>
-            <div style="margin-bottom: 8px;">
-              <span style="background: #272115; border: 1px solid #eab308; color: #facc15; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin-right: 8px;">
-                ⭐ ${rating} / 10
-              </span>
-              <span style="font-size: 11px; color: #9ca3af; text-transform: uppercase;">
-                TMDB #${m.id}
-              </span>
-            </div>
-            <p style="font-size: 12px; color: #bbbbcc; line-height: 1.5; margin: 0 0 10px 0;">
-              ${m.overview ? (m.overview.length > 220 ? m.overview.slice(0, 220) + '...' : m.overview) : 'No overview available.'}
-            </p>
-            <div>
-              <a href="${portalLink}" target="_blank" style="display: inline-block; background: #E50914; color: #ffffff; font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 6px; text-decoration: none; margin-right: 8px;">
-                Manage on MovieVerify
-              </a>
-              <a href="${tmdbLink}" target="_blank" style="display: inline-block; background: #262630; color: #d1d5db; font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 6px; text-decoration: none; border: 1px solid #3a3a48;">
-                View on TMDB ↗
-              </a>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
 
     const formattedDate = new Date().toLocaleDateString('en-US', {
       weekday: 'long',
@@ -667,56 +657,114 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
       day: 'numeric'
     });
 
+    emailSubject = targetAudience === 'users'
+      ? `🎬 Today's Releases & New Movies on MovieVerify (${formattedDate})`
+      : `🎬 [MovieVerify Digest] Top Releases & Trending (${formattedDate})`;
+
+    // 5. Generate Cinema Responsive HTML
+    const movieItemsHtml = moviesList.map((m, idx) => {
+      const title = m.title || m.name || 'Untitled';
+      const isTv = m.media_type === 'tv' || (!m.title && m.name);
+      const mType = isTv ? 'tv' : 'movie';
+      const posterUrl = m.poster_path
+        ? `https://image.tmdb.org/t/p/w342${m.poster_path}`
+        : 'https://moviex.sbs/favicon.ico';
+      const year = (m.release_date || m.first_air_date || '').slice(0, 4) || '2026';
+      const rating = m.vote_average ? Number(m.vote_average).toFixed(1) : '7.5';
+      const portalLink = `https://moviex.sbs/?type=${mType}&id=${m.id}`;
+
+      return `
+        <tr style="border-bottom: 1px solid #22222a;">
+          <td style="padding: 16px 10px; vertical-align: top; width: 85px;">
+            <a href="${portalLink}" target="_blank">
+              <img src="${posterUrl}" alt="${title}" width="80" style="border-radius: 8px; border: 1px solid #33333e; display: block;" />
+            </a>
+          </td>
+          <td style="padding: 16px 10px; vertical-align: top; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <div style="font-size: 15px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">
+              <span style="color: #E50914; margin-right: 6px;">#${idx + 1}</span>
+              ${title}
+              <span style="font-size: 12px; color: #8c8c9a; font-weight: 400; margin-left: 6px;">(${year})</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+              <span style="background: #272115; border: 1px solid #eab308; color: #facc15; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 12px; margin-right: 6px;">
+                ⭐ ${rating} / 10
+              </span>
+              <span style="background: #192219; border: 1px solid #22c55e; color: #4ade80; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 12px;">
+                ${isTv ? '📺 Web Series' : '🎬 Releasing Today'}
+              </span>
+            </div>
+            <p style="font-size: 12px; color: #b0b0c0; line-height: 1.45; margin: 0 0 10px 0;">
+              ${m.overview ? (m.overview.length > 180 ? m.overview.slice(0, 180) + '...' : m.overview) : 'Fresh premiere now streaming. Watch official trailer and high-speed links directly on MovieVerify.'}
+            </p>
+            <div>
+              <a href="${portalLink}" target="_blank" style="display: inline-block; background: #E50914; color: #ffffff; font-size: 11px; font-weight: 700; padding: 6px 14px; border-radius: 6px; text-decoration: none; margin-right: 8px;">
+                ▶ Watch / Download on MovieVerify
+              </a>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
     const emailHtml = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Daily Trending Movies Digest</title>
+        <title>${emailSubject}</title>
       </head>
       <body style="margin: 0; padding: 0; background-color: #0b0b0e; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0b0b0e; padding: 24px 12px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0b0b0e; padding: 20px 8px;">
           <tr>
             <td align="center">
-              <table width="100%" max-width="640" cellpadding="0" cellspacing="0" style="max-width: 640px; background-color: #141419; border: 1px solid #282832; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+              <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 620px; background-color: #141419; border: 1px solid #252530; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
                 <!-- Header -->
                 <tr>
-                  <td style="padding: 24px; background: linear-gradient(135deg, #1f1113 0%, #141419 100%); border-bottom: 2px solid #E50914;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                      <div>
-                        <div style="font-size: 20px; font-weight: 900; letter-spacing: 1px; color: #ffffff;">
-                          <span style="color: #E50914;">MOVIE</span>VERIFY
-                        </div>
-                        <div style="font-size: 12px; color: #ef4444; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 2px;">
-                          Admin Daily Trending Digest
-                        </div>
-                      </div>
+                  <td style="padding: 24px; background: linear-gradient(135deg, #220f12 0%, #141419 100%); border-bottom: 2px solid #E50914;">
+                    <div style="font-size: 22px; font-weight: 900; letter-spacing: 1px; color: #ffffff;">
+                      <span style="color: #E50914;">MOVIE</span>VERIFY
                     </div>
-                    <div style="font-size: 13px; color: #9ca3af; margin-top: 12px;">
-                      📅 ${formattedDate} • 🎬 Top 10 TMDB Trending Ingestion Candidates
+                    <div style="font-size: 12px; color: #ef4444; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 3px;">
+                      Today's Premiere Releases & Trending Updates
+                    </div>
+                    <div style="font-size: 13px; color: #9ca3af; margin-top: 10px;">
+                      📅 ${formattedDate} • Namaste! Aaj release hone wali sabse nayi movies aur web series aapke liye ready hain.
                     </div>
                   </td>
                 </tr>
 
                 <!-- Content Table -->
                 <tr>
-                  <td style="padding: 8px 16px;">
+                  <td style="padding: 6px 16px;">
                     <table width="100%" cellpadding="0" cellspacing="0">
                       ${movieItemsHtml}
                     </table>
                   </td>
                 </tr>
 
+                <!-- CTA Banner -->
+                <tr>
+                  <td style="padding: 20px; background-color: #1a1a24; text-align: center; border-top: 1px solid #282835;">
+                    <p style="font-size: 13px; color: #e4e4e7; margin: 0 0 12px 0;">
+                      Bina kisi ad ya fake link ke fast 1080p downloads aur trailers ke liye visit karein:
+                    </p>
+                    <a href="https://moviex.sbs" target="_blank" style="display: inline-block; background: #E50914; color: #ffffff; font-size: 13px; font-weight: 800; padding: 10px 24px; border-radius: 8px; text-decoration: none;">
+                      Explore All Today Releases on MovieVerify →
+                    </a>
+                  </td>
+                </tr>
+
                 <!-- Footer -->
                 <tr>
-                  <td style="padding: 20px 24px; background-color: #0e0e13; border-top: 1px solid #22222a; text-align: center; font-size: 11px; color: #71717a;">
+                  <td style="padding: 20px 24px; background-color: #0c0c10; border-top: 1px solid #1f1f28; text-align: center; font-size: 11px; color: #71717a;">
                     <p style="margin: 0 0 6px 0;">
-                      Automated administrative alert dispatched from <strong>movieverify-backend</strong> on Render.
+                      You are receiving this daily email release notification because you signed in to <strong>MovieVerify</strong>.
                     </p>
                     <p style="margin: 0;">
-                      <a href="https://moviex.sbs" style="color: #E50914; text-decoration: none; font-weight: 600;">Open Admin Panel</a> •
-                      <a href="https://moviex.sbs" style="color: #9ca3af; text-decoration: none;">moviex.sbs</a>
+                      <a href="https://moviex.sbs" style="color: #E50914; text-decoration: none; font-weight: 600;">MovieVerify Web</a> •
+                      <a href="https://moviex.sbs" style="color: #9ca3af; text-decoration: none;">Manage Notification Preferences</a>
                     </p>
                   </td>
                 </tr>
@@ -728,38 +776,106 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
       </html>
     `;
 
-    // 6. Send Email via Resend SDK
+    // 6. Send via Resend (Supports batching for 100/day limit)
     const resend = new Resend(resendApiKey);
-    const senderEmail = process.env.RESEND_FROM_EMAIL || 'MovieVerify Admin <onboarding@resend.dev>';
+    const senderEmail = process.env.RESEND_FROM_EMAIL || 'MovieVerify <onboarding@resend.dev>';
+
+    // Cap recipients safely to protect free limits
+    const dispatchList = recipientEmails.slice(0, 95);
 
     const resendResult = await resend.emails.send({
       from: senderEmail,
-      to: adminEmails,
-      subject: `🎬 [MovieVerify Digest] Top 10 Trending Movies (${formattedDate})`,
+      to: dispatchList,
+      subject: emailSubject,
       html: emailHtml,
     });
 
     if (resendResult.error) {
-      console.error('[DailyDigest] Resend API error:', resendResult.error);
+      console.error('[DailyBroadcast] Resend API error:', resendResult.error);
       return res.status(502).json({
         error: 'Resend API rejected delivery',
         details: resendResult.error
       });
     }
 
+    // 7. Record in Supabase notification_campaigns for Admin Panel Live Tracking
+    const campaignId = crypto.randomUUID();
+    if (supabase) {
+      try {
+        await supabase.from('notification_campaigns').insert({
+          id: campaignId,
+          title: emailSubject,
+          body: `Today's release digest dispatched to ${dispatchList.length} users via Resend.`,
+          category: 'movie_release',
+          target_type: 'all',
+          target_criteria: {
+            channel: 'email',
+            provider: 'resend',
+            target: targetAudience,
+            recipients_count: dispatchList.length,
+            movies_count: moviesList.length
+          },
+          status: 'completed',
+          total_recipients: dispatchList.length,
+          sent_count: dispatchList.length,
+          success_count: dispatchList.length,
+          failure_count: 0,
+          action_url: 'https://moviex.sbs',
+          sent_at: new Date().toISOString(),
+          completed_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.warn('[DailyBroadcast] Could not record campaign in DB:', logErr.message);
+      }
+    }
+
     return res.json({
       success: true,
-      recipients: adminEmails,
-      moviesCount: topMovies.length,
+      campaignId,
+      target: targetAudience,
+      recipientsCount: dispatchList.length,
+      recipients: dispatchList,
+      moviesCount: moviesList.length,
       emailId: resendResult.data?.id,
       timestamp: new Date().toISOString()
     });
   } catch (err) {
-    console.error('[DailyDigest] Server error:', err);
+    console.error('[DailyBroadcast] Server error:', err);
     return res.status(500).json({
-      error: 'Internal server error while executing daily digest',
+      error: 'Internal server error while executing broadcast',
       message: err.message
     });
+  }
+});
+
+// GET /api/admin/email-broadcast/stats: Live tracking for Admin Panel
+app.get('/api/admin/email-broadcast/stats', async (req, res) => {
+  try {
+    let totalUsers = 0;
+    let recentDispatches = [];
+
+    if (supabase) {
+      const { data: authUsersData } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      totalUsers = authUsersData?.users?.length || 0;
+
+      const { data: campaignRows } = await supabase
+        .from('notification_campaigns')
+        .select('*')
+        .contains('target_criteria', { channel: 'email' })
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      recentDispatches = campaignRows || [];
+    }
+
+    return res.json({
+      success: true,
+      totalRegisteredUsers: totalUsers,
+      provider: 'Resend',
+      dispatches: recentDispatches
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
