@@ -319,8 +319,8 @@ const IntroAnimation = ({ onComplete }) => {
           {phase >= 3 && (
             <div className="flex flex-wrap justify-center gap-0.5 md:gap-1.5 relative overflow-visible">
               
-              {/* MOVIE Segment */}
-              <div className="flex">
+              {/* MOVIEX Segment */}
+              <div className="flex items-center">
                 {"MOVIE".split("").map((char, index) => (
                   <motion.span
                     key={`movie-${index}`}
@@ -352,40 +352,31 @@ const IntroAnimation = ({ onComplete }) => {
                     {char}
                   </motion.span>
                 ))}
-              </div>
 
-              {/* VERIFY Segment */}
-              <div className="flex">
-                {"VERIFY".split("").map((char, index) => (
-                  <motion.span
-                    key={`verify-${index}`}
-                    className={`font-black tracking-tight ${phase >= 4 ? 'text-white' : 'text-[#E50914]'}`}
-                    style={{
-                      fontSize: 'clamp(36px, 8vw, 85px)',
-                      fontFamily: '"Montserrat", "Arial Black", sans-serif',
-                      textShadow: phase >= 4 
-                        ? '0 0 15px rgba(229,9,20,0.6), inset 0 0 4px rgba(255,255,255,0.4)' 
-                        : '0 0 20px rgba(229,9,20,0.8)',
-                      display: 'inline-block',
-                      background: phase >= 4 ? 'linear-gradient(to bottom, #ffffff 30%, #a3a3a3 70%)' : 'none',
-                      WebkitBackgroundClip: phase >= 4 ? 'text' : 'none',
-                      WebkitTextFillColor: phase >= 4 ? 'transparent' : 'initial',
-                    }}
-                    initial={reducedMotion ? { opacity: 1 } : { x: 40, y: -15, opacity: 0, rotate: 15, filter: 'blur(8px)' }}
-                    animate={
-                      phase >= 6
-                        ? { scale: 3, opacity: 0, filter: 'blur(12px)', transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.15 + index * 0.03 } }
-                        : { x: 0, y: 0, opacity: 1, rotate: 0, filter: 'blur(0px)' }
-                    }
-                    transition={{
-                      duration: 0.8,
-                      delay: 0.3 + index * 0.06,
-                      ease: [0.16, 1, 0.3, 1],
-                    }}
-                  >
-                    {char}
-                  </motion.span>
-                ))}
+                {/* Big Bold Custom 'X' */}
+                <motion.span
+                  key="movie-x"
+                  className="font-black text-[#E50914] ml-1 md:ml-2.5 drop-shadow-[0_0_25px_rgba(229,9,20,0.9)]"
+                  style={{
+                    fontSize: 'clamp(46px, 11vw, 110px)',
+                    fontFamily: '"Montserrat", "Arial Black", sans-serif',
+                    textShadow: '0 0 25px rgba(229,9,20,0.9), 0 0 50px rgba(229,9,20,0.6)',
+                    display: 'inline-block',
+                  }}
+                  initial={reducedMotion ? { opacity: 1 } : { scale: 0.2, opacity: 0, rotate: 45, filter: 'blur(10px)' }}
+                  animate={
+                    phase >= 6
+                      ? { scale: 3.5, opacity: 0, filter: 'blur(15px)', transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.2 } }
+                      : { scale: 1, opacity: 1, rotate: 0, filter: 'blur(0px)' }
+                  }
+                  transition={{
+                    duration: 0.9,
+                    delay: 0.35,
+                    ease: [0.16, 1, 0.3, 1],
+                  }}
+                >
+                  X
+                </motion.span>
               </div>
 
               {/* Phase 4+: Premium Glass Specular Reflection light sweep */}

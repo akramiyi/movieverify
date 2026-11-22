@@ -153,7 +153,7 @@ const ShareButton = ({ movieTitle, movieId, mediaType, movie }) => {
     ? window.location.origin
     : 'https://movieverify.vercel.app';
   const shareUrl = hasValidMediaType ? `${baseOrigin}/share/${type}/${cleanId}` : '';
-  const shareText = `Check out "${title}" on MovieVerify!`;
+  const shareText = `Check out "${title}" on MovieX!`;
 
   // Start preparing the exact canonical share URL as soon as component/details are available
   useEffect(() => {

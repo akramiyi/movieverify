@@ -1425,7 +1425,7 @@ function App() {
                 </div>
               )}
               <span className="text-white text-xs font-bold tracking-tight">
-                {foregroundPushAlert.isWelcome ? 'Welcome to MovieVerify' : 'MovieVerify'}
+                {foregroundPushAlert.isWelcome ? 'Welcome to MovieX' : 'MovieX'}
               </span>
               <span className="text-gray-400 text-[11px]">• now</span>
             </div>

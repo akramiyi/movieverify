@@ -58,7 +58,7 @@ const Footer = ({ onAdminClick }) => {
         {/* Copyright & TMDB Attribution */}
         <div className="text-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex flex-col gap-1.5">
-            <div>© 2024-2026 MovieVerify, Inc.</div>
+            <div>© 2024-2026 MovieX, Inc.</div>
             <div className="text-gray-600 text-[10px] md:text-[11px] leading-relaxed">
               This product uses the TMDB API but is not endorsed or certified by TMDB.
             </div>

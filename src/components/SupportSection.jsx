@@ -89,8 +89,8 @@ const SupportSection = () => {
         key: orderData.key_id,
         amount: orderData.amount,
         currency: orderData.currency,
-        name: 'MovieVerify',
-        description: 'Support MovieVerify',
+        name: 'MovieX',
+        description: 'Support MovieX',
         order_id: orderData.order_id,
         handler: async function (response) {
           try {
@@ -115,7 +115,7 @@ const SupportSection = () => {
 
             const verifyData = await verifyRes.json();
             if (verifyData.success) {
-              setMessage('Payment successful. Thank you for supporting MovieVerify! ❤️');
+              setMessage('Payment successful. Thank you for supporting MovieX! ❤️');
               setMessageType('success');
             } else {
               throw new Error(verifyData.error || 'Verification failed');
@@ -126,7 +126,7 @@ const SupportSection = () => {
           }
         },
         prefill: {
-          name: 'MovieVerify Supporter',
+          name: 'MovieX Supporter',
         },
         theme: {
           color: '#E50914'
@@ -163,10 +163,10 @@ const SupportSection = () => {
           </div>
           
           <h2 className="text-2xl md:text-3xl font-black text-white mb-3 tracking-tight">
-            Support MovieVerify
+            Support MovieX
           </h2>
           <p className="text-gray-400 text-sm md:text-base mb-8 max-w-md">
-            If you enjoy MovieVerify, you can support us and help keep the platform running.
+            If you enjoy MovieX, you can support us and help keep the platform running.
           </p>
 
           {/* Amount Options */}

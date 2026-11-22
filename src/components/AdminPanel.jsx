@@ -1076,7 +1076,7 @@ const AdminPanel = ({ onClose }) => {
                   Too many failed attempts. Admin access is locked for 15 minutes.
                 </span>
               ) : (
-                'Sign in to MovieVerify Admin'
+                'Sign in to MovieX Admin'
               )}
             </p>
           </div>

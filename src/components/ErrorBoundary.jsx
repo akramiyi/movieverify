@@ -34,7 +34,7 @@ class ErrorBoundary extends React.Component {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF3445] to-[#E50914] flex items-center justify-center text-white font-black text-2xl shadow-[0_0_25px_rgba(229,9,20,0.6)] mb-6">
             M
           </div>
-          <h1 className="text-2xl font-bold mb-2 tracking-tight">MovieVerify</h1>
+          <h1 className="text-2xl font-bold mb-2 tracking-tight">MovieX</h1>
           <p className="text-gray-400 text-sm max-w-sm mb-6">
             Something unexpected occurred while loading the application.
           </p>

@@ -323,7 +323,7 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
               initial={logoAnimated ? { rotate: -360, opacity: 0, scale: 0.5 } : false}
               animate={{ rotate: 0, opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
-              className="flex items-center justify-center w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-[#FF3445] to-[#E50914] rounded-md shadow-[0_0_10px_rgba(229,9,20,0.5)] text-white text-sm md:text-base font-black"
+              className="flex items-center justify-center w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-[#FF3445] to-[#E50914] rounded-md shadow-[0_0_12px_rgba(229,9,20,0.6)] text-white text-sm md:text-base font-black"
             >
               M
             </motion.div>
@@ -331,9 +331,9 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
               initial={logoAnimated ? { x: -20, opacity: 0 } : false}
               animate={{ x: 0, opacity: 1 }}
               transition={{ duration: 0.5, delay: 0.6, ease: "easeOut" }}
-              className="text-white tracking-tighter font-sans uppercase"
+              className="text-white tracking-tighter font-sans uppercase flex items-baseline"
             >
-              Ovie<span className="text-[#E50914]">verify</span>
+              <span>ovie</span><span className="text-[#E50914] text-xl md:text-3xl font-black ml-0.5 drop-shadow-[0_0_12px_rgba(229,9,20,0.8)]">X</span>
             </motion.span>
           </div>
           

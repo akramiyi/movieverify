@@ -838,7 +838,7 @@ const AuthModal = ({ isOpen, onClose, onOpenAdmin }) => {
                   {greeting}
                 </h2>
                 <p className="text-xs sm:text-sm lg:text-base text-gray-400">
-                  Sign in to MovieVerify Admin Control Panel
+                  Sign in to MovieX Admin Control Panel
                 </p>
               </div>
             ) : (
