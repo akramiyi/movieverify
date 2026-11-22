@@ -45,6 +45,8 @@ const cors = require('cors');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const NodeCache = require('node-cache');
+const { Resend } = require('resend');
+const { supabase } = require('./supabase');
 
 // In-Memory Cache for TMDB data (Reduces TMDB rate limits and speeds up responses to ~15ms)
 const tmdbCache = new NodeCache({ stdTTL: 21600, checkperiod: 1800, maxKeys: 3000 });
@@ -486,6 +488,278 @@ app.get('/api/admin-verify', (req, res) => {
     return res.json({ authenticated: true, role: payload.role });
   } catch {
     return res.status(401).json({ authenticated: false, error: 'Invalid token payload' });
+  }
+});
+
+// ==============================================================================
+// Admin-Only Daily Trending Movies Digest via Resend Email
+// ==============================================================================
+app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req, res) => {
+  // 1. Authorize: Check Cron Secret or Admin HMAC Token
+  const cronSecret = process.env.CRON_SECRET || process.env.SITE_LOCK_KEY;
+  const authHeader = req.headers.authorization;
+  const providedCronHeader = req.headers['x-cron-secret'];
+
+  let isAuthorized = false;
+
+  // Option A: Machine-to-machine cron trigger via header or query
+  if (cronSecret) {
+    if (providedCronHeader && timingSafeCompare(providedCronHeader, cronSecret)) {
+      isAuthorized = true;
+    } else if (req.query.secret && timingSafeCompare(req.query.secret, cronSecret)) {
+      isAuthorized = true;
+    }
+  }
+
+  // Option B: Authenticated Admin via Bearer HMAC Token
+  if (!isAuthorized && authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    const parts = token.split('.');
+    if (parts.length === 2) {
+      const [tokenData, signature] = parts;
+      const salt = process.env.ADMIN_HMAC_SALT || 'movieverify-hmac-salt-2026';
+      const expectedSignature = crypto.createHmac('sha256', salt).update(tokenData).digest('base64url');
+      if (timingSafeCompare(signature, expectedSignature)) {
+        try {
+          const payload = JSON.parse(Buffer.from(tokenData, 'base64url').toString('utf8'));
+          const nowSec = Math.floor(Date.now() / 1000);
+          if (payload.exp && payload.exp >= nowSec && payload.role === 'admin') {
+            isAuthorized = true;
+          }
+        } catch {}
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    return res.status(401).json({
+      error: 'Unauthorized: Admin HMAC session or valid x-cron-secret required.'
+    });
+  }
+
+  // 2. Verify Resend API Key is configured
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) {
+    return res.status(503).json({
+      error: 'Resend API key missing. Please configure RESEND_API_KEY in Render environment.'
+    });
+  }
+
+  try {
+    // 3. Securely resolve Admin recipient email(s) from Supabase Service Role
+    let adminEmails = [];
+
+    // Check env ADMIN_EMAIL first as priority/fallback
+    if (process.env.ADMIN_EMAIL) {
+      const parsedEmails = process.env.ADMIN_EMAIL.split(',').map(e => e.trim()).filter(Boolean);
+      adminEmails.push(...parsedEmails);
+    }
+
+    // Query Supabase database for registered admin emails
+    if (supabase) {
+      try {
+        // Query admin_users join users or profiles
+        const { data: adminRows } = await supabase
+          .from('admin_users')
+          .select('email, user_id');
+
+        if (adminRows && adminRows.length > 0) {
+          adminRows.forEach(row => {
+            if (row.email && !adminEmails.includes(row.email)) {
+              adminEmails.push(row.email);
+            }
+          });
+        }
+
+        // Also check users table where role = 'admin' if available
+        const { data: userRows } = await supabase
+          .from('users')
+          .select('email')
+          .eq('role', 'admin');
+
+        if (userRows && userRows.length > 0) {
+          userRows.forEach(u => {
+            if (u.email && !adminEmails.includes(u.email)) {
+              adminEmails.push(u.email);
+            }
+          });
+        }
+      } catch (dbErr) {
+        console.warn('[DailyDigest] Supabase admin lookup warning:', dbErr.message);
+      }
+    }
+
+    if (adminEmails.length === 0) {
+      return res.status(400).json({
+        error: 'No admin recipient found. Please set ADMIN_EMAIL in Render or insert admin into admin_users table.'
+      });
+    }
+
+    // 4. Fetch Top 10 Trending Movies from TMDB
+    const serverToken = process.env.TMDB_TOKEN || process.env.VITE_TMDB_TOKEN;
+    const tmdbHeaders = {
+      'Accept': 'application/json',
+      ...(serverToken ? { 'Authorization': `Bearer ${serverToken}` } : {})
+    };
+
+    const tmdbRes = await fetch('https://api.themoviedb.org/3/trending/movie/day?language=en-US', {
+      headers: tmdbHeaders
+    });
+
+    if (!tmdbRes.ok) {
+      return res.status(502).json({ error: 'Failed to fetch trending movies from TMDB' });
+    }
+
+    const tmdbData = await tmdbRes.json();
+    const topMovies = (tmdbData.results || []).slice(0, 10);
+
+    // 5. Build clean, responsive HTML email template
+    const movieItemsHtml = topMovies.map((m, idx) => {
+      const posterUrl = m.poster_path
+        ? `https://image.tmdb.org/t/p/w342${m.poster_path}`
+        : 'https://moviex.sbs/favicon.ico';
+      const year = m.release_date ? m.release_date.slice(0, 4) : 'N/A';
+      const rating = m.vote_average ? Number(m.vote_average).toFixed(1) : 'N/A';
+      const tmdbLink = `https://www.themoviedb.org/movie/${m.id}`;
+      const portalLink = `https://moviex.sbs/?type=movie&id=${m.id}`;
+
+      return `
+        <tr style="border-bottom: 1px solid #2a2a32;">
+          <td style="padding: 16px 12px; vertical-align: top; width: 90px;">
+            <a href="${portalLink}" target="_blank">
+              <img src="${posterUrl}" alt="${m.title}" width="85" style="border-radius: 8px; border: 1px solid #3a3a44; display: block;" />
+            </a>
+          </td>
+          <td style="padding: 16px 12px; vertical-align: top; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <div style="font-size: 16px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">
+              <span style="color: #E50914; margin-right: 6px;">#${idx + 1}</span>
+              ${m.title}
+              <span style="font-size: 12px; color: #8c8c9a; font-weight: 400; margin-left: 6px;">(${year})</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+              <span style="background: #272115; border: 1px solid #eab308; color: #facc15; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; margin-right: 8px;">
+                ⭐ ${rating} / 10
+              </span>
+              <span style="font-size: 11px; color: #9ca3af; text-transform: uppercase;">
+                TMDB #${m.id}
+              </span>
+            </div>
+            <p style="font-size: 12px; color: #bbbbcc; line-height: 1.5; margin: 0 0 10px 0;">
+              ${m.overview ? (m.overview.length > 220 ? m.overview.slice(0, 220) + '...' : m.overview) : 'No overview available.'}
+            </p>
+            <div>
+              <a href="${portalLink}" target="_blank" style="display: inline-block; background: #E50914; color: #ffffff; font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 6px; text-decoration: none; margin-right: 8px;">
+                Manage on MovieVerify
+              </a>
+              <a href="${tmdbLink}" target="_blank" style="display: inline-block; background: #262630; color: #d1d5db; font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 6px; text-decoration: none; border: 1px solid #3a3a48;">
+                View on TMDB ↗
+              </a>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    const formattedDate = new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Daily Trending Movies Digest</title>
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #0b0b0e; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0b0b0e; padding: 24px 12px;">
+          <tr>
+            <td align="center">
+              <table width="100%" max-width="640" cellpadding="0" cellspacing="0" style="max-width: 640px; background-color: #141419; border: 1px solid #282832; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 24px; background: linear-gradient(135deg, #1f1113 0%, #141419 100%); border-bottom: 2px solid #E50914;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                      <div>
+                        <div style="font-size: 20px; font-weight: 900; letter-spacing: 1px; color: #ffffff;">
+                          <span style="color: #E50914;">MOVIE</span>VERIFY
+                        </div>
+                        <div style="font-size: 12px; color: #ef4444; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 2px;">
+                          Admin Daily Trending Digest
+                        </div>
+                      </div>
+                    </div>
+                    <div style="font-size: 13px; color: #9ca3af; margin-top: 12px;">
+                      📅 ${formattedDate} • 🎬 Top 10 TMDB Trending Ingestion Candidates
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Content Table -->
+                <tr>
+                  <td style="padding: 8px 16px;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      ${movieItemsHtml}
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 20px 24px; background-color: #0e0e13; border-top: 1px solid #22222a; text-align: center; font-size: 11px; color: #71717a;">
+                    <p style="margin: 0 0 6px 0;">
+                      Automated administrative alert dispatched from <strong>movieverify-backend</strong> on Render.
+                    </p>
+                    <p style="margin: 0;">
+                      <a href="https://moviex.sbs" style="color: #E50914; text-decoration: none; font-weight: 600;">Open Admin Panel</a> •
+                      <a href="https://moviex.sbs" style="color: #9ca3af; text-decoration: none;">moviex.sbs</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    // 6. Send Email via Resend SDK
+    const resend = new Resend(resendApiKey);
+    const senderEmail = process.env.RESEND_FROM_EMAIL || 'MovieVerify Admin <onboarding@resend.dev>';
+
+    const resendResult = await resend.emails.send({
+      from: senderEmail,
+      to: adminEmails,
+      subject: `🎬 [MovieVerify Digest] Top 10 Trending Movies (${formattedDate})`,
+      html: emailHtml,
+    });
+
+    if (resendResult.error) {
+      console.error('[DailyDigest] Resend API error:', resendResult.error);
+      return res.status(502).json({
+        error: 'Resend API rejected delivery',
+        details: resendResult.error
+      });
+    }
+
+    return res.json({
+      success: true,
+      recipients: adminEmails,
+      moviesCount: topMovies.length,
+      emailId: resendResult.data?.id,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('[DailyDigest] Server error:', err);
+    return res.status(500).json({
+      error: 'Internal server error while executing daily digest',
+      message: err.message
+    });
   }
 });
 

@@ -362,18 +362,42 @@ const fetchMetadataForIds = async (ids, alreadyFetchedList) => {
     }
   }
 
-  // Eliminate N+1 requests on initial home feed: resolve remaining IDs locally from activeLinks/catalog
-  for (const idStr of idsToFetch) {
-    const parsedId = parseInt(idStr.split('-')[0], 10);
-    const link = activeLinks[idStr] || activeLinks[parsedId];
-    if (link) {
-      results.push(formatMovie({
-        id: parsedId,
-        title: link.title || `Movie ${parsedId}`,
-        overview: link.description || '',
-        media_type: idStr.includes('-tv') ? 'tv' : 'movie'
-      }));
-    }
+  // Batch fetch real metadata from TMDB for IDs not in the initial feed
+  // to ensure verified posters, backdrops, real movie titles, and ratings
+  if (idsToFetch.length > 0) {
+    const batchPromises = idsToFetch.map(async (idStr) => {
+      const parsedId = parseInt(idStr.split('-')[0], 10);
+      const mediaType = idStr.includes('-tv')
+        ? 'tv'
+        : (idStr.includes('-movie')
+          ? 'movie'
+          : (getMediaTypeFromId(parsedId) || 'movie'));
+
+      try {
+        const item = await fetchTMDB(`/${mediaType}/${parsedId}`);
+        if (item) {
+          item.media_type = mediaType;
+          return formatMovie(item);
+        }
+      } catch (e) {
+        console.warn(`Failed to fetch metadata for TMDB ID: ${parsedId} (${mediaType})`, e?.message);
+      }
+
+      // Safe local fallback if TMDB request fails
+      const link = activeLinks[idStr] || activeLinks[parsedId];
+      if (link) {
+        return formatMovie({
+          id: parsedId,
+          title: link.title || `Movie ${parsedId}`,
+          overview: link.description || '',
+          media_type: mediaType
+        });
+      }
+      return null;
+    });
+
+    const batchResults = await Promise.all(batchPromises);
+    results.push(...batchResults.filter(Boolean));
   }
 
   return results;
