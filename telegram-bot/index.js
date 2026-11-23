@@ -664,16 +664,26 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
     let configuredLinkMap = new Map();
     if (supabase) {
       try {
-        const { data: dbLinks } = await supabase.from('download_links').select('id, download480p, download720p, download1080p');
+        const { data: dbLinks } = await supabase.from('download_links').select('id, tmdb_id, title, download480p, download720p, download1080p, seasons');
         if (Array.isArray(dbLinks)) {
           dbLinks.forEach(link => {
-            const hasAny = Boolean(link.download1080p || link.download720p || link.download480p);
-            configuredLinkMap.set(String(link.id), {
+            const hasAny = Boolean(
+              (link.download1080p && link.download1080p !== '#') ||
+              (link.download720p && link.download720p !== '#') ||
+              (link.download480p && link.download480p !== '#') ||
+              (Array.isArray(link.seasons) && link.seasons.length > 0)
+            );
+            const statusObj = {
               has1080p: Boolean(link.download1080p && link.download1080p !== '#'),
               has720p: Boolean(link.download720p && link.download720p !== '#'),
               has480p: Boolean(link.download480p && link.download480p !== '#'),
               hasAny
-            });
+            };
+
+            // Index by full string id, tmdb_id, and lowercase normalized title for 100% accurate matching
+            if (link.id) configuredLinkMap.set(String(link.id), statusObj);
+            if (link.tmdb_id) configuredLinkMap.set(String(link.tmdb_id), statusObj);
+            if (link.title) configuredLinkMap.set(String(link.title).trim().toLowerCase(), statusObj);
           });
         }
       } catch {}
@@ -772,7 +782,10 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
       const portalLink = `https://moviex.sbs/?type=${mType}&id=${m.id}`;
       const adminEditLink = `https://moviex.sbs/admin?tmdb_id=${m.id}&type=${mType}&title=${encodeURIComponent(title)}`;
 
-      const linkStatus = configuredLinkMap.get(String(m.id));
+      // Check link status by tmdb_id, compound id, or title
+      const linkStatus = configuredLinkMap.get(String(m.id)) 
+        || configuredLinkMap.get(`${m.id}-${mType}`) 
+        || configuredLinkMap.get(title.trim().toLowerCase());
       const hasLinks = linkStatus?.hasAny;
 
       return `
