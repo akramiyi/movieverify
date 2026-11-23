@@ -514,9 +514,11 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
     }
   }
 
-  // Option B: Authenticated Admin via Bearer HMAC Token
+  // Option B: Authenticated Admin via Bearer HMAC Token OR Supabase Auth Token
   if (!isAuthorized && authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
+
+    // B1: Try signed HMAC session token
     const parts = token.split('.');
     if (parts.length === 2) {
       const [tokenData, signature] = parts;
@@ -530,6 +532,27 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
             isAuthorized = true;
           }
         } catch {}
+      }
+    }
+
+    // B2: Try Supabase JWT Bearer Token directly from Admin logged into Admin Panel
+    if (!isAuthorized && supabase) {
+      try {
+        const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
+        if (!userErr && user) {
+          const adminEmails = (process.env.ADMIN_EMAIL || 'meakramiyi@gmail.com').split(',').map(e => e.trim().toLowerCase());
+          if (adminEmails.includes((user.email || '').toLowerCase())) {
+            isAuthorized = true;
+          } else {
+            // Also check admin_users table
+            const { data: adminRow } = await supabase.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle();
+            if (adminRow) {
+              isAuthorized = true;
+            }
+          }
+        }
+      } catch (tokenErr) {
+        console.warn('[BroadcastAuth] Error validating Supabase token:', tokenErr.message);
       }
     }
   }
