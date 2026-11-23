@@ -2848,6 +2848,7 @@ export default function CampaignManager({ initialView = 'form' }) {
 
       {/* Dedicated Upcoming Release Admin Preview Modal */}
       <UpcomingReleaseModal
+        key={previewMovie ? `admin-preview-${previewMovie.id}-${previewMovie.release_date || ''}` : 'admin-preview-closed'}
         item={previewMovie}
         isOpen={Boolean(previewMovie)}
         onClose={() => setPreviewMovie(null)}

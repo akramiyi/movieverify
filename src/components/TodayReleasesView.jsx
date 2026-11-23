@@ -433,6 +433,7 @@ export default function TodayReleasesView({ onRequireAuth }) {
 
       {/* In-Modal Trailer & Release Details Player */}
       <UpcomingReleaseModal
+        key={selectedRelease ? `upcoming-modal-${selectedRelease.id}-${selectedRelease.release_date || ''}` : 'upcoming-modal-closed'}
         item={selectedRelease}
         isOpen={Boolean(selectedRelease)}
         onClose={() => setSelectedRelease(null)}

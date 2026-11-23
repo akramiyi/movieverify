@@ -16,6 +16,11 @@ const ImageWithFallback = ({
 }) => {
   const [errorLevel, setErrorLevel] = useState(0);
 
+  // Reset errorLevel whenever src or backdropSrc changes
+  useEffect(() => {
+    setErrorLevel(0);
+  }, [src, backdropSrc]);
+
   // Fallback progression: src -> backdropSrc -> DEFAULT_POSTER (guarantees no grey boxes)
   let currentSrc = DEFAULT_POSTER;
   if (errorLevel === 0) {

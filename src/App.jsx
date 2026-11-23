@@ -1347,6 +1347,7 @@ function App() {
       {/* Global Movie Details Modal (accessible across Home, Genre, and Actor pages) */}
       {location.pathname !== '/admin' && (
         <MovieDetailsModal
+          key={selectedMovie ? `movie-modal-${selectedMovie.id}` : 'movie-modal-closed'}
           movie={selectedMovie}
           isOpen={!!selectedMovie || deepLinkLoading}
           isLoading={deepLinkLoading}
