@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DEFAULT_POSTER } from '../hooks/useTMDB';
+import { getOptimizedImageUrl } from '../utils/imageOptimization';
 
 const ImageWithFallback = ({
   src,
@@ -22,35 +23,41 @@ const ImageWithFallback = ({
   }, [src, backdropSrc]);
 
   // Fallback progression: src -> backdropSrc -> DEFAULT_POSTER (guarantees no grey boxes)
-  let currentSrc = DEFAULT_POSTER;
+  let rawSrc = DEFAULT_POSTER;
   if (errorLevel === 0) {
-    currentSrc = src || backdropSrc || DEFAULT_POSTER;
+    rawSrc = src || backdropSrc || DEFAULT_POSTER;
   } else if (errorLevel === 1) {
-    currentSrc = (backdropSrc && backdropSrc !== src) ? backdropSrc : DEFAULT_POSTER;
+    rawSrc = (backdropSrc && backdropSrc !== src) ? backdropSrc : DEFAULT_POSTER;
   } else {
-    currentSrc = DEFAULT_POSTER;
+    rawSrc = DEFAULT_POSTER;
   }
 
   // Trigger onLoad immediately for inline SVG data URI to unblock parent skeletons
   useEffect(() => {
-    if (currentSrc && currentSrc.startsWith('data:') && onLoad) {
+    if (rawSrc && rawSrc.startsWith('data:') && onLoad) {
       onLoad();
     }
-  }, [currentSrc, onLoad]);
+  }, [rawSrc, onLoad]);
 
-  // Generate responsive srcSet for image proxy/TMDB images
+  // If using Cloudflare image optimization, route external TMDB URLs
+  const currentSrc = (rawSrc && !rawSrc.startsWith('data:') && !rawSrc.startsWith('/'))
+    ? getOptimizedImageUrl(rawSrc, { width: priority ? 1280 : 500, format: 'webp', quality: 80 })
+    : rawSrc;
+
+  // Generate responsive srcSet for posters
   const getSrcSet = (url) => {
-    if (!url || typeof url !== 'string' || url.startsWith('data:') || !url.includes('/w500/')) {
+    if (!url || typeof url !== 'string' || url.startsWith('data:') || url.startsWith('/')) {
       return undefined;
     }
-    const cleanUrl = url.replace(/([^:]\/)\/+/g, '$1');
-    const w342Url = cleanUrl.replace('/w500/', '/w342/');
-    const w780Url = cleanUrl.replace('/w500/', '/w780/');
-    return `${w342Url} 342w, ${cleanUrl} 500w, ${w780Url} 780w`;
+    const w200 = getOptimizedImageUrl(url, { width: 200, format: 'webp', quality: 75 });
+    const w342 = getOptimizedImageUrl(url, { width: 342, format: 'webp', quality: 80 });
+    const w500 = getOptimizedImageUrl(url, { width: 500, format: 'webp', quality: 80 });
+    const w780 = getOptimizedImageUrl(url, { width: 780, format: 'webp', quality: 80 });
+    return `${w200} 200w, ${w342} 342w, ${w500} 500w, ${w780} 780w`;
   };
 
-  const srcSet = getSrcSet(currentSrc);
-  const sizes = srcSet ? '(max-width: 640px) 120px, (max-width: 1024px) 180px, 240px' : undefined;
+  const srcSet = getSrcSet(rawSrc);
+  const sizes = srcSet ? '(max-width: 640px) 160px, (max-width: 1024px) 240px, 350px' : undefined;
 
   return (
     <img

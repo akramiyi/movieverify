@@ -4,6 +4,7 @@ import { Download, Play, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchTMDBDetails } from '../hooks/useTMDB';
 import ImageWithFallback from './ImageWithFallback';
 import TrailerModal from './TrailerModal';
+import { getHeroBackdropSources } from '../utils/imageOptimization';
 
 const getMatchPercent = (rating) => {
   const num = parseFloat(rating);
@@ -72,16 +73,18 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  // Preload next movie's high-res backdrop and poster to eliminate blank box / image pop flash
+  // Preload next movie's backdrop in optimized size (w780/w1280 WebP)
   useEffect(() => {
     if (totalMovies <= 1) return;
     const nextIdx = (safeIndex + 1) % totalMovies;
     const nextItem = movies[nextIdx];
     if (nextItem) {
-      const bannerSrc = nextItem.original_backdrop || nextItem.backdrop || nextItem.original_poster || nextItem.poster;
-      if (bannerSrc) {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      const sources = getHeroBackdropSources(nextItem);
+      const targetSrc = isMobile ? sources.mobile : sources.desktop;
+      if (targetSrc) {
         const img = new Image();
-        img.src = bannerSrc;
+        img.src = targetSrc;
       }
     }
   }, [safeIndex, totalMovies, movies]);
@@ -166,22 +169,39 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
           transition={{ duration: 0.8, ease: 'easeInOut' }}
           className="absolute inset-0 w-full h-full"
         >
-          {/* Backdrop Image with smooth, cinematic Ken Burns zoom (NO sideways jump or black edge gap) */}
+          {/* Backdrop Image with smooth, cinematic Ken Burns zoom */}
           <motion.div
             initial={{ scale: 1.05 }}
             animate={{ scale: 1.0 }}
             transition={{ duration: 7.5, ease: 'easeOut' }}
             className="absolute inset-0 w-full h-full"
           >
-            <ImageWithFallback 
-              className="w-full h-full object-cover object-center"
-              src={currentMovie.original_backdrop || currentMovie.backdrop || currentMovie.original_poster || currentMovie.poster}
-              backdropSrc={currentMovie.backdrop || currentMovie.original_poster || currentMovie.poster}
-              alt={currentMovie.title}
-              lazy={false}
-              priority={true}
-              shouldLoad={true}
-            />
+            {/* Picture element: Mobile loads optimized w780 (WebP), Desktop loads w1280 (WebP). NEVER loads heavy original TMDB */}
+            <picture className="w-full h-full">
+              <source
+                media="(max-width: 768px)"
+                srcSet={getHeroBackdropSources(currentMovie).mobile}
+                type="image/webp"
+              />
+              <source
+                media="(min-width: 769px)"
+                srcSet={getHeroBackdropSources(currentMovie).desktop}
+                type="image/webp"
+              />
+              <img
+                src={getHeroBackdropSources(currentMovie).desktop || currentMovie.backdrop || currentMovie.poster}
+                alt={currentMovie.title}
+                className="w-full h-full object-cover object-center"
+                loading="eager"
+                decoding="async"
+                fetchpriority="high"
+                onError={(e) => {
+                  if (currentMovie.poster && e.target.src !== currentMovie.poster) {
+                    e.target.src = currentMovie.poster;
+                  }
+                }}
+              />
+            </picture>
           </motion.div>
           
           {/* Cinema dynamic overlay: Lighter gradient dark only at bottom, completely clear at top */}

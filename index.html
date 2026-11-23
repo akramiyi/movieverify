@@ -11,8 +11,28 @@
     <meta name="keywords" content="movies, download movies, 1080p movies, hindi movies, web series, moviex, moviex.sbs" />
     <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
     <link rel="dns-prefetch" href="https://image.tmdb.org" />
+    <link rel="preconnect" href="https://moviex.sbs" crossorigin />
+    <link rel="dns-prefetch" href="https://moviex.sbs" />
     <link rel="preconnect" href="https://jbfqwxcymldhyembzjpv.supabase.co" crossorigin />
     <link rel="dns-prefetch" href="https://jbfqwxcymldhyembzjpv.supabase.co" />
+
+    <!-- Critical Hero Image Preload for Instant LCP Delivery -->
+    <link 
+      rel="preload" 
+      as="image" 
+      type="image/webp"
+      href="https://moviex.sbs/cdn-cgi/image/width=780,format=webp,quality=80/https://image.tmdb.org/t/p/original/4fLZUr1e65hKPPVw0R3PmKFKxj1.jpg"
+      media="(max-width: 768px)"
+      fetchpriority="high"
+    />
+    <link 
+      rel="preload" 
+      as="image" 
+      type="image/webp"
+      href="https://moviex.sbs/cdn-cgi/image/width=1280,format=webp,quality=82/https://image.tmdb.org/t/p/original/4fLZUr1e65hKPPVw0R3PmKFKxj1.jpg"
+      media="(min-width: 769px)"
+      fetchpriority="high"
+    />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#E50914" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
