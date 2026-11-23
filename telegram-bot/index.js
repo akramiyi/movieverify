@@ -770,7 +770,7 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
       const year = (m.release_date || m.first_air_date || '').slice(0, 4) || '2026';
       const rating = m.vote_average ? Number(m.vote_average).toFixed(1) : '7.5';
       const portalLink = `https://moviex.sbs/?type=${mType}&id=${m.id}`;
-      const adminEditLink = `https://moviex.sbs/admin?search=${encodeURIComponent(title)}`;
+      const adminEditLink = `https://moviex.sbs/admin?tmdb_id=${m.id}&type=${mType}&title=${encodeURIComponent(title)}`;
 
       const linkStatus = configuredLinkMap.get(String(m.id));
       const hasLinks = linkStatus?.hasAny;

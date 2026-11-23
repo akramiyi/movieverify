@@ -551,6 +551,29 @@ const AdminPanel = ({ onClose }) => {
             setIsLoggedIn(true);
             fetchCurrentLinks();
             fetchSiteLockStatus();
+
+            // Auto-load movie if opened directly from Admin Task Email (?tmdb_id=... or ?search=...)
+            if (typeof window !== 'undefined') {
+              const urlParams = new URLSearchParams(window.location.search);
+              const tmdbIdParam = urlParams.get('tmdb_id');
+              const typeParam = urlParams.get('type') || 'movie';
+              const titleParam = urlParams.get('title') || urlParams.get('search');
+
+              if (tmdbIdParam) {
+                try {
+                  const fetchedDetails = await fetchMovieOrTVById(tmdbIdParam, typeParam);
+                  if (fetchedDetails && isMounted) {
+                    handleSelectMovie(fetchedDetails);
+                    setActiveTab('downloads');
+                  }
+                } catch (e) {
+                  console.warn('Auto-select from URL param failed:', e.message);
+                }
+              } else if (titleParam && isMounted) {
+                setSearchQuery(titleParam);
+                setActiveTab('downloads');
+              }
+            }
           } else {
             setIsLoggedIn(false);
             setLoginError(`Signed in as viewer (${session.user.email}). Administrator credentials required.`);
