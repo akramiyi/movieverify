@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Plus, ThumbsUp, ChevronDown, Check } from 'lucide-react';
+import { Download, Plus, ThumbsUp, ChevronDown, Check, Star } from 'lucide-react';
 import ImageWithFallback from './ImageWithFallback';
 import { useViewportIntersection } from '../hooks/useViewportIntersection';
 
@@ -64,6 +64,8 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100, r
   }
 
   const hasDownloadLink = !!(movie.download480p || movie.download720p || movie.download1080p || movie.seasons);
+  const rawRating = parseFloat(movie.rating || movie.vote_average);
+  const displayRating = !isNaN(rawRating) && rawRating > 0 ? rawRating.toFixed(1) : null;
 
   return (
     <div 
@@ -95,6 +97,12 @@ const MovieCard = ({ movie, onClick, myList = [], onToggleMyList, index = 100, r
           <div className="absolute top-1.5 right-1.5 bg-green-600/90 text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md uppercase tracking-wider backdrop-blur-sm z-10 flex items-center gap-0.5">
             <Download className="w-2.5 h-2.5 stroke-[3]" />
             Available
+          </div>
+        )}
+        {displayRating && (
+          <div className="absolute top-1.5 left-1.5 bg-black/75 backdrop-blur-md text-amber-300 border border-amber-400/30 text-[9px] md:text-[10px] font-black px-1.5 py-0.5 rounded shadow-md z-10 flex items-center gap-0.5">
+            <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+            <span>{displayRating}</span>
           </div>
         )}
       </div>

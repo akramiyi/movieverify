@@ -100,6 +100,15 @@ export default function UpcomingReleaseModal({
     }
 
     let isMounted = true;
+    // Instantly reset details to current item so previous modal's backdrop/poster doesn't flash
+    setDetails({
+      cast: item.cast || '',
+      trailerUrl: item.trailerUrl || '',
+      runtime: item.runtime || null,
+      overview: item.overview || '',
+      backdrop: item.backdrop || (item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : null) || null,
+      poster: item.poster || (item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null) || null,
+    });
     setLoadingDetails(true);
     setVideoSource(isPakistaniOrRestricted ? 'unblocked' : 'youtube');
 
@@ -109,12 +118,12 @@ export default function UpcomingReleaseModal({
       .then((res) => {
         if (!isMounted) return;
         setDetails({
-          cast: res?.cast || '',
-          trailerUrl: res?.trailerUrl || '',
-          runtime: res?.runtime || null,
+          cast: res?.cast || item.cast || '',
+          trailerUrl: res?.trailerUrl || item.trailerUrl || '',
+          runtime: res?.runtime || item.runtime || null,
           overview: res?.overview || item.overview || '',
-          backdrop: res?.backdrop || item.backdrop || null,
-          poster: res?.poster || item.poster || null,
+          backdrop: res?.backdrop || item.backdrop || (item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : null) || null,
+          poster: res?.poster || item.poster || (item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null) || null,
         });
       })
       .catch((err) => {
@@ -127,7 +136,7 @@ export default function UpcomingReleaseModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, item]);
+  }, [isOpen, item?.id, item?.release_date, item?.target_season]);
 
   // Handle ESC key to close
   useEffect(() => {
