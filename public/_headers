@@ -1,0 +1,52 @@
+# Cloudflare Pages Custom HTTP Headers Configuration
+# Improves Pingdom & PageSpeed ratings by enforcing strict caching & expires headers
+
+# 1. Hashed Vite production assets (JavaScript, CSS) - Cache for 1 full year, immutable
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff
+
+# 2. Static icons, images, logos, manifest, and audio assets
+/*.png
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400
+  Access-Control-Allow-Origin: *
+
+/*.jpg
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400
+  Access-Control-Allow-Origin: *
+
+/*.jpeg
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400
+  Access-Control-Allow-Origin: *
+
+/*.webp
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400
+  Access-Control-Allow-Origin: *
+
+/*.svg
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400
+  Access-Control-Allow-Origin: *
+
+/*.ico
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400
+  Access-Control-Allow-Origin: *
+
+/manifest.json
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Content-Type: application/manifest+json; charset=utf-8
+
+# 3. Service Workers must never be aggressively cached (so client updates immediately)
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /
+
+/firebase-messaging-sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /
+
+# 4. Global default for HTML documents & API responses
+/*
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

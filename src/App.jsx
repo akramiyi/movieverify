@@ -264,9 +264,10 @@ function App() {
       }
     };
 
-    refreshUnreadNotifications();
+    // Only query unread notifications if an authenticated user session is active
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
+        refreshUnreadNotifications();
         triggerWelcomeForSession(session, 'initial');
       }
     }).catch(() => {});
