@@ -184,12 +184,17 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
             />
           </motion.div>
           
-          {/* Netflix signature dark gradients */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-transparent to-transparent pointer-events-none z-10" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/60 to-transparent pointer-events-none z-10" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#141414] via-[#141414]/70 to-transparent w-full md:w-[75%] pointer-events-none z-10" />
+          {/* Cinema dynamic overlay: Lighter gradient dark only at bottom, completely clear at top */}
+          <div 
+            className="absolute inset-0 pointer-events-none z-10" 
+            style={{
+              background: 'linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 50%, rgba(0, 0, 0, 0) 100%)'
+            }}
+          />
+          {/* Subtle horizontal gradient on large screens to keep left-aligned typography razor sharp */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent w-full md:w-[60%] pointer-events-none z-10" />
 
-          {/* Content with elegant vertical entrance (NO conflicting sideways stutter) */}
+          {/* Content with elegant vertical entrance */}
           <div className="absolute inset-0 flex flex-col justify-end px-4 sm:px-8 md:px-16 pt-24 sm:pt-28 md:pt-32 pb-16 sm:pb-20 md:pb-24 z-20 pointer-events-none">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -200,25 +205,37 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
             >
               {/* Fake Netflix Series/Movie badge */}
               <div className="flex items-center gap-2 mb-3">
-                <div className="flex items-center text-primary font-bold tracking-widest text-sm md:text-base">
+                <div 
+                  className="flex items-center text-primary font-bold tracking-widest text-sm md:text-base"
+                  style={{ textShadow: '0 2px 6px rgba(0, 0, 0, 0.8)' }}
+                >
                   <span className="mr-1">N</span>
                   <span className="text-gray-300 text-xs tracking-[0.2em]">{isTvSeries ? 'SERIES' : 'FILM'}</span>
                 </div>
               </div>
               
-              <h1 className={`font-black text-white mb-3 sm:mb-4 uppercase tracking-tight drop-shadow-[0_4px_20px_rgba(0,0,0,0.95)] leading-[1.08] ${getTitleClass(currentMovie.title)}`}>
+              <h1 
+                className={`font-black text-white mb-3 sm:mb-4 uppercase tracking-tight leading-[1.08] ${getTitleClass(currentMovie.title)}`}
+                style={{ textShadow: '0 2px 10px rgba(0, 0, 0, 0.9), 0 4px 20px rgba(0, 0, 0, 0.85)' }}
+              >
                 {currentMovie.title}
               </h1>
 
               {/* Tags */}
-              <div className="flex items-center gap-3 text-xs sm:text-sm md:text-base font-semibold text-white mb-4 drop-shadow-md flex-wrap">
+              <div 
+                className="flex items-center gap-3 text-xs sm:text-sm md:text-base font-semibold text-white mb-4 flex-wrap"
+                style={{ textShadow: '0 2px 6px rgba(0, 0, 0, 0.9)' }}
+              >
                 <span className="text-green-500 font-bold">{getMatchPercent(currentMovie.rating)} Match</span>
                 <span>{currentMovie.year}</span>
-                <span className="border border-white/40 px-1.5 py-0.5 rounded text-xs">{currentMovie.quality}</span>
+                <span className="border border-white/40 px-1.5 py-0.5 rounded text-xs backdrop-blur-xs bg-black/20">{currentMovie.quality}</span>
                 <span>{(currentMovie.genre || 'N/A').split(',')[0]}</span>
               </div>
               
-              <p className="text-gray-200 text-xs sm:text-sm md:text-base mb-6 max-w-xl line-clamp-2 sm:line-clamp-3 md:line-clamp-3 drop-shadow-md font-medium leading-relaxed">
+              <p 
+                className="text-gray-100 text-xs sm:text-sm md:text-base mb-6 max-w-xl line-clamp-2 sm:line-clamp-3 md:line-clamp-3 font-medium leading-relaxed"
+                style={{ textShadow: '0 1px 6px rgba(0, 0, 0, 0.8), 0 2px 12px rgba(0, 0, 0, 0.9)' }}
+              >
                 {currentMovie.description}
               </p>
 
