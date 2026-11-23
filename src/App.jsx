@@ -422,68 +422,9 @@ function App() {
     }
   };
 
-  // Immediate Google Sign-In / Signup welcome popup for unauthenticated visitors on website open
+  // Sync auth state changes and dismiss modal on successful sign-in
+  // Note: Automatic signup popup on initial page load is disabled to ensure zero LCP blocking and high PageSpeed
   useEffect(() => {
-    if (showIntro || siteLocked || showAdmin || location.pathname === '/admin') return;
-
-    // Do not show if dismissed during this active browsing session or already authenticated
-    if (authPopupDismissed) return;
-
-    // Fast synchronous check: If user is cached in local storage, do not popup
-    if (getCachedAuthUser()) {
-      setAuthPopupDismissed(true);
-      return;
-    }
-
-    // If visitor opened a shared deep link, OAuth callback, or hash token, prioritize title viewing without popup
-    const initialParams = new URLSearchParams(location.search);
-    if (
-      initialParams.has('id') ||
-      initialParams.has('movie') ||
-      initialParams.has('tv') ||
-      initialParams.has('code') ||
-      initialParams.has('error') ||
-      (typeof window !== 'undefined' && window.location.hash.includes('access_token'))
-    ) {
-      return;
-    }
-
-    let isMounted = true;
-
-    const initAuth = async () => {
-      try {
-        // Asynchronously check Supabase session
-        const { data: { session } } = await supabase.auth.getSession();
-
-        // Authenticated users must never see the automatic login popup
-        if (!isMounted || session?.user || showAdmin || location.pathname === '/admin') {
-          if (session?.user) {
-            setAuthPopupDismissed(true);
-            try {
-              sessionStorage.setItem('movieverify_auth_popup_dismissed', 'true');
-              localStorage.setItem('movieverify_auth_popup_dismissed', 'true');
-            } catch {}
-          }
-          return;
-        }
-
-        // Check again right before showing popup: if user signed in or dismissed, don't popup
-        if (getCachedAuthUser()) {
-          setAuthPopupDismissed(true);
-          return;
-        }
-
-        // Open signup modal for unauthenticated visitor
-        setShowAuthModal(true);
-      } catch (err) {
-        console.warn('Auth check error for immediate signup popup:', err?.message);
-        // Do not force showAuthModal on transient check or network errors
-      }
-    };
-
-    initAuth();
-
-    // Listen for auth state changes: automatically dismiss modal on sign-in
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         setShowAuthModal(false);
@@ -496,10 +437,9 @@ function App() {
     });
 
     return () => {
-      isMounted = false;
       subscription?.unsubscribe();
     };
-  }, [showIntro, siteLocked, showAdmin, location.pathname, authPopupDismissed]);
+  }, []);
 
   useEffect(() => {
     const checkLock = async () => {

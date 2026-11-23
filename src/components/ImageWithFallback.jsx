@@ -39,21 +39,21 @@ const ImageWithFallback = ({
     }
   }, [rawSrc, onLoad]);
 
-  // If using Cloudflare image optimization, route external TMDB URLs
+  // Native TMDB direct sizing (w500 default, w780/w1280 for priority)
   const currentSrc = (rawSrc && !rawSrc.startsWith('data:') && !rawSrc.startsWith('/'))
-    ? getOptimizedImageUrl(rawSrc, { width: priority ? 1280 : 500, format: 'webp', quality: 80 })
+    ? getOptimizedImageUrl(rawSrc, { width: priority ? 780 : 500 })
     : rawSrc;
 
-  // Generate responsive srcSet for posters
+  // Generate responsive srcSet for posters with native TMDB sizes
   const getSrcSet = (url) => {
     if (!url || typeof url !== 'string' || url.startsWith('data:') || url.startsWith('/')) {
       return undefined;
     }
-    const w200 = getOptimizedImageUrl(url, { width: 200, format: 'webp', quality: 75 });
-    const w342 = getOptimizedImageUrl(url, { width: 342, format: 'webp', quality: 80 });
-    const w500 = getOptimizedImageUrl(url, { width: 500, format: 'webp', quality: 80 });
-    const w780 = getOptimizedImageUrl(url, { width: 780, format: 'webp', quality: 80 });
-    return `${w200} 200w, ${w342} 342w, ${w500} 500w, ${w780} 780w`;
+    const w200 = getOptimizedImageUrl(url, { width: 185 });
+    const w342 = getOptimizedImageUrl(url, { width: 342 });
+    const w500 = getOptimizedImageUrl(url, { width: 500 });
+    const w780 = getOptimizedImageUrl(url, { width: 780 });
+    return `${w200} 185w, ${w342} 342w, ${w500} 500w, ${w780} 780w`;
   };
 
   const srcSet = getSrcSet(rawSrc);

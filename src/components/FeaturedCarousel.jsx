@@ -176,17 +176,15 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
             transition={{ duration: 7.5, ease: 'easeOut' }}
             className="absolute inset-0 w-full h-full"
           >
-            {/* Picture element: Mobile loads optimized w780 (WebP), Desktop loads w1280 (WebP). NEVER loads heavy original TMDB */}
+            {/* Picture element: Mobile loads w780, Desktop loads w1280 directly from TMDB CDN */}
             <picture className="w-full h-full">
               <source
                 media="(max-width: 768px)"
                 srcSet={getHeroBackdropSources(currentMovie).mobile}
-                type="image/webp"
               />
               <source
                 media="(min-width: 769px)"
                 srcSet={getHeroBackdropSources(currentMovie).desktop}
-                type="image/webp"
               />
               <img
                 src={getHeroBackdropSources(currentMovie).desktop || currentMovie.backdrop || currentMovie.poster}
