@@ -779,6 +779,8 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
       <PremiumXVaultModal
         isOpen={isPremiumXOpen}
         onClose={() => setIsPremiumXOpen(false)}
+        currentUser={currentUser}
+        isAdminUser={isAdminUser}
         onLaunchAdminPanel={() => {
           setIsPremiumXOpen(false);
           if (onAdminClick) onAdminClick();

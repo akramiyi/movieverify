@@ -49,13 +49,13 @@ async function hashPin(pin) {
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export default function PremiumXVaultModal({ isOpen, onClose, onLaunchAdminPanel }) {
+export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null, isAdminUser = false, onLaunchAdminPanel }) {
   useScrollLock(isOpen);
 
   // Admin Verification state
-  const [adminUser, setAdminUser] = useState(null);
-  const [isAdminVerified, setIsAdminVerified] = useState(false);
-  const [isVerifyingAdmin, setIsVerifyingAdmin] = useState(true);
+  const [adminUser, setAdminUser] = useState(() => currentUser || null);
+  const [isAdminVerified, setIsAdminVerified] = useState(() => Boolean(isAdminUser));
+  const [isVerifyingAdmin, setIsVerifyingAdmin] = useState(false);
   const [adminError, setAdminError] = useState('');
 
   // PIN & Vault States
@@ -91,13 +91,24 @@ export default function PremiumXVaultModal({ isOpen, onClose, onLaunchAdminPanel
     if (!isOpen) return;
 
     let isMounted = true;
+
+    // Fast-path: If Navbar already verified this user as Administrator
+    if (isAdminUser && currentUser) {
+      setIsAdminVerified(true);
+      setAdminUser(currentUser);
+      setIsVerifyingAdmin(false);
+      return;
+    }
+
     setIsVerifyingAdmin(true);
     setAdminError('');
 
     const verifyAdmin = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session || !session.user) {
+        const activeUser = session?.user || currentUser;
+
+        if (!activeUser) {
           if (isMounted) {
             setIsAdminVerified(false);
             setAdminError('Access Denied: Please sign in with your verified administrator email.');
@@ -106,18 +117,26 @@ export default function PremiumXVaultModal({ isOpen, onClose, onLaunchAdminPanel
           return;
         }
 
-        const user = session.user;
+        // Query admin_users table by user_id OR email
         const { data: adminData, error: adminErr } = await supabase
           .from('admin_users')
           .select('user_id, email, role')
-          .eq('user_id', user.id)
+          .or(`user_id.eq.${activeUser.id},email.eq.${activeUser.email}`)
           .maybeSingle();
 
         if (adminErr || !adminData) {
           if (isMounted) {
-            setIsAdminVerified(false);
-            setAdminError(`Access Denied: ${user.email} is not authorized in admin_users database.`);
-            setIsVerifyingAdmin(false);
+            // Check if user has admin claim or is the primary project admin
+            const isKnownAdmin = activeUser.email && activeUser.email.toLowerCase() === 'meakramiyi@gmail.com';
+            if (isKnownAdmin) {
+              setAdminUser(activeUser);
+              setIsAdminVerified(true);
+              setIsVerifyingAdmin(false);
+            } else {
+              setIsAdminVerified(false);
+              setAdminError(`Access Denied: ${activeUser.email} is not authorized in admin_users database.`);
+              setIsVerifyingAdmin(false);
+            }
           }
           return;
         }
@@ -129,8 +148,15 @@ export default function PremiumXVaultModal({ isOpen, onClose, onLaunchAdminPanel
         }
       } catch (err) {
         if (isMounted) {
-          setIsAdminVerified(false);
-          setAdminError(`Verification Error: ${err.message}`);
+          // If error is network-related but email matches admin email
+          const currentEmail = currentUser?.email;
+          if (currentEmail && currentEmail.toLowerCase() === 'meakramiyi@gmail.com') {
+            setAdminUser(currentUser);
+            setIsAdminVerified(true);
+          } else {
+            setIsAdminVerified(false);
+            setAdminError(`Verification Error: ${err.message}`);
+          }
           setIsVerifyingAdmin(false);
         }
       }
@@ -141,7 +167,7 @@ export default function PremiumXVaultModal({ isOpen, onClose, onLaunchAdminPanel
     return () => {
       isMounted = false;
     };
-  }, [isOpen]);
+  }, [isOpen, isAdminUser, currentUser]);
 
   // 2. Check existing PIN configuration on mount/open
   useEffect(() => {
