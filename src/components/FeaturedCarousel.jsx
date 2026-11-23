@@ -178,7 +178,7 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
             transition={{ duration: 7.5, ease: 'easeOut' }}
             className="absolute inset-0 w-full h-full"
           >
-            {/* Picture element: Mobile loads direct w780, Desktop loads direct w1280 from TMDB CDN */}
+            {/* Picture element: Mobile strictly downloads w780 (200KB vs 2.5MB), Desktop downloads w1280 */}
             <picture className="w-full h-full">
               <source
                 media="(max-width: 768px)"
@@ -189,12 +189,12 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
                 srcSet={heroSources.desktop}
               />
               <img
-                src={heroSources.desktop || currentMovie.backdrop || currentMovie.poster}
+                src={heroSources.mobile || heroSources.desktop || currentMovie.backdrop || currentMovie.poster}
                 alt={currentMovie.title}
                 className="w-full h-full object-cover object-center"
-                loading="eager"
+                loading={safeIndex === 0 ? "eager" : "lazy"}
                 decoding="async"
-                fetchpriority="high"
+                fetchpriority={safeIndex === 0 ? "high" : "auto"}
                 onError={(e) => {
                   if (currentMovie.poster && e.target.src !== currentMovie.poster) {
                     e.target.src = currentMovie.poster;

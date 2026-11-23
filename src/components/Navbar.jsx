@@ -417,14 +417,17 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
         <div className="flex items-center gap-4 md:gap-6">
           <div className={`relative flex items-center transition-all duration-300 ${isSearchExpanded ? 'bg-black border border-white px-3 py-1.5' : 'bg-transparent'}`}>
             <button 
+              type="button"
               onClick={() => setIsSearchExpanded(!isSearchExpanded)}
-              className="text-white focus:outline-none flex items-center justify-center"
+              aria-label="Search movies and series"
+              className="text-white focus:outline-none flex items-center justify-center cursor-pointer"
             >
               <Search className="w-5 h-5 md:w-6 md:h-6 stroke-[2.5]" />
             </button>
             <input 
               type="text"
               placeholder="Titles, genres"
+              aria-label="Search by titles or genres"
               value={searchQuery}
               onChange={(e) => {
                 if(!isSearchExpanded) setIsSearchExpanded(true);
@@ -465,8 +468,10 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
           </a>
 
           <button 
+            type="button"
             onClick={onHistoryClick}
-            className="text-white hidden sm:block hover:text-[#E50914] transition"
+            aria-label="View download history"
+            className="text-white hidden sm:block hover:text-[#E50914] transition cursor-pointer"
             title="Download History"
           >
             <Download className="w-5 h-5 md:w-6 md:h-6" />

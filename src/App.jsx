@@ -8,9 +8,7 @@ import Navbar from './components/Navbar';
 import FeaturedCarousel from './components/FeaturedCarousel';
 import MovieRow from './components/MovieRow';
 import MovieCard from './components/MovieCard';
-import MovieDetailsModal from './components/MovieDetailsModal';
 import Footer from './components/Footer';
-import AuthModal from './components/AuthModal';
 import { getFeaturedMovies, getTrendingMovies, getMoviesByCategory } from './data/movies';
 import IntroAnimation from './components/IntroAnimation';
 import SearchFilters from './components/SearchFilters';
@@ -32,7 +30,9 @@ import { resolveNotificationTargetUrl, parseNotificationMovieLink } from './util
 import { reportNotificationTelemetry } from './utils/notificationTelemetry';
 import { playNotificationSound } from './utils/notificationSound';
 
-// Lazy-loaded routes and heavy modal components for optimal initial bundle performance
+// Lazy-loaded heavy modal components and routes for instant initial bundle loading
+const MovieDetailsModal = lazy(() => import('./components/MovieDetailsModal'));
+const AuthModal = lazy(() => import('./components/AuthModal'));
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const ActorModal = lazy(() => import('./components/ActorModal'));
 const AllActorsPage = lazy(() => import('./pages/AllActorsPage'));
