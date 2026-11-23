@@ -660,34 +660,92 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
     let moviesList = [];
     let emailSubject = '';
 
-    // Fetch releases for today
-    try {
-      const todayRes = await fetch(`https://api.themoviedb.org/3/discover/movie?region=IN&primary_release_date.gte=${todayDate}&primary_release_date.lte=${todayDate}&sort_by=popularity.desc`, {
-        headers: tmdbHeaders
-      });
-      if (todayRes.ok) {
-        const todayData = await todayRes.json();
-        moviesList = (todayData.results || []).filter(m => m.poster_path && m.overview).slice(0, 8);
-      }
-    } catch {}
-
-    // If today's list is light, blend with top trending daily
-    if (moviesList.length < 5) {
+    // Check configured downloads from Supabase so Admin sees link status
+    let configuredLinkMap = new Map();
+    if (supabase) {
       try {
-        const trendRes = await fetch('https://api.themoviedb.org/3/trending/all/day?language=en-US', {
-          headers: tmdbHeaders
-        });
-        if (trendRes.ok) {
-          const trendData = await trendRes.json();
-          const existingIds = new Set(moviesList.map(m => m.id));
-          (trendData.results || []).forEach(item => {
-            if (moviesList.length < 10 && !existingIds.has(item.id) && item.poster_path) {
-              existingIds.add(item.id);
-              moviesList.push(item);
-            }
+        const { data: dbLinks } = await supabase.from('download_links').select('id, download480p, download720p, download1080p');
+        if (Array.isArray(dbLinks)) {
+          dbLinks.forEach(link => {
+            const hasAny = Boolean(link.download1080p || link.download720p || link.download480p);
+            configuredLinkMap.set(String(link.id), {
+              has1080p: Boolean(link.download1080p && link.download1080p !== '#'),
+              has720p: Boolean(link.download720p && link.download720p !== '#'),
+              has480p: Boolean(link.download480p && link.download480p !== '#'),
+              hasAny
+            });
           });
         }
       } catch {}
+    }
+
+    if (targetAudience === 'admin') {
+      // SPECIAL ADMIN TASK: Top 10 Indian Box Office & Global Trending movies
+      // Direct task list for Admin to upload/update download links
+      try {
+        const [trendIndiaRes, trendGlobalRes, nowPlayingRes] = await Promise.all([
+          fetch('https://api.themoviedb.org/3/discover/movie?region=IN&sort_by=popularity.desc&vote_count.gte=10', { headers: tmdbHeaders }).catch(() => null),
+          fetch('https://api.themoviedb.org/3/trending/movie/day?language=en-US', { headers: tmdbHeaders }).catch(() => null),
+          fetch('https://api.themoviedb.org/3/movie/now_playing?region=IN&page=1', { headers: tmdbHeaders }).catch(() => null),
+        ]);
+
+        const candidateMap = new Map();
+
+        const addCandidate = (item) => {
+          if (!item || !item.id || !item.poster_path) return;
+          const id = String(item.id);
+          if (!candidateMap.has(id)) {
+            candidateMap.set(id, item);
+          }
+        };
+
+        if (trendIndiaRes && trendIndiaRes.ok) {
+          const data = await trendIndiaRes.json();
+          (data.results || []).slice(0, 8).forEach(addCandidate);
+        }
+        if (nowPlayingRes && nowPlayingRes.ok) {
+          const data = await nowPlayingRes.json();
+          (data.results || []).slice(0, 6).forEach(addCandidate);
+        }
+        if (trendGlobalRes && trendGlobalRes.ok) {
+          const data = await trendGlobalRes.json();
+          (data.results || []).slice(0, 6).forEach(addCandidate);
+        }
+
+        moviesList = Array.from(candidateMap.values()).slice(0, 10);
+      } catch (err) {
+        console.warn('[AdminDigest] Error fetching admin candidates:', err.message);
+      }
+    } else {
+      // USERS DIGEST: Releases for today
+      try {
+        const todayRes = await fetch(`https://api.themoviedb.org/3/discover/movie?region=IN&primary_release_date.gte=${todayDate}&primary_release_date.lte=${todayDate}&sort_by=popularity.desc`, {
+          headers: tmdbHeaders
+        });
+        if (todayRes.ok) {
+          const todayData = await todayRes.json();
+          moviesList = (todayData.results || []).filter(m => m.poster_path && m.overview).slice(0, 8);
+        }
+      } catch {}
+
+      // If today's list is light, blend with top trending daily
+      if (moviesList.length < 5) {
+        try {
+          const trendRes = await fetch('https://api.themoviedb.org/3/trending/all/day?language=en-US', {
+            headers: tmdbHeaders
+          });
+          if (trendRes.ok) {
+            const trendData = await trendRes.json();
+            const existingIds = new Set(moviesList.map(m => m.id));
+            (trendData.results || []).forEach(item => {
+              if (moviesList.length < 10 && !existingIds.has(item.id) && item.poster_path) {
+                existingIds.add(item.id);
+                moviesList.push(item);
+              }
+            });
+          }
+        } catch {}
+      }
     }
 
     const formattedDate = new Date().toLocaleDateString('en-US', {
@@ -699,7 +757,7 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
 
     emailSubject = targetAudience === 'users'
       ? `🎬 Today's Releases & New Movies on MovieVerify (${formattedDate})`
-      : `🎬 [MovieVerify Digest] Top Releases & Trending (${formattedDate})`;
+      : `🔥 [Admin Action Task] Top 10 Trending Movies to Upload Links (${formattedDate})`;
 
     // 5. Generate Cinema Responsive HTML
     const movieItemsHtml = moviesList.map((m, idx) => {
@@ -712,6 +770,10 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
       const year = (m.release_date || m.first_air_date || '').slice(0, 4) || '2026';
       const rating = m.vote_average ? Number(m.vote_average).toFixed(1) : '7.5';
       const portalLink = `https://moviex.sbs/?type=${mType}&id=${m.id}`;
+      const adminEditLink = `https://moviex.sbs/admin?search=${encodeURIComponent(title)}`;
+
+      const linkStatus = configuredLinkMap.get(String(m.id));
+      const hasLinks = linkStatus?.hasAny;
 
       return `
         <tr style="border-bottom: 1px solid #22222a;">
@@ -730,17 +792,31 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
               <span style="background: #272115; border: 1px solid #eab308; color: #facc15; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 12px; margin-right: 6px;">
                 ⭐ ${rating} / 10
               </span>
-              <span style="background: #192219; border: 1px solid #22c55e; color: #4ade80; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 12px;">
-                ${isTv ? '📺 Web Series' : '🎬 Releasing Today'}
+              <span style="background: #192219; border: 1px solid #22c55e; color: #4ade80; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 12px; margin-right: 6px;">
+                ${isTv ? '📺 Web Series' : '🎬 Popular Trending'}
               </span>
+              ${targetAudience === 'admin' ? (
+                hasLinks 
+                  ? `<span style="background: #064e3b; border: 1px solid #10b981; color: #a7f3d0; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 12px;">✅ Link Configured</span>`
+                  : `<span style="background: #7f1d1d; border: 1px solid #ef4444; color: #fecaca; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 12px;">⚠️ Link Missing (Action Required)</span>`
+              ) : ''}
             </div>
             <p style="font-size: 12px; color: #b0b0c0; line-height: 1.45; margin: 0 0 10px 0;">
               ${m.overview ? (m.overview.length > 180 ? m.overview.slice(0, 180) + '...' : m.overview) : 'Fresh premiere now streaming. Watch official trailer and high-speed links directly on MovieVerify.'}
             </p>
             <div>
-              <a href="${portalLink}" target="_blank" style="display: inline-block; background: #E50914; color: #ffffff; font-size: 11px; font-weight: 700; padding: 6px 14px; border-radius: 6px; text-decoration: none; margin-right: 8px;">
-                ▶ Watch / Download on MovieVerify
-              </a>
+              ${targetAudience === 'admin' ? `
+                <a href="${adminEditLink}" target="_blank" style="display: inline-block; background: #E50914; color: #ffffff; font-size: 11px; font-weight: 700; padding: 6px 14px; border-radius: 6px; text-decoration: none; margin-right: 8px;">
+                  ✏️ Update Link in Admin Panel
+                </a>
+                <a href="${portalLink}" target="_blank" style="display: inline-block; background: #22222a; color: #dddddd; font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 6px; text-decoration: none; border: 1px solid #3c3c4a;">
+                  👁️ View Page
+                </a>
+              ` : `
+                <a href="${portalLink}" target="_blank" style="display: inline-block; background: #E50914; color: #ffffff; font-size: 11px; font-weight: 700; padding: 6px 14px; border-radius: 6px; text-decoration: none; margin-right: 8px;">
+                  ▶ Watch / Download on MovieVerify
+                </a>
+              `}
             </div>
           </td>
         </tr>
@@ -764,13 +840,13 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
                 <tr>
                   <td style="padding: 24px; background: linear-gradient(135deg, #220f12 0%, #141419 100%); border-bottom: 2px solid #E50914;">
                     <div style="font-size: 22px; font-weight: 900; letter-spacing: 1px; color: #ffffff;">
-                      <span style="color: #E50914;">MOVIE</span>VERIFY
+                      <span style="color: #E50914;">MOVIE</span>VERIFY ${targetAudience === 'admin' ? '<span style="font-size: 12px; background: #7f1d1d; color: #fecaca; padding: 2px 8px; border-radius: 6px; margin-left: 8px; vertical-align: middle;">ADMIN TASK DESK</span>' : ''}
                     </div>
                     <div style="font-size: 12px; color: #ef4444; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 3px;">
-                      Today's Premiere Releases & Trending Updates
+                      ${targetAudience === 'admin' ? 'Daily Top 10 Trending Action Task (Upload Download Links)' : "Today's Premiere Releases & Trending Updates"}
                     </div>
                     <div style="font-size: 13px; color: #9ca3af; margin-top: 10px;">
-                      📅 ${formattedDate} • Namaste! Aaj release hone wali sabse nayi movies aur web series aapke liye ready hain.
+                      📅 ${formattedDate} • ${targetAudience === 'admin' ? 'Akram, yeh aaj ki Top 10 sabse zyada searched movies hain. Inke 1080p/720p links check karein aur upload karein.' : 'Namaste! Aaj release hone wali sabse nayi movies aur web series aapke liye ready hain.'}
                     </div>
                   </td>
                 </tr>
@@ -788,10 +864,10 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
                 <tr>
                   <td style="padding: 20px; background-color: #1a1a24; text-align: center; border-top: 1px solid #282835;">
                     <p style="font-size: 13px; color: #e4e4e7; margin: 0 0 12px 0;">
-                      Bina kisi ad ya fake link ke fast 1080p downloads aur trailers ke liye visit karein:
+                      ${targetAudience === 'admin' ? 'Direct Admin Control Panel me jakar missing download links paste karein:' : 'Bina kisi ad ya fake link ke fast 1080p downloads aur trailers ke liye visit karein:'}
                     </p>
-                    <a href="https://moviex.sbs" target="_blank" style="display: inline-block; background: #E50914; color: #ffffff; font-size: 13px; font-weight: 800; padding: 10px 24px; border-radius: 8px; text-decoration: none;">
-                      Explore All Today Releases on MovieVerify →
+                    <a href="${targetAudience === 'admin' ? 'https://moviex.sbs/admin' : 'https://moviex.sbs'}" target="_blank" style="display: inline-block; background: #E50914; color: #ffffff; font-size: 13px; font-weight: 800; padding: 10px 24px; border-radius: 8px; text-decoration: none;">
+                      ${targetAudience === 'admin' ? 'Open Admin Control Panel →' : 'Explore All Today Releases on MovieVerify →'}
                     </a>
                   </td>
                 </tr>
@@ -800,11 +876,11 @@ app.all(['/api/admin/daily-digest', '/api/admin/daily-digest/send'], async (req,
                 <tr>
                   <td style="padding: 20px 24px; background-color: #0c0c10; border-top: 1px solid #1f1f28; text-align: center; font-size: 11px; color: #71717a;">
                     <p style="margin: 0 0 6px 0;">
-                      You are receiving this daily email release notification because you signed in to <strong>MovieVerify</strong>.
+                      ${targetAudience === 'admin' ? 'Confidential: Administrator Daily Content Suggestion & Link Action Task.' : 'You are receiving this daily email release notification because you signed in to <strong>MovieVerify</strong>.'}
                     </p>
                     <p style="margin: 0;">
                       <a href="https://moviex.sbs" style="color: #E50914; text-decoration: none; font-weight: 600;">MovieVerify Web</a> •
-                      <a href="https://moviex.sbs" style="color: #9ca3af; text-decoration: none;">Manage Notification Preferences</a>
+                      <a href="https://moviex.sbs/admin" style="color: #9ca3af; text-decoration: none;">Admin Panel</a>
                     </p>
                   </td>
                 </tr>
