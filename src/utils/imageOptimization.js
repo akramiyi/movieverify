@@ -1,17 +1,20 @@
 /**
- * Native TMDB Image Optimization Helper
+ * Direct TMDB Image Optimization Helper
  *
- * Uses direct TMDB CDN URLs (https://image.tmdb.org/t/p/...) with exact responsive sizes.
- * Avoids Cloudflare Paid Image Resizing (/cdn-cgi/image/) while delivering fast, CDN-cached
- * images in w342, w500, w780, and w1280.
+ * Exclusively uses direct TMDB CDN URLs (https://image.tmdb.org/t/p/...) with exact responsive sizes.
+ * Never calls Cloudflare /cdn-cgi/image/ (requires paid plan).
+ *
+ * Rules:
+ * - Desktop Hero: w1280
+ * - Mobile Hero: w780
+ * - Movie Posters: w342 or w500
+ * - Thumbnails: w185
  */
 
-// TMDB supported standard widths
-const TMDB_POSTER_SIZES = [92, 154, 185, 342, 500, 780];
-const TMDB_BACKDROP_SIZES = [300, 780, 1280];
+const TMDB_CDN_BASE = 'https://image.tmdb.org/t/p';
 
 /**
- * Maps any requested target pixel width to the most appropriate TMDB width tier.
+ * Maps requested pixel width to the most appropriate TMDB width tier.
  */
 export function getTmdbSizeByWidth(width, isBackdrop = false) {
   if (isBackdrop) {
@@ -24,23 +27,22 @@ export function getTmdbSizeByWidth(width, isBackdrop = false) {
   if (width <= 185) return 'w185';
   if (width <= 342) return 'w342';
   if (width <= 500) return 'w500';
-  if (width <= 780) return 'w780';
   return 'w780';
 }
 
 /**
- * Returns a direct TMDB optimized image URL with exact size tier.
- * Never requests "original" unless explicitly required, saving up to 85% bandwidth.
+ * Returns a direct TMDB URL with exact size tier (w342, w500, w780, w1280).
+ * Strips any legacy /cdn-cgi/image/ or /api/image prefixes and ensures clean paths.
  */
 export function getOptimizedImageUrl(rawUrl, { width = 500, isBackdrop = false } = {}) {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
 
   // Return data URIs, local assets, or SVG directly
-  if (rawUrl.startsWith('data:') || rawUrl.startsWith('/') || rawUrl.endsWith('.svg')) {
+  if (rawUrl.startsWith('data:') || rawUrl.startsWith('/') && !rawUrl.startsWith('/api/image') || rawUrl.endsWith('.svg')) {
     return rawUrl;
   }
 
-  // Strip any old Cloudflare image resizing prefix if encountered
+  // Strip legacy Cloudflare /cdn-cgi/image/ prefix if present
   let cleanUrl = rawUrl;
   if (cleanUrl.includes('/cdn-cgi/image/')) {
     const cfMatch = cleanUrl.match(/\/https?:\/\/.+$/);
@@ -49,12 +51,17 @@ export function getOptimizedImageUrl(rawUrl, { width = 500, isBackdrop = false }
     }
   }
 
-  // Handle TMDB URLs
+  // Strip /api/image/ prefix if present to route directly to image.tmdb.org
+  if (cleanUrl.includes('/api/image/')) {
+    cleanUrl = cleanUrl.replace(/.*?\/api\/image\//, 'https://image.tmdb.org/t/p/');
+  }
+
+  // Handle TMDB URLs: extract path and apply ideal size tier
   if (cleanUrl.includes('image.tmdb.org/t/p/')) {
     const match = cleanUrl.match(/\/t\/p\/[^/]+(\/.+)$/);
     if (match && match[1]) {
       const tmdbSize = getTmdbSizeByWidth(width, isBackdrop);
-      return `https://image.tmdb.org/t/p/${tmdbSize}${match[1]}`;
+      return `${TMDB_CDN_BASE}/${tmdbSize}${match[1]}`;
     }
   }
 
@@ -63,9 +70,8 @@ export function getOptimizedImageUrl(rawUrl, { width = 500, isBackdrop = false }
 
 /**
  * Responsive backdrop sources helper for Hero Carousel:
- * Mobile: w780 directly from image.tmdb.org
- * Desktop: w1280 directly from image.tmdb.org
- * Fallback: w1280
+ * Mobile (<768px): w780 direct from TMDB
+ * Desktop (>=769px): w1280 direct from TMDB
  */
 export function getHeroBackdropSources(movie) {
   if (!movie) return { mobile: '', desktop: '', fallback: '' };
@@ -82,10 +88,13 @@ export function getHeroBackdropSources(movie) {
   } else if (raw.includes('/t/p/')) {
     const match = raw.match(/\/t\/p\/[^/]+(\/.+)$/);
     if (match) imgPath = match[1];
+  } else if (raw.includes('/api/image/')) {
+    const match = raw.match(/\/api\/image\/[^/]+(\/.+)$/);
+    if (match) imgPath = match[1];
   }
 
-  const mobileUrl = imgPath ? `https://image.tmdb.org/t/p/w780${imgPath}` : raw;
-  const desktopUrl = imgPath ? `https://image.tmdb.org/t/p/w1280${imgPath}` : raw;
+  const mobileUrl = imgPath ? `${TMDB_CDN_BASE}/w780${imgPath}` : raw;
+  const desktopUrl = imgPath ? `${TMDB_CDN_BASE}/w1280${imgPath}` : raw;
 
   return {
     mobile: mobileUrl,

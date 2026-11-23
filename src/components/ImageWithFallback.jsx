@@ -39,9 +39,9 @@ const ImageWithFallback = ({
     }
   }, [rawSrc, onLoad]);
 
-  // Native TMDB direct sizing (w500 default, w780/w1280 for priority)
+  // Native TMDB direct sizing (w342 default, w500/w780 for priority)
   const currentSrc = (rawSrc && !rawSrc.startsWith('data:') && !rawSrc.startsWith('/'))
-    ? getOptimizedImageUrl(rawSrc, { width: priority ? 780 : 500 })
+    ? getOptimizedImageUrl(rawSrc, { width: priority ? 500 : 342 })
     : rawSrc;
 
   // Generate responsive srcSet for posters with native TMDB sizes
@@ -49,15 +49,14 @@ const ImageWithFallback = ({
     if (!url || typeof url !== 'string' || url.startsWith('data:') || url.startsWith('/')) {
       return undefined;
     }
-    const w200 = getOptimizedImageUrl(url, { width: 185 });
+    const w185 = getOptimizedImageUrl(url, { width: 185 });
     const w342 = getOptimizedImageUrl(url, { width: 342 });
     const w500 = getOptimizedImageUrl(url, { width: 500 });
-    const w780 = getOptimizedImageUrl(url, { width: 780 });
-    return `${w200} 185w, ${w342} 342w, ${w500} 500w, ${w780} 780w`;
+    return `${w185} 185w, ${w342} 342w, ${w500} 500w`;
   };
 
   const srcSet = getSrcSet(rawSrc);
-  const sizes = srcSet ? '(max-width: 640px) 160px, (max-width: 1024px) 240px, 350px' : undefined;
+  const sizes = srcSet ? '(max-width: 640px) 154px, (max-width: 1024px) 200px, 342px' : undefined;
 
   return (
     <img

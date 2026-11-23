@@ -140,6 +140,8 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
 
   if (!currentMovie) return null;
 
+  const heroSources = getHeroBackdropSources(currentMovie);
+
   const isTvSeries = Boolean(
     currentMovie.mediaType === 'tv' ||
     currentMovie.media_type === 'tv' ||
@@ -176,18 +178,18 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
             transition={{ duration: 7.5, ease: 'easeOut' }}
             className="absolute inset-0 w-full h-full"
           >
-            {/* Picture element: Mobile loads w780, Desktop loads w1280 directly from TMDB CDN */}
+            {/* Picture element: Mobile loads direct w780, Desktop loads direct w1280 from TMDB CDN */}
             <picture className="w-full h-full">
               <source
                 media="(max-width: 768px)"
-                srcSet={getHeroBackdropSources(currentMovie).mobile}
+                srcSet={heroSources.mobile}
               />
               <source
                 media="(min-width: 769px)"
-                srcSet={getHeroBackdropSources(currentMovie).desktop}
+                srcSet={heroSources.desktop}
               />
               <img
-                src={getHeroBackdropSources(currentMovie).desktop || currentMovie.backdrop || currentMovie.poster}
+                src={heroSources.desktop || currentMovie.backdrop || currentMovie.poster}
                 alt={currentMovie.title}
                 className="w-full h-full object-cover object-center"
                 loading="eager"
