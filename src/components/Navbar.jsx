@@ -578,46 +578,24 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
                 {/* Actions */}
                 <div className="pt-3 space-y-1">
                   {isAdminUser ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsProfileMenuOpen(false);
-                          if (onAdminClick) onAdminClick();
-                        }}
-                        className="w-full flex items-center justify-between gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg bg-red-950/40 hover:bg-red-900/50 text-red-200 hover:text-white transition cursor-pointer text-left"
-                      >
-                        <span className="flex items-center gap-2.5">
-                          <ShieldCheck className="w-4 h-4 text-red-400" />
-                          <span>Admin Control Panel</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        if (onAdminClick) onAdminClick();
+                      }}
+                      className="w-full flex items-center justify-between gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg bg-red-950/40 hover:bg-red-900/50 text-red-200 hover:text-white transition cursor-pointer text-left"
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <ShieldCheck className="w-4 h-4 text-red-400" />
+                        <span>Admin Control Panel</span>
+                      </span>
+                      {pendingReports > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E50914] text-white">
+                          {pendingReports > 9 ? '9+' : pendingReports}
                         </span>
-                        {pendingReports > 0 && (
-                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E50914] text-white">
-                            {pendingReports > 9 ? '9+' : pendingReports}
-                          </span>
-                        )}
-                      </button>
-
-                      {/* Premium X Classified Vault Button */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsProfileMenuOpen(false);
-                          setIsPremiumXOpen(true);
-                        }}
-                        className="w-full flex items-center justify-between gap-2.5 px-3 py-2 text-xs font-bold rounded-lg bg-gradient-to-r from-red-950/60 to-black hover:from-red-900/70 hover:to-red-950/40 border border-red-500/30 text-white transition cursor-pointer text-left shadow-[0_0_15px_rgba(229,9,20,0.15)] group"
-                      >
-                        <span className="flex items-center gap-2.5">
-                          <Sparkles className="w-4 h-4 text-[#E50914] group-hover:rotate-12 transition-transform" />
-                          <span className="tracking-wide">
-                            Premium <span className="text-[#E50914] font-black">X</span>
-                          </span>
-                        </span>
-                        <span className="flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-600/30 text-red-300 border border-red-500/40">
-                          <KeyRound className="w-2.5 h-2.5" /> 6-Digit
-                        </span>
-                      </button>
-                    </>
+                      )}
+                    </button>
                   ) : (
                     <button
                       type="button"
@@ -636,6 +614,26 @@ const Navbar = ({ onSearch, searchQuery, activeTab = 'home', setActiveTab, onPro
                       </span>
                     </button>
                   )}
+
+                  {/* Premium X button visible to all logged-in accounts */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      setIsPremiumXOpen(true);
+                    }}
+                    className="w-full flex items-center justify-between gap-2.5 px-3 py-2 text-xs font-bold rounded-lg bg-gradient-to-r from-red-950/60 to-black hover:from-red-900/70 hover:to-red-950/40 border border-red-500/30 text-white transition cursor-pointer text-left shadow-[0_0_15px_rgba(229,9,20,0.15)] group"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Sparkles className="w-4 h-4 text-[#E50914] group-hover:rotate-12 transition-transform" />
+                      <span className="tracking-wide">
+                        Premium <span className="text-[#E50914] font-black">X</span>
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-600/30 text-red-300 border border-red-500/40">
+                      <KeyRound className="w-2.5 h-2.5" /> 6-Digit
+                    </span>
+                  </button>
 
                   <button
                     type="button"

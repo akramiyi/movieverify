@@ -36,40 +36,21 @@ import {
 import useScrollLock from '../hooks/useScrollLock';
 import { supabase } from '../data/supabaseClient';
 import { searchTMDB, activeLinks } from '../hooks/useTMDB';
+import { verifyLockerPin } from '../utils/lockerSecurity';
 
-const STORAGE_HASH_KEY = 'moviex_premium_x_pin_hash';
 const STORAGE_SESSION_AUTH = 'moviex_premium_x_authorized_until';
-
-// SHA-256 helper for client-side cryptographic hashing of the 6-digit PIN
-async function hashPin(pin) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(`moviex_salt_${pin}_2026_secure`);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null, isAdminUser = false, onLaunchAdminPanel }) {
   useScrollLock(isOpen);
 
-  // Admin Verification state
-  const [adminUser, setAdminUser] = useState(() => currentUser || null);
-  const [isAdminVerified, setIsAdminVerified] = useState(() => Boolean(isAdminUser));
-  const [isVerifyingAdmin, setIsVerifyingAdmin] = useState(false);
-  const [adminError, setAdminError] = useState('');
-
-  // PIN & Vault States
-  const [hasPinConfigured, setHasPinConfigured] = useState(false);
+  // States
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const [newPinInput, setNewPinInput] = useState('');
-  const [confirmPinInput, setConfirmPinInput] = useState('');
   const [showPin, setShowPin] = useState(false);
-  const [isSettingUp, setIsSettingUp] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [activeTab, setActiveTab] = useState('manager'); // 'manager' | 'cloud' | 'system' | 'security'
+  const [activeTab, setActiveTab] = useState('manager'); // 'manager' | 'cloud' | 'system'
   const inputRef = useRef(null);
 
   // Custom Quick Content Manager State (Direct DB insert/update from inside Premium X)
@@ -86,90 +67,7 @@ export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null
   const [isLoadingLinks, setIsLoadingLinks] = useState(false);
   const [savingLink, setSavingLink] = useState(false);
 
-  // 1. Strictly verify that the currently logged-in user belongs to admin_users table
-  useEffect(() => {
-    if (!isOpen) return;
-
-    let isMounted = true;
-
-    // Fast-path: If Navbar already verified this user as Administrator
-    if (isAdminUser && currentUser) {
-      setIsAdminVerified(true);
-      setAdminUser(currentUser);
-      setIsVerifyingAdmin(false);
-      return;
-    }
-
-    setIsVerifyingAdmin(true);
-    setAdminError('');
-
-    const verifyAdmin = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const activeUser = session?.user || currentUser;
-
-        if (!activeUser) {
-          if (isMounted) {
-            setIsAdminVerified(false);
-            setAdminError('Access Denied: Please sign in with your verified administrator email.');
-            setIsVerifyingAdmin(false);
-          }
-          return;
-        }
-
-        // Query admin_users table by user_id OR email
-        const { data: adminData, error: adminErr } = await supabase
-          .from('admin_users')
-          .select('user_id, email, role')
-          .or(`user_id.eq.${activeUser.id},email.eq.${activeUser.email}`)
-          .maybeSingle();
-
-        if (adminErr || !adminData) {
-          if (isMounted) {
-            // Check if user has admin claim or is the primary project admin
-            const isKnownAdmin = activeUser.email && activeUser.email.toLowerCase() === 'meakramiyi@gmail.com';
-            if (isKnownAdmin) {
-              setAdminUser(activeUser);
-              setIsAdminVerified(true);
-              setIsVerifyingAdmin(false);
-            } else {
-              setIsAdminVerified(false);
-              setAdminError(`Access Denied: ${activeUser.email} is not authorized in admin_users database.`);
-              setIsVerifyingAdmin(false);
-            }
-          }
-          return;
-        }
-
-        if (isMounted) {
-          setAdminUser(adminData);
-          setIsAdminVerified(true);
-          setIsVerifyingAdmin(false);
-        }
-      } catch (err) {
-        if (isMounted) {
-          // If error is network-related but email matches admin email
-          const currentEmail = currentUser?.email;
-          if (currentEmail && currentEmail.toLowerCase() === 'meakramiyi@gmail.com') {
-            setAdminUser(currentUser);
-            setIsAdminVerified(true);
-          } else {
-            setIsAdminVerified(false);
-            setAdminError(`Verification Error: ${err.message}`);
-          }
-          setIsVerifyingAdmin(false);
-        }
-      }
-    };
-
-    verifyAdmin();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen, isAdminUser, currentUser]);
-
-  // 2. Check existing PIN configuration on mount/open
+  // Check existing session authorization on open
   useEffect(() => {
     if (!isOpen) {
       setPinInput('');
@@ -178,29 +76,20 @@ export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null
       return;
     }
 
-    const storedHash = localStorage.getItem(STORAGE_HASH_KEY);
     const authUntil = sessionStorage.getItem(STORAGE_SESSION_AUTH);
-
-    if (storedHash) {
-      setHasPinConfigured(true);
-      if (authUntil && parseInt(authUntil, 10) > Date.now()) {
-        setIsUnlocked(true);
-        loadDbLinks();
-      } else {
-        setIsUnlocked(false);
-      }
+    if (authUntil && parseInt(authUntil, 10) > Date.now()) {
+      setIsUnlocked(true);
+      loadDbLinks();
     } else {
-      setHasPinConfigured(false);
-      setIsSettingUp(true);
       setIsUnlocked(false);
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
+    if (isOpen && !isUnlocked && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [isOpen, isSettingUp, isUnlocked]);
+  }, [isOpen, isUnlocked]);
 
   // Load database links
   const loadDbLinks = async () => {
@@ -332,7 +221,7 @@ export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null
     setErrorMsg('');
   };
 
-  // Verify PIN
+  // Verify PIN against active Locker Master Code
   const handleVerifyPin = async (e) => {
     if (e) e.preventDefault();
     if (pinInput.length !== 6) {
@@ -344,10 +233,9 @@ export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null
     setErrorMsg('');
 
     try {
-      const storedHash = localStorage.getItem(STORAGE_HASH_KEY);
-      const computedHash = await hashPin(pinInput);
+      const isValid = await verifyLockerPin(pinInput);
 
-      if (computedHash === storedHash) {
+      if (isValid) {
         setIsUnlocked(true);
         sessionStorage.setItem(STORAGE_SESSION_AUTH, String(Date.now() + 2 * 60 * 60 * 1000));
         setSuccessMsg('Access Granted: Premium X Vault Unlocked');
@@ -359,40 +247,6 @@ export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null
       }
     } catch {
       setErrorMsg('Cryptographic verification failed.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Setup or Reset PIN
-  const handleCreatePin = async (e) => {
-    if (e) e.preventDefault();
-    if (newPinInput.length !== 6) {
-      setErrorMsg('Access code must be exactly 6 numeric digits.');
-      return;
-    }
-    if (newPinInput !== confirmPinInput) {
-      setErrorMsg('Access codes do not match.');
-      return;
-    }
-
-    setIsProcessing(true);
-    setErrorMsg('');
-
-    try {
-      const hashed = await hashPin(newPinInput);
-      localStorage.setItem(STORAGE_HASH_KEY, hashed);
-      sessionStorage.setItem(STORAGE_SESSION_AUTH, String(Date.now() + 2 * 60 * 60 * 1000));
-      setHasPinConfigured(true);
-      setIsSettingUp(false);
-      setIsUnlocked(true);
-      setNewPinInput('');
-      setConfirmPinInput('');
-      setSuccessMsg('6-Digit Security Access Code successfully registered!');
-      setTimeout(() => setSuccessMsg(''), 3000);
-      loadDbLinks();
-    } catch {
-      setErrorMsg('Failed to create secure hash.');
     } finally {
       setIsProcessing(false);
     }
@@ -427,18 +281,18 @@ export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null
                   <span>PREMIUM</span>
                   <span className="text-[#E50914] text-xl font-black">X</span>
                   <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-red-950 text-red-400 border border-red-800/60 ml-1">
-                    Master Admin Panel
+                    Classified Access
                   </span>
                 </h2>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                {adminUser ? `Signed as ${adminUser.email}` : 'Restricted to Verified Administrator Email'}
+                {currentUser?.email ? `Logged in: ${currentUser.email}` : 'Protected 6-Digit Master Vault'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {isUnlocked && isAdminVerified && (
+            {isUnlocked && (
               <button
                 type="button"
                 onClick={handleLockVault}
@@ -460,193 +314,77 @@ export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null
 
         {/* Modal Scroll Body */}
         <div className="p-5 sm:p-7 overflow-y-auto overscroll-contain flex-1 space-y-6">
-          {/* STEP 1: Verify Admin Email Check */}
-          {isVerifyingAdmin ? (
-            <div className="py-16 text-center space-y-3">
-              <RefreshCw className="w-8 h-8 text-red-500 animate-spin mx-auto" />
-              <p className="text-sm font-semibold text-gray-300">
-                Verifying Administrator Email Credentials...
-              </p>
-            </div>
-          ) : !isAdminVerified ? (
-            <div className="max-w-md mx-auto py-8 text-center space-y-4">
-              <div className="w-16 h-16 rounded-3xl bg-red-950/60 border border-red-500/40 mx-auto flex items-center justify-center shadow-[0_0_30px_rgba(229,9,20,0.3)]">
-                <ShieldAlert className="w-8 h-8 text-red-400" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Administrator Verification Required</h3>
-              <p className="text-xs text-red-300 bg-red-950/40 p-3.5 rounded-xl border border-red-500/30 leading-relaxed">
-                {adminError || 'Yeh section sirf verified admin email ke liye reserved hai.'}
-              </p>
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition"
-              >
-                Close Vault
-              </button>
-            </div>
-          ) : !isUnlocked ? (
-            /* STEP 2: 6-Digit PIN Security Gate */
-            <div className="max-w-md mx-auto py-4 text-center space-y-6">
+          {!isUnlocked ? (
+            /* 6-Digit PIN Security Gate */
+            <div className="max-w-md mx-auto py-6 text-center space-y-6">
               <div className="w-16 h-16 rounded-3xl bg-red-950/60 border border-red-500/40 mx-auto flex items-center justify-center shadow-[0_0_30px_rgba(229,9,20,0.3)]">
                 <KeyRound className="w-8 h-8 text-red-400 animate-pulse" />
               </div>
 
               <div>
                 <h3 className="text-xl font-bold text-white tracking-wide">
-                  {isSettingUp ? 'Create 6-Digit Master Security Code' : 'Enter 6-Digit Master Access Code'}
+                  Enter 6-Digit Master Access Code
                 </h3>
                 <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
-                  {isSettingUp
-                    ? 'Pehli baar setup ke liye apna 6-digit access code banayein. Iske baad aapka poora control panel unlock ho jayega.'
-                    : `Verified Admin: ${adminUser?.email}. Access ke liye apna 6-digit master access code daalein.`}
+                  Admin panel ke <strong>Locker</strong> tab me banaya gaya 6-digit access code daalein. Jisko bhi code pata hoga woh Premium X unlock kar sakta hai.
                 </p>
               </div>
 
-              {isSettingUp ? (
-                /* PIN Setup Form */
-                <form onSubmit={handleCreatePin} className="space-y-4">
-                  <div className="space-y-2 text-left">
-                    <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">
-                      New 6-Digit Code
-                    </label>
-                    <input
-                      ref={inputRef}
-                      type={showPin ? 'text' : 'password'}
-                      maxLength={6}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={newPinInput}
-                      onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="e.g. 749201"
-                      className="w-full bg-[#141419] border border-white/15 focus:border-red-500 rounded-2xl px-4 py-3 text-center text-xl font-mono tracking-widest text-white outline-none transition shadow-inner"
-                    />
-                  </div>
-
-                  <div className="space-y-2 text-left">
-                    <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">
-                      Confirm 6-Digit Code
-                    </label>
-                    <input
-                      type={showPin ? 'text' : 'password'}
-                      maxLength={6}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={confirmPinInput}
-                      onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="Confirm 6 digits"
-                      className="w-full bg-[#141419] border border-white/15 focus:border-red-500 rounded-2xl px-4 py-3 text-center text-xl font-mono tracking-widest text-white outline-none transition shadow-inner"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-gray-400 px-1">
-                    <button
-                      type="button"
-                      onClick={() => setShowPin(!showPin)}
-                      className="flex items-center gap-1.5 hover:text-white transition cursor-pointer"
-                    >
-                      {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      <span>{showPin ? 'Hide PIN' : 'Show PIN'}</span>
-                    </button>
-                    {hasPinConfigured && (
-                      <button
-                        type="button"
-                        onClick={() => setIsSettingUp(false)}
-                        className="text-red-400 hover:underline cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                  </div>
-
-                  {errorMsg && (
-                    <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/50 text-red-300 text-xs flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span>{errorMsg}</span>
-                    </div>
-                  )}
-
+              <form onSubmit={handleVerifyPin} className="space-y-4">
+                <div className="relative">
+                  <input
+                    ref={inputRef}
+                    type={showPin ? 'text' : 'password'}
+                    maxLength={6}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={pinInput}
+                    onChange={(e) => handlePinChange(e.target.value)}
+                    placeholder="&bull; &bull; &bull; &bull; &bull; &bull;"
+                    className="w-full bg-[#141419] border border-white/20 focus:border-red-500 rounded-2xl px-4 py-3.5 text-center text-2xl font-mono tracking-[0.5em] text-white outline-none transition shadow-inner"
+                  />
                   <button
-                    type="submit"
-                    disabled={isProcessing || newPinInput.length !== 6 || confirmPinInput.length !== 6}
-                    className="w-full bg-[#E50914] hover:bg-[#b80710] disabled:opacity-50 text-white font-bold text-sm py-3.5 rounded-2xl shadow-[0_0_25px_rgba(229,9,20,0.5)] transition hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                    type="button"
+                    onClick={() => setShowPin(!showPin)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white cursor-pointer"
                   >
-                    {isProcessing ? 'Encrypting Code...' : 'Save & Lock Master Code'}
+                    {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
-                </form>
-              ) : (
-                /* PIN Verification Form */
-                <form onSubmit={handleVerifyPin} className="space-y-4">
-                  <div className="relative">
-                    <input
-                      ref={inputRef}
-                      type={showPin ? 'text' : 'password'}
-                      maxLength={6}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={pinInput}
-                      onChange={(e) => handlePinChange(e.target.value)}
-                      placeholder="&bull; &bull; &bull; &bull; &bull; &bull;"
-                      className="w-full bg-[#141419] border border-white/20 focus:border-red-500 rounded-2xl px-4 py-3.5 text-center text-2xl font-mono tracking-[0.5em] text-white outline-none transition shadow-inner"
+                </div>
+
+                {/* 6 Digit Indicator Dots */}
+                <div className="flex justify-center gap-3 py-1">
+                  {[0, 1, 2, 3, 4, 5].map((idx) => (
+                    <div
+                      key={idx}
+                      className={`w-3 h-3 rounded-full transition-all duration-200 ${
+                        pinInput.length > idx
+                          ? 'bg-[#E50914] shadow-[0_0_10px_rgba(229,9,20,0.8)] scale-110'
+                          : 'bg-white/10 border border-white/20'
+                      }`}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPin(!showPin)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white cursor-pointer"
-                    >
-                      {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                  ))}
+                </div>
+
+                {errorMsg && (
+                  <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/50 text-red-300 text-xs flex items-center justify-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{errorMsg}</span>
                   </div>
+                )}
 
-                  {/* 6 Digit Indicator Dots */}
-                  <div className="flex justify-center gap-3 py-1">
-                    {[0, 1, 2, 3, 4, 5].map((idx) => (
-                      <div
-                        key={idx}
-                        className={`w-3 h-3 rounded-full transition-all duration-200 ${
-                          pinInput.length > idx
-                            ? 'bg-[#E50914] shadow-[0_0_10px_rgba(229,9,20,0.8)] scale-110'
-                            : 'bg-white/10 border border-white/20'
-                        }`}
-                      />
-                    ))}
-                  </div>
-
-                  {errorMsg && (
-                    <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/50 text-red-300 text-xs flex items-center justify-center gap-2">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span>{errorMsg}</span>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={isProcessing || pinInput.length !== 6}
-                    className="w-full bg-[#E50914] hover:bg-[#b80710] disabled:opacity-50 text-white font-bold text-sm py-3.5 rounded-2xl shadow-[0_0_25px_rgba(229,9,20,0.5)] transition hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Unlock className="w-4 h-4" />
-                    <span>{isProcessing ? 'Verifying...' : 'Unlock Premium X Vault'}</span>
-                  </button>
-
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm('Resetting PIN requires entering a new 6-digit access code. Continue?')) {
-                          setIsSettingUp(true);
-                          setErrorMsg('');
-                        }
-                      }}
-                      className="text-xs text-gray-500 hover:text-red-400 transition cursor-pointer"
-                    >
-                      Forgot or reset 6-digit code?
-                    </button>
-                  </div>
-                </form>
-              )}
+                <button
+                  type="submit"
+                  disabled={isProcessing || pinInput.length !== 6}
+                  className="w-full bg-[#E50914] hover:bg-[#b80710] disabled:opacity-50 text-white font-bold text-sm py-3.5 rounded-2xl shadow-[0_0_25px_rgba(229,9,20,0.5)] transition hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Unlock className="w-4 h-4" />
+                  <span>{isProcessing ? 'Verifying...' : 'Unlock Premium X Vault'}</span>
+                </button>
+              </form>
             </div>
           ) : (
-            /* STEP 3: UNLOCKED MASTER ADMIN INTERIOR WITH FULL CUSTOMIZABILITY */
+            /* UNLOCKED MASTER ADMIN INTERIOR WITH FULL CUSTOMIZABILITY */
             <div className="space-y-6 animate-in fade-in duration-300">
               {/* Top Banner Alert */}
               <div className="p-4 rounded-2xl bg-gradient-to-r from-red-950/40 via-black/40 to-black/40 border border-red-500/30 flex items-center justify-between flex-wrap gap-3">
@@ -696,7 +434,6 @@ export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null
                   { id: 'manager', label: 'Movie & Link Customizer', icon: Film },
                   { id: 'cloud', label: 'Cloud Table Inspector', icon: Database },
                   { id: 'system', label: 'Architecture Diagnostics', icon: Cpu },
-                  { id: 'security', label: 'PIN & Master Code', icon: KeyRound },
                 ].map((t) => {
                   const Icon = t.icon;
                   const isActive = activeTab === t.id;
@@ -985,33 +722,6 @@ export default function PremiumXVaultModal({ isOpen, onClose, currentUser = null
                       Handles TMDB proxies, notifications, automated digests, and bot automation.
                     </p>
                   </div>
-                </div>
-              )}
-
-              {/* TAB 4: PIN & MASTER SECURITY CODE MANAGEMENT */}
-              {activeTab === 'security' && (
-                <div className="p-5 rounded-2xl bg-[#141419] border border-white/10 space-y-4">
-                  <h5 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <KeyRound className="w-4 h-4 text-red-500" />
-                    <span>Manage Master 6-Digit Access Code</span>
-                  </h5>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Aap kabhi bhi apna 6-digit master security code badal sakte hain. Naya code lagane par purana code turant expire ho jayega.
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSettingUp(true);
-                      setIsUnlocked(false);
-                      setNewPinInput('');
-                      setConfirmPinInput('');
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-red-950/60 hover:bg-red-900/60 border border-red-500/40 text-red-300 text-xs font-bold transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <KeyRound className="w-3.5 h-3.5" />
-                    <span>Change 6-Digit Master PIN</span>
-                  </button>
                 </div>
               )}
             </div>

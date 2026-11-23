@@ -6,6 +6,7 @@ import ReportsPanel from './ReportsPanel';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import CampaignManager from './CampaignManager';
 import EmailBroadcastManager from './EmailBroadcastManager';
+import { updateLockerPin, getActiveLockerHash } from '../utils/lockerSecurity';
 import { buildContentUpdateIdempotencyKey } from '../utils/notificationLinks';
 import useScrollLock from '../hooks/useScrollLock';
 
@@ -117,6 +118,12 @@ const AdminPanel = ({ onClose }) => {
   const [lockToggling, setLockToggling] = useState(false);
   const [lockKeyUpdating, setLockKeyUpdating] = useState(false);
   const [lockMessage, setLockMessage] = useState(null);
+
+  // Locker 6-Digit PIN Master Management State
+  const [lockerPinInput, setLockerPinInput] = useState('');
+  const [lockerPinConfirm, setLockerPinConfirm] = useState('');
+  const [lockerSaving, setLockerSaving] = useState(false);
+  const [lockerStatusMsg, setLockerStatusMsg] = useState(null);
 
   // Fetch all link configurations from Supabase
   const fetchCurrentLinks = async () => {
@@ -1367,6 +1374,18 @@ const AdminPanel = ({ onClose }) => {
             <Sliders className="w-3.5 h-3.5 text-purple-400" />
             <span>Category Controls</span>
           </button>
+          <button 
+            onClick={() => setActiveTab(activeTab === 'locker' ? 'manager' : 'locker')}
+            className={`transition-all duration-200 text-xs font-bold px-3.5 py-1.5 sm:py-2 rounded-full flex items-center gap-1.5 focus:outline-none backdrop-blur-md cursor-pointer border whitespace-nowrap shrink-0 ${
+              activeTab === 'locker'
+                ? 'bg-gradient-to-r from-red-600 to-amber-600 text-white border-red-400/80 shadow-[0_0_20px_rgba(229,9,20,0.6)] scale-[1.03]'
+                : 'bg-red-950/40 hover:bg-red-900/40 text-red-300 hover:text-white border-red-500/30'
+            }`}
+            title="Locker Master 6-Digit PIN Generator & Global Access Control"
+          >
+            <Key className="w-3.5 h-3.5 text-amber-400" />
+            <span>🔐 Locker</span>
+          </button>
         </div>
 
         {/* Main Content Area */}
@@ -1394,6 +1413,113 @@ const AdminPanel = ({ onClose }) => {
           ) : activeTab === 'reports' ? (
             <div className="w-full flex-1">
               <ReportsPanel />
+            </div>
+          ) : activeTab === 'locker' ? (
+            <div className="w-full flex-1 max-w-2xl mx-auto space-y-6">
+              <div className="bg-[#141419] border border-red-500/30 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600 to-amber-600 flex items-center justify-center text-white shadow-lg shadow-red-600/30">
+                    <Key className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white flex items-center gap-2">
+                      <span>Locker Master PIN Generator</span>
+                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-red-950 text-red-300 border border-red-800/60">
+                        Admin Only
+                      </span>
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Yahan se banaya gaya 6-digit access code sabhi accounts ke "Premium X" vault ko unlock karega.
+                    </p>
+                  </div>
+                </div>
+
+                {lockerStatusMsg && (
+                  <div className={`p-4 rounded-2xl text-xs font-semibold flex items-center gap-2.5 border ${
+                    lockerStatusMsg.type === 'success'
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                      : 'bg-red-950/40 border-red-500/40 text-red-300'
+                  }`}>
+                    {lockerStatusMsg.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />}
+                    <span>{lockerStatusMsg.text}</span>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-300 uppercase tracking-wider block">
+                      New 6-Digit Master Code
+                    </label>
+                    <input
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={lockerPinInput}
+                      onChange={(e) => setLockerPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="e.g. 749201"
+                      className="w-full bg-black/50 border border-white/15 focus:border-red-500 rounded-2xl px-4 py-3.5 text-center text-2xl font-mono tracking-widest text-white outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-gray-300 uppercase tracking-wider block">
+                      Confirm 6-Digit Code
+                    </label>
+                    <input
+                      type="password"
+                      maxLength={6}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={lockerPinConfirm}
+                      onChange={(e) => setLockerPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Confirm 6 digits"
+                      className="w-full bg-black/50 border border-white/15 focus:border-red-500 rounded-2xl px-4 py-3.5 text-center text-2xl font-mono tracking-widest text-white outline-none"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={lockerSaving || lockerPinInput.length !== 6 || lockerPinConfirm.length !== 6}
+                    onClick={async () => {
+                      if (lockerPinInput !== lockerPinConfirm) {
+                        setLockerStatusMsg({ type: 'error', text: 'Codes do not match. Please verify both inputs.' });
+                        return;
+                      }
+                      setLockerSaving(true);
+                      setLockerStatusMsg(null);
+                      try {
+                        await updateLockerPin(lockerPinInput);
+                        setLockerStatusMsg({
+                          type: 'success',
+                          text: `✅ Naya 6-digit Locker code safalta se set ho gaya! Ab jisko bhi yeh code pata hoga woh Premium X khol payega.`
+                        });
+                        setLockerPinInput('');
+                        setLockerPinConfirm('');
+                      } catch (err) {
+                        setLockerStatusMsg({ type: 'error', text: err.message });
+                      } finally {
+                        setLockerSaving(false);
+                      }
+                    }}
+                    className="w-full bg-[#E50914] hover:bg-[#b80710] disabled:opacity-50 text-white font-bold text-sm py-3.5 rounded-2xl shadow-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{lockerSaving ? 'Saving Master Code...' : 'Save & Deploy 6-Digit Locker Code'}</span>
+                  </button>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2 text-xs text-gray-400">
+                  <div className="text-white font-bold flex items-center gap-1.5">
+                    <span>💡 How it works:</span>
+                  </div>
+                  <p>
+                    1. Sirf Admin Panel ke <strong>Locker</strong> tab se hi yeh 6-digit code generate ya change kiya ja sakta hai.<br />
+                    2. Sabhi accounts ke profile dropdown me <strong>Premium X</strong> button dikhega.<br />
+                    3. Jisko bhi aap yeh 6-digit access code denge, woh apna code daal kar Premium X vault unlock kar sakega.
+                  </p>
+                </div>
+              </div>
             </div>
           ) : activeTab === 'analytics' ? (
             <div className="w-full flex-1">
