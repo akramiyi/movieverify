@@ -1021,17 +1021,31 @@ test('HTTP Dispatch Endpoint Suite (POST /api/notifications/dispatch)', async (t
     assert.equal(typeof json.worker_id, 'string');
   });
 
-  await t.test('4. Rejects query parameter authentication (?secret=)', async () => {
-    const { req, res } = createMockHttp({
-      method: 'POST',
-      headers: {}, // No x-worker-secret header
-    });
-    req.url = '/api/notifications/dispatch?secret=secret-test-key-xyz';
-    req.query = { secret: 'secret-test-key-xyz' };
+  await t.test('4. Validates query parameter authentication (?secret=)', async () => {
+    const mockSupabase = createMockSupabaseWithRpc({ deliveries: [], tokens: [] });
+    const mockMessaging = createMockMessaging();
 
-    await dispatchHandler(req, res);
-    assert.equal(res.statusCode, 401);
-    assert.match(res.json().error, /Valid x-worker-secret header required/);
+    // Valid query secret succeeds
+    const { req: reqValid, res: resValid } = createMockHttp({
+      method: 'GET',
+      headers: {},
+    });
+    reqValid.url = '/api/notifications/dispatch?secret=secret-test-key-xyz';
+    reqValid.query = { secret: 'secret-test-key-xyz' };
+
+    await dispatchHandler(reqValid, resValid, { supabase: mockSupabase, messaging: mockMessaging });
+    assert.equal(resValid.statusCode, 200);
+
+    // Invalid query secret rejected (401)
+    const { req: reqInvalid, res: resInvalid } = createMockHttp({
+      method: 'GET',
+      headers: {},
+    });
+    reqInvalid.url = '/api/notifications/dispatch?secret=wrong-secret-key';
+    reqInvalid.query = { secret: 'wrong-secret-key' };
+
+    await dispatchHandler(reqInvalid, resInvalid, { supabase: mockSupabase, messaging: mockMessaging });
+    assert.equal(resInvalid.statusCode, 401);
   });
 
   await t.test('5. Validates Authorization: Bearer support and rejects invalid schemes or headers', async () => {

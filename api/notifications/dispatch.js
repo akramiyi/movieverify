@@ -7,10 +7,9 @@
  * 2. Vercel Cron / external ping monitors via 'Authorization: Bearer <CRON_SECRET>' header (GET or POST).
  * 
  * Security Controls:
- * 1. Accepts authentication via 'x-worker-secret' or 'Authorization: Bearer <token>'.
- * 2. Rejects query parameters (?secret=), alternate headers (x-cron-secret), or invalid schemes.
- * 3. Uses constant-time secret comparison (crypto.timingSafeEqual with sha256).
- * 4. Fails closed if neither INTERNAL_WORKER_SECRET nor CRON_SECRET is configured.
+ * 1. Accepts authentication via 'x-worker-secret', 'Authorization: Bearer <token>', or '?secret= / ?key=' query param.
+ * 2. Uses constant-time secret comparison (crypto.timingSafeEqual with sha256).
+ * 3. Fails closed if neither INTERNAL_WORKER_SECRET nor CRON_SECRET is configured.
  */
 
 import crypto from 'node:crypto';
@@ -48,14 +47,14 @@ export function timingSafeCompare(a, b) {
  * 
  * Strict Security Rules:
  * 1. Fails closed if neither INTERNAL_WORKER_SECRET nor CRON_SECRET is configured.
- * 2. Accepts worker secret via 'x-worker-secret' header OR 'Authorization: Bearer <token>' header.
- * 3. Rejects query parameters (?secret=), non-Bearer authorization schemes, or alternate headers.
- * 4. Compares secrets in constant time using crypto.timingSafeEqual.
+ * 2. Accepts worker secret via 'x-worker-secret' header, 'Authorization: Bearer <token>' header, or query param (?secret= / ?key=).
+ * 3. Compares secrets in constant time using crypto.timingSafeEqual.
  * 
  * @param {object} headers Request headers
+ * @param {object|string} [queryOrUrl] Request query object or URL
  * @returns {boolean}
  */
-export function isAuthorizedWorker(headers) {
+export function isAuthorizedWorker(headers, queryOrUrl) {
   const configuredSecret = process.env.INTERNAL_WORKER_SECRET || process.env.CRON_SECRET;
   const cronSecret = process.env.CRON_SECRET || process.env.INTERNAL_WORKER_SECRET;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -68,41 +67,64 @@ export function isAuthorizedWorker(headers) {
     return false;
   }
 
-  if (!headers || typeof headers !== 'object') {
-    return false;
-  }
-
   // Channel 1: Accept worker secret through x-worker-secret header (case-insensitive)
-  const workerSecretKey = Object.keys(headers).find((k) => k.toLowerCase() === 'x-worker-secret');
-  if (workerSecretKey) {
-    const providedWorkerSecret = headers[workerSecretKey];
-    if (typeof providedWorkerSecret === 'string' && providedWorkerSecret.trim() !== '') {
-      if (
-        (configuredSecret && timingSafeCompare(providedWorkerSecret.trim(), configuredSecret.trim())) ||
-        (cronSecret && timingSafeCompare(providedWorkerSecret.trim(), cronSecret.trim())) ||
-        (serviceRoleKey && timingSafeCompare(providedWorkerSecret.trim(), serviceRoleKey.trim()))
-      ) {
-        return true;
-      }
-    }
-  }
-
-  // Channel 2: Accept Bearer token through Authorization header (Vercel Cron standard)
-  const authHeaderKey = Object.keys(headers).find((k) => k.toLowerCase() === 'authorization');
-  if (authHeaderKey) {
-    const authVal = headers[authHeaderKey];
-    if (typeof authVal === 'string' && authVal.trim() !== '') {
-      const match = authVal.match(/^Bearer\s+(.+)$/i);
-      if (match && match[1]) {
-        const bearerToken = match[1].trim();
+  if (headers && typeof headers === 'object') {
+    const workerSecretKey = Object.keys(headers).find((k) => k.toLowerCase() === 'x-worker-secret');
+    if (workerSecretKey) {
+      const providedWorkerSecret = headers[workerSecretKey];
+      if (typeof providedWorkerSecret === 'string' && providedWorkerSecret.trim() !== '') {
         if (
-          (configuredSecret && timingSafeCompare(bearerToken, configuredSecret.trim())) ||
-          (cronSecret && timingSafeCompare(bearerToken, cronSecret.trim())) ||
-          (serviceRoleKey && timingSafeCompare(bearerToken, serviceRoleKey.trim()))
+          (configuredSecret && timingSafeCompare(providedWorkerSecret.trim(), configuredSecret.trim())) ||
+          (cronSecret && timingSafeCompare(providedWorkerSecret.trim(), cronSecret.trim())) ||
+          (serviceRoleKey && timingSafeCompare(providedWorkerSecret.trim(), serviceRoleKey.trim()))
         ) {
           return true;
         }
       }
+    }
+
+    // Channel 2: Accept Bearer token through Authorization header (Vercel Cron standard)
+    const authHeaderKey = Object.keys(headers).find((k) => k.toLowerCase() === 'authorization');
+    if (authHeaderKey) {
+      const authVal = headers[authHeaderKey];
+      if (typeof authVal === 'string' && authVal.trim() !== '') {
+        const match = authVal.match(/^Bearer\s+(.+)$/i);
+        if (match && match[1]) {
+          const bearerToken = match[1].trim();
+          if (
+            (configuredSecret && timingSafeCompare(bearerToken, configuredSecret.trim())) ||
+            (cronSecret && timingSafeCompare(bearerToken, cronSecret.trim())) ||
+            (serviceRoleKey && timingSafeCompare(bearerToken, serviceRoleKey.trim()))
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+
+  // Channel 3: Accept secret through query param (?secret=... or ?key=...) for external cron monitors
+  let querySecret = null;
+  if (queryOrUrl) {
+    if (typeof queryOrUrl === 'object') {
+      querySecret = queryOrUrl.secret || queryOrUrl.key;
+    } else if (typeof queryOrUrl === 'string') {
+      try {
+        const parsed = new URL(queryOrUrl, 'http://localhost');
+        querySecret = parsed.searchParams.get('secret') || parsed.searchParams.get('key');
+      } catch {
+        // ignore parse error
+      }
+    }
+  }
+
+  if (typeof querySecret === 'string' && querySecret.trim() !== '') {
+    if (
+      (configuredSecret && timingSafeCompare(querySecret.trim(), configuredSecret.trim())) ||
+      (cronSecret && timingSafeCompare(querySecret.trim(), cronSecret.trim())) ||
+      (serviceRoleKey && timingSafeCompare(querySecret.trim(), serviceRoleKey.trim()))
+    ) {
+      return true;
     }
   }
 
@@ -117,8 +139,8 @@ export default async function handler(req, res, customDependencies = {}) {
     return sendJson(res, 405, { error: 'Method not allowed. Use GET or POST.' });
   }
 
-  // 2. Validate Authorization (Worker secret, Vercel Cron Bearer, or Authenticated Admin Session)
-  let authorized = isAuthorizedWorker(req.headers);
+  // 2. Validate Authorization (Worker secret, Vercel Cron Bearer, query secret, or Authenticated Admin Session)
+  let authorized = isAuthorizedWorker(req.headers, req.query || req.url);
   if (!authorized) {
     try {
       const adminAuth = await isServerSideAdmin(req.headers, customDependencies.supabase);
