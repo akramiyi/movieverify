@@ -38,17 +38,30 @@ function createMockRes() {
   };
 }
 
-test('1. Smart Distributed Time Slots - accurately configured for 8:30 AM, 1:30 PM, 6:00 PM, 8:45 PM IST', () => {
-  assert.equal(SMART_DAYTIME_SLOTS_IST.length, 4);
+test('1. Smart Distributed Time Slots - accurately configured for 8 daytime slots between 8:30 AM and 9:15 PM IST', () => {
+  assert.equal(SMART_DAYTIME_SLOTS_IST.length, 8);
   assert.deepEqual(
     SMART_DAYTIME_SLOTS_IST.map((s) => s.timeStr),
-    ['08:30 AM IST', '01:30 PM IST', '06:00 PM IST', '08:45 PM IST']
+    [
+      '08:30 AM IST',
+      '10:30 AM IST',
+      '12:15 PM IST',
+      '02:00 PM IST',
+      '04:15 PM IST',
+      '06:00 PM IST',
+      '07:45 PM IST',
+      '09:15 PM IST',
+    ]
   );
   // UTC Equivalencies for IST (UTC+05:30)
   assert.equal(SMART_DAYTIME_SLOTS_IST[0].utcSlot, '03:00:00.000Z'); // 8:30 AM IST
-  assert.equal(SMART_DAYTIME_SLOTS_IST[1].utcSlot, '08:00:00.000Z'); // 1:30 PM IST
-  assert.equal(SMART_DAYTIME_SLOTS_IST[2].utcSlot, '12:30:00.000Z'); // 6:00 PM IST
-  assert.equal(SMART_DAYTIME_SLOTS_IST[3].utcSlot, '15:15:00.000Z'); // 8:45 PM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[1].utcSlot, '05:00:00.000Z'); // 10:30 AM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[2].utcSlot, '06:45:00.000Z'); // 12:15 PM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[3].utcSlot, '08:30:00.000Z'); // 02:00 PM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[4].utcSlot, '10:45:00.000Z'); // 04:15 PM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[5].utcSlot, '12:30:00.000Z'); // 06:00 PM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[6].utcSlot, '14:15:00.000Z'); // 07:45 PM IST
+  assert.equal(SMART_DAYTIME_SLOTS_IST[7].utcSlot, '15:45:00.000Z'); // 09:15 PM IST
 });
 
 test('2. getScheduledSlotForRelease - staggers same-day movie releases across daytime slots with max clamping', () => {
@@ -59,21 +72,21 @@ test('2. getScheduledSlotForRelease - staggers same-day movie releases across da
   assert.equal(slot0.scheduled_for, '2026-11-20T03:00:00.000Z');
 
   const slot1 = getScheduledSlotForRelease(releaseDate, 1);
-  assert.equal(slot1.slot_time, '01:30 PM IST');
-  assert.equal(slot1.scheduled_for, '2026-11-20T08:00:00.000Z');
+  assert.equal(slot1.slot_time, '10:30 AM IST');
+  assert.equal(slot1.scheduled_for, '2026-11-20T05:00:00.000Z');
 
   const slot2 = getScheduledSlotForRelease(releaseDate, 2);
-  assert.equal(slot2.slot_time, '06:00 PM IST');
-  assert.equal(slot2.scheduled_for, '2026-11-20T12:30:00.000Z');
+  assert.equal(slot2.slot_time, '12:15 PM IST');
+  assert.equal(slot2.scheduled_for, '2026-11-20T06:45:00.000Z');
 
   const slot3 = getScheduledSlotForRelease(releaseDate, 3);
-  assert.equal(slot3.slot_time, '08:45 PM IST');
-  assert.equal(slot3.scheduled_for, '2026-11-20T15:15:00.000Z');
+  assert.equal(slot3.slot_time, '02:00 PM IST');
+  assert.equal(slot3.scheduled_for, '2026-11-20T08:30:00.000Z');
 
-  // Slot 4 clamps to the last slot (8:45 PM IST)
-  const slot4 = getScheduledSlotForRelease(releaseDate, 4);
-  assert.equal(slot4.slot_time, '08:45 PM IST');
-  assert.equal(slot4.scheduled_for, '2026-11-20T15:15:00.000Z');
+  // Slot 8 clamps to the last slot (9:15 PM IST)
+  const slot8 = getScheduledSlotForRelease(releaseDate, 8);
+  assert.equal(slot8.slot_time, '09:15 PM IST');
+  assert.equal(slot8.scheduled_for, '2026-11-20T15:45:00.000Z');
 });
 
 test('3. autoIngestUpcomingReleases - automatically ingests releases with zero approval required and staggers same-day releases', async () => {
@@ -139,13 +152,13 @@ test('3. autoIngestUpcomingReleases - automatically ingests releases with zero a
   assert.equal(res1.releases[0].slot_time, '08:30 AM IST');
   assert.equal(res1.releases[0].scheduled_for, '2026-11-25T03:00:00.000Z');
 
-  // Movie 2 assigned Slot 1 (01:30 PM IST)
-  assert.equal(res1.releases[1].slot_time, '01:30 PM IST');
-  assert.equal(res1.releases[1].scheduled_for, '2026-11-25T08:00:00.000Z');
+  // Movie 2 assigned Slot 1 (10:30 AM IST)
+  assert.equal(res1.releases[1].slot_time, '10:30 AM IST');
+  assert.equal(res1.releases[1].scheduled_for, '2026-11-25T05:00:00.000Z');
 
-  // Movie 3 assigned Slot 2 (06:00 PM IST)
-  assert.equal(res1.releases[2].slot_time, '06:00 PM IST');
-  assert.equal(res1.releases[2].scheduled_for, '2026-11-25T12:30:00.000Z');
+  // Movie 3 assigned Slot 2 (12:15 PM IST)
+  assert.equal(res1.releases[2].slot_time, '12:15 PM IST');
+  assert.equal(res1.releases[2].scheduled_for, '2026-11-25T06:45:00.000Z');
 
   // Pass 2: Replay auto-ingest (Idempotency test)
   const res2 = await autoIngestUpcomingReleases(mockSupabase, { releases: sampleReleases });
@@ -301,7 +314,7 @@ test('6. Anti-Spam Protection - Quiet Hours, Daily Cap (Max 3/Day), and Past Dat
     },
   };
 
-  // 1 past release + 5 same-day future releases (testing max daily cap = 3)
+  // 1 past release + 10 same-day future releases (testing max daily cap = 8)
   const burstReleases = [
     {
       id: 999,
@@ -310,7 +323,7 @@ test('6. Anti-Spam Protection - Quiet Hours, Daily Cap (Max 3/Day), and Past Dat
       media_type: 'movie',
       industry_label: 'Hollywood',
     },
-    ...Array.from({ length: 5 }, (_, i) => ({
+    ...Array.from({ length: 10 }, (_, i) => ({
       id: 200 + i,
       title: `Blockbuster Part ${i + 1}`,
       release_date: '2026-11-30',
@@ -320,10 +333,10 @@ test('6. Anti-Spam Protection - Quiet Hours, Daily Cap (Max 3/Day), and Past Dat
   ];
 
   const result = await autoIngestUpcomingReleases(mockSupabase, { releases: burstReleases });
-  // Past movie skipped (1) + 2 extra movies capped (total 5 - 3 = 2 skipped) -> total skipped = 3
-  assert.equal(result.ingested_count, 3); // Capped at MAX_DAILY_NOTIFICATIONS (3)
+  // Past movie skipped (1) + 2 extra movies capped (total 10 - 8 = 2 skipped) -> total skipped = 3
+  assert.equal(result.ingested_count, 8); // Capped at MAX_DAILY_NOTIFICATIONS (8)
   assert.equal(result.skipped_count, 3); // 1 past + 2 capped
-  assert.equal(mockInsertedCampaigns.length, 3);
+  assert.equal(mockInsertedCampaigns.length, 8);
 });
 
 test('7. Admin Category Access Controls - toggling categories suppresses automated alerts for muted categories', async () => {

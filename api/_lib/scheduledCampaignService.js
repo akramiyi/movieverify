@@ -180,23 +180,34 @@ export async function promoteDueScheduledCampaignsFallback(customSupabase = null
  * Designed to eliminate spam bursts by distributing notifications across waking daytime hours
  * with 3.5 to 5.5 hours of breathing space.
  *
+ * Smart Daytime Notification Slots (IST) - 8 Distributed Windows
+ * Designed to eliminate spam bursts by distributing notifications across waking daytime hours.
+ * 
  * Quiet Hours: 10:00 PM to 08:00 AM IST (Strict DND - No pushes sent!)
  *
- * Slots:
- * - 08:30 AM IST (Morning Spotlight) -> 03:00 UTC
- * - 01:30 PM IST (Afternoon Premiere) -> 08:00 UTC
- * - 06:00 PM IST (Evening Prime) -> 12:30 UTC
- * - 08:45 PM IST (Night Watchlist) -> 15:15 UTC
+ * 8 Daytime Slots:
+ * 1. 08:30 AM IST (Morning Spotlight)     -> 03:00 UTC
+ * 2. 10:30 AM IST (Late Morning Buzz)     -> 05:00 UTC
+ * 3. 12:15 PM IST (Midday Premiere)       -> 06:45 UTC
+ * 4. 02:00 PM IST (Afternoon Feature)     -> 08:30 UTC
+ * 5. 04:15 PM IST (Teatime Binge)         -> 10:45 UTC
+ * 6. 06:00 PM IST (Evening Prime)         -> 12:30 UTC
+ * 7. 07:45 PM IST (Sunset Blockbuster)    -> 14:15 UTC
+ * 8. 09:15 PM IST (Night Watchlist)       -> 15:45 UTC
  */
 export const SMART_DAYTIME_SLOTS_IST = [
-  { id: 'morning', hourIST: 8, minuteIST: 30, timeStr: '08:30 AM IST', utcSlot: '03:00:00.000Z', label: 'Morning Spotlight' },
-  { id: 'afternoon', hourIST: 13, minuteIST: 30, timeStr: '01:30 PM IST', utcSlot: '08:00:00.000Z', label: 'Afternoon Premiere' },
-  { id: 'evening', hourIST: 18, minuteIST: 0, timeStr: '06:00 PM IST', utcSlot: '12:30:00.000Z', label: 'Evening Prime' },
-  { id: 'night', hourIST: 20, minuteIST: 45, timeStr: '08:45 PM IST', utcSlot: '15:15:00.000Z', label: 'Night Watchlist' },
+  { id: 'morning_early', hourIST: 8, minuteIST: 30, timeStr: '08:30 AM IST', utcSlot: '03:00:00.000Z', label: 'Morning Spotlight' },
+  { id: 'morning_late', hourIST: 10, minuteIST: 30, timeStr: '10:30 AM IST', utcSlot: '05:00:00.000Z', label: 'Late Morning Buzz' },
+  { id: 'midday', hourIST: 12, minuteIST: 15, timeStr: '12:15 PM IST', utcSlot: '06:45:00.000Z', label: 'Midday Premiere' },
+  { id: 'afternoon', hourIST: 14, minuteIST: 0, timeStr: '02:00 PM IST', utcSlot: '08:30:00.000Z', label: 'Afternoon Feature' },
+  { id: 'teatime', hourIST: 16, minuteIST: 15, timeStr: '04:15 PM IST', utcSlot: '10:45:00.000Z', label: 'Teatime Binge' },
+  { id: 'evening_prime', hourIST: 18, minuteIST: 0, timeStr: '06:00 PM IST', utcSlot: '12:30:00.000Z', label: 'Evening Prime' },
+  { id: 'sunset', hourIST: 19, minuteIST: 45, timeStr: '07:45 PM IST', utcSlot: '14:15:00.000Z', label: 'Sunset Blockbuster' },
+  { id: 'night_watchlist', hourIST: 21, minuteIST: 15, timeStr: '09:15 PM IST', utcSlot: '15:45:00.000Z', label: 'Night Watchlist' },
 ];
 
 export const MORNING_SLOTS_IST = SMART_DAYTIME_SLOTS_IST;
-export const MAX_DAILY_NOTIFICATIONS = 3;
+export const MAX_DAILY_NOTIFICATIONS = 8;
 
 export const CATEGORY_CONFIG_CAMPAIGN_ID = '00000000-0000-4000-8000-000000000002';
 

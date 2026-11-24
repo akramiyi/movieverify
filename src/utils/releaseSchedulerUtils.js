@@ -4,28 +4,34 @@
  * Designed to prevent notification fatigue and spam bursts:
  * 1. Strict Future Ingestion Guard: Never sends retrospective push alerts for past releases.
  * 2. Quiet Hours (DND): 10:00 PM to 08:00 AM IST (No push notifications dispatched during sleep hours).
- * 3. Daytime Distributed Windows:
- *    - 08:30 AM IST (Morning Spotlight) -> 03:00 UTC
- *    - 01:30 PM IST (Afternoon Premiere) -> 08:00 UTC
- *    - 06:00 PM IST (Evening Prime) -> 12:30 UTC
- *    - 08:45 PM IST (Night Watchlist) -> 15:15 UTC
- * 4. Multi-Movie Capping & Smart Digest:
- *    - Max 3 push notifications per day.
- *    - If 4+ movies release on the same date (e.g. 10 movies), sends 1 morning Mega-Release Digest
- *      at 08:30 AM covering all 10 titles, plus afternoon & evening spotlights for top 2 blockbusters.
+ * 3. 8 Daytime Distributed Windows:
+ *    - 08:30 AM IST (Morning Spotlight)     -> 03:00 UTC
+ *    - 10:30 AM IST (Late Morning Buzz)     -> 05:00 UTC
+ *    - 12:15 PM IST (Midday Premiere)       -> 06:45 UTC
+ *    - 02:00 PM IST (Afternoon Feature)     -> 08:30 UTC
+ *    - 04:15 PM IST (Teatime Binge)         -> 10:45 UTC
+ *    - 06:00 PM IST (Evening Prime)         -> 12:30 UTC
+ *    - 07:45 PM IST (Sunset Blockbuster)    -> 14:15 UTC
+ *    - 09:15 PM IST (Night Watchlist)       -> 15:45 UTC
+ * 4. Multi-Movie Capping & Smart Distribution:
+ *    - Max 8 push notifications per day distributed intelligently without overlap.
  */
 
 export const SMART_DAYTIME_SLOTS_IST = [
-  { id: 'morning', hourIST: 8, minuteIST: 30, timeStr: '08:30 AM IST', utcSlot: '03:00:00.000Z', label: 'Morning Spotlight' },
-  { id: 'afternoon', hourIST: 13, minuteIST: 30, timeStr: '01:30 PM IST', utcSlot: '08:00:00.000Z', label: 'Afternoon Premiere' },
-  { id: 'evening', hourIST: 18, minuteIST: 0, timeStr: '06:00 PM IST', utcSlot: '12:30:00.000Z', label: 'Evening Prime' },
-  { id: 'night', hourIST: 20, minuteIST: 45, timeStr: '08:45 PM IST', utcSlot: '15:15:00.000Z', label: 'Night Watchlist' },
+  { id: 'morning_early', hourIST: 8, minuteIST: 30, timeStr: '08:30 AM IST', utcSlot: '03:00:00.000Z', label: 'Morning Spotlight' },
+  { id: 'morning_late', hourIST: 10, minuteIST: 30, timeStr: '10:30 AM IST', utcSlot: '05:00:00.000Z', label: 'Late Morning Buzz' },
+  { id: 'midday', hourIST: 12, minuteIST: 15, timeStr: '12:15 PM IST', utcSlot: '06:45:00.000Z', label: 'Midday Premiere' },
+  { id: 'afternoon', hourIST: 14, minuteIST: 0, timeStr: '02:00 PM IST', utcSlot: '08:30:00.000Z', label: 'Afternoon Feature' },
+  { id: 'teatime', hourIST: 16, minuteIST: 15, timeStr: '04:15 PM IST', utcSlot: '10:45:00.000Z', label: 'Teatime Binge' },
+  { id: 'evening_prime', hourIST: 18, minuteIST: 0, timeStr: '06:00 PM IST', utcSlot: '12:30:00.000Z', label: 'Evening Prime' },
+  { id: 'sunset', hourIST: 19, minuteIST: 45, timeStr: '07:45 PM IST', utcSlot: '14:15:00.000Z', label: 'Sunset Blockbuster' },
+  { id: 'night_watchlist', hourIST: 21, minuteIST: 15, timeStr: '09:15 PM IST', utcSlot: '15:45:00.000Z', label: 'Night Watchlist' },
 ];
 
-// Backward-compatible alias for 4 slots
+// Backward-compatible alias for 8 slots
 export const MORNING_SLOTS_IST = SMART_DAYTIME_SLOTS_IST;
 
-export const MAX_DAILY_NOTIFICATIONS = 3;
+export const MAX_DAILY_NOTIFICATIONS = 8;
 
 export const CATEGORY_CONFIG_CAMPAIGN_ID = '00000000-0000-4000-8000-000000000002';
 

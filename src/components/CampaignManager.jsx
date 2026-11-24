@@ -402,7 +402,7 @@ export default function CampaignManager({ initialView = 'form' }) {
 
       setActionStatus({
         type: 'success',
-        message: `Auto-Sync complete! ${data.ingested_count || 0} upcoming release(s) scheduled across smart daytime slots (08:30 AM, 01:30 PM, 06:00 PM, 08:45 PM IST). ${data.skipped_count || 0} skipped (already scheduled or muted).`,
+        message: `Auto-Sync complete! ${data.ingested_count || 0} upcoming release(s) scheduled across 8 smart daytime slots (08:30 AM to 09:15 PM IST). ${data.skipped_count || 0} skipped (already scheduled or muted).`,
       });
       fetchCampaigns();
       if (upcomingMovies.length > 0) {
@@ -1255,7 +1255,7 @@ export default function CampaignManager({ initialView = 'form' }) {
                   </span>
                 </div>
                 <p className="text-gray-400 text-xs mt-0.5">
-                  Upcoming releases auto-distribute across daytime windows: <strong className="text-amber-300">08:30 AM, 01:30 PM, 06:00 PM, 08:45 PM IST</strong> (Max 3/day). Quiet Hours (<span className="text-red-300 font-semibold">10 PM - 8 AM IST</span>) strictly protected to eliminate spam bursts.
+                  Upcoming releases auto-distribute across 8 daytime windows: <strong className="text-amber-300">08:30 AM, 10:30 AM, 12:15 PM, 02:00 PM, 04:15 PM, 06:00 PM, 07:45 PM, 09:15 PM IST</strong> (Max 8/day). Quiet Hours (<span className="text-red-300 font-semibold">10 PM - 8 AM IST</span>) strictly protected to eliminate spam bursts.
                 </p>
               </div>
             </div>
@@ -2839,7 +2839,7 @@ export default function CampaignManager({ initialView = 'form' }) {
               <strong className="text-white block font-bold">Automatic Synchronization & Spam Protection:</strong>
               <p className="text-gray-400 leading-relaxed">
                 When you mute a category, any active releases currently waiting in the schedule queue for that category are immediately cancelled.
-                Re-enabling the category allows future releases to be scheduled automatically across the 4 safe daytime slots (08:30 AM, 01:30 PM, 06:00 PM, 08:45 PM IST).
+                Re-enabling the category allows future releases to be scheduled automatically across the 8 safe daytime slots (08:30 AM to 09:15 PM IST).
               </p>
             </div>
           </div>
