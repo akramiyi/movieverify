@@ -1060,6 +1060,38 @@ app.get('/api/admin/links/health-check', async (req, res) => {
   }
 });
 
+// Auto-Pilot Dispatcher: Autonomous background heartbeat running inside 24/7 Render instance.
+// Triggers /api/notifications/dispatch every 10 minutes so push notifications NEVER rely on external crons or manual clicks.
+const CRON_SECRET = process.env.CRON_SECRET || process.env.INTERNAL_WORKER_SECRET || 'mvx_9f8b2c7d1a6c4f7b9a4cf3b5a0d8c2c1';
+
+async function autoPilotNotificationDispatch() {
+  try {
+    const targetUrl = `https://movieverify.vercel.app/api/notifications/dispatch?secret=${encodeURIComponent(CRON_SECRET)}`;
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-worker-secret': CRON_SECRET
+      },
+      body: JSON.stringify({ batch_size: 50, sweep_expired: true })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      if (data.sent > 0 || data.promoted > 0) {
+        console.log(`[AutoPilot Dispatcher] Dispatched successfully: sent=${data.sent}, promoted=${data.promoted}`);
+      }
+    } else {
+      console.warn(`[AutoPilot Dispatcher] Dispatch response HTTP ${res.status}:`, data.error || data.message || 'Check logs');
+    }
+  } catch (err) {
+    console.error('[AutoPilot Dispatcher] Heartbeat failed:', err.message);
+  }
+}
+
+// Run 30 seconds after server startup, then recurring every 10 minutes continuously
+setTimeout(autoPilotNotificationDispatch, 30 * 1000);
+setInterval(autoPilotNotificationDispatch, 10 * 60 * 1000);
+
 app.listen(PORT, () => {
-  console.log(`🌐 API Server running on port ${PORT} (Health Check & Payments)`);
+  console.log(`🌐 API Server running on port ${PORT} (Health Check, Payments & AutoPilot Dispatcher)`);
 });
