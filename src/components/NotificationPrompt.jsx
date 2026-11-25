@@ -80,6 +80,7 @@ export const NotificationPrompt = ({ onSubscribeSuccess = null, onVisibilityChan
           </p>
           <div className="mt-3 flex items-center gap-2">
             <button
+              id="tour-enable-alerts-btn"
               onClick={handleEnable}
               disabled={isLoading}
               className="px-3.5 py-1.5 bg-[#E50914] hover:bg-[#b81d24] active:bg-[#991b1b] text-white text-xs font-semibold rounded-lg transition shadow-md disabled:opacity-50 cursor-pointer"

@@ -33,12 +33,13 @@ const TOUR_STEPS = [
   },
   {
     id: 'enable-push-alerts',
-    selector: '#tour-push-prompt, #tour-notification-bell',
-    badge: '4 of 4 • Push Alerts Benefits',
-    title: 'Turn On Release Alerts 🚀 (Fayde)',
-    description: 'Alerts Enable karne ke zabardast fayde: Nayi OTT movie aate hi sabse pehle direct mobile pop-up, verified download link ready hone ka alert, aur 0% spam (raat ko DND safe)!',
+    selector: '#tour-enable-alerts-btn, #tour-push-prompt, #tour-notification-bell',
+    badge: '4 of 4 • Enable Alerts (Fayde)',
+    title: 'Neeche "Enable Alerts" Par Tap Karein! 🔔',
+    description: 'Neeche diye gaye box me "Enable Alerts" button dabayein! Isse nayi movie release hote hi direct notification aayega, verified download link milenge, aur 0% spam (raat ko DND safe) rahega!',
     actionText: 'Got It ✓',
-    color: '#10b981',
+    color: '#E50914',
+    position: 'top',
   },
 ];
 
@@ -127,7 +128,10 @@ export const NewUserGuide = ({ isOpen = false, onClose }) => {
     ? Math.max(20, Math.min(tooltipWidth - 20, targetRect.centerX - tooltipLeft))
     : tooltipWidth / 2;
 
-  const tooltipTop = targetRect ? targetRect.bottom + 18 : 100;
+  const isPositionTop = step?.position === 'top' && targetRect && targetRect.top > 250;
+  const tooltipTop = targetRect 
+    ? (isPositionTop ? Math.max(20, targetRect.top - 200) : targetRect.bottom + 18)
+    : 100;
 
   return (
     <aside 
