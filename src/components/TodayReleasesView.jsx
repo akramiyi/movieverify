@@ -84,25 +84,33 @@ export default function TodayReleasesView({ onRequireAuth }) {
     return `${year}-${month}-${day}`;
   }, []);
 
-  // Countdown helper
+  // Countdown helper - matches releaseSchedulerUtils to prevent past releases showing as "Releases Today!"
   const getReleaseCountdown = (dateStr) => {
     if (!dateStr) return null;
+    const cleanDate = dateStr.split('T')[0];
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const relDate = new Date(dateStr + 'T00:00:00');
-    const diffDays = Math.ceil((relDate - today) / (1000 * 60 * 60 * 24));
+    const relDate = new Date(cleanDate + 'T00:00:00');
+    if (Number.isNaN(relDate.getTime())) return null;
 
-    if (diffDays <= 0) return { text: '🔥 Releases Today!', isToday: true, isUrgent: true };
-    if (diffDays === 1) return { text: '⚡ Releases Tomorrow!', isToday: false, isUrgent: true };
-    return { text: `In ${diffDays} days`, isToday: false, isUrgent: false };
+    const diffDays = Math.round((relDate - today) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return { text: 'Released', isToday: false, isUrgent: false, isPast: true };
+    }
+    if (diffDays === 0 || cleanDate === todayStr) {
+      return { text: '🔥 Releases Today!', isToday: true, isUrgent: true, isPast: false };
+    }
+    if (diffDays === 1) {
+      return { text: '⚡ Releases Tomorrow!', isToday: false, isUrgent: true, isPast: false };
+    }
+    return { text: `In ${diffDays} days`, isToday: false, isUrgent: false, isPast: false };
   };
 
   // Filter releases by category, time horizon, and search
   const filteredReleases = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const sevenDaysFromNow = new Date(today);
-    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
 
     return releases.filter((item) => {
       // 1. Category Filter
@@ -111,12 +119,13 @@ export default function TodayReleasesView({ onRequireAuth }) {
       }
 
       // 2. Time Filter
-      const itemDate = new Date(item.release_date + 'T00:00:00');
-      const diffDays = Math.ceil((itemDate - today) / (1000 * 60 * 60 * 24));
+      const cleanDate = (item.release_date || '').split('T')[0];
+      const itemDate = new Date(cleanDate + 'T00:00:00');
+      const diffDays = Math.round((itemDate - today) / (1000 * 60 * 60 * 24));
 
       if (timeFilter === 'today') {
-        // Match today, or releases from the last 2 days (weekend/Friday releases)
-        if (diffDays > 0 && item.release_date !== todayStr) return false;
+        // Only strictly today releases (diffDays === 0 or date matches todayStr)
+        if (diffDays !== 0 && cleanDate !== todayStr) return false;
       } else if (timeFilter === 'week') {
         if (diffDays < 0 || diffDays > 7) return false;
       }
@@ -136,12 +145,13 @@ export default function TodayReleasesView({ onRequireAuth }) {
 
   // Counts for tabs
   const todayCount = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     return releases.filter((m) => {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const itemDate = new Date(m.release_date + 'T00:00:00');
-      const diffDays = Math.ceil((itemDate - today) / (1000 * 60 * 60 * 24));
-      return diffDays <= 0 || m.release_date === todayStr;
+      const cleanDate = (m.release_date || '').split('T')[0];
+      const itemDate = new Date(cleanDate + 'T00:00:00');
+      const diffDays = Math.round((itemDate - today) / (1000 * 60 * 60 * 24));
+      return diffDays === 0 || cleanDate === todayStr;
     }).length;
   }, [releases, todayStr]);
 
@@ -149,8 +159,9 @@ export default function TodayReleasesView({ onRequireAuth }) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     return releases.filter((m) => {
-      const itemDate = new Date(m.release_date + 'T00:00:00');
-      const diffDays = Math.ceil((itemDate - today) / (1000 * 60 * 60 * 24));
+      const cleanDate = (m.release_date || '').split('T')[0];
+      const itemDate = new Date(cleanDate + 'T00:00:00');
+      const diffDays = Math.round((itemDate - today) / (1000 * 60 * 60 * 24));
       return diffDays >= 0 && diffDays <= 7;
     }).length;
   }, [releases]);

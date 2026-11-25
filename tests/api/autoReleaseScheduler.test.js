@@ -120,7 +120,7 @@ test('3. autoIngestUpcomingReleases - automatically ingests releases with zero a
     {
       id: 101,
       title: 'South Movie 1',
-      release_date: '2026-11-25',
+      release_date: '2026-11-28',
       media_type: 'movie',
       industry_label: 'South Movies',
       poster_path: '/poster1.jpg',
@@ -128,7 +128,7 @@ test('3. autoIngestUpcomingReleases - automatically ingests releases with zero a
     {
       id: 102,
       title: 'South Movie 2 (Same Date)',
-      release_date: '2026-11-25',
+      release_date: '2026-11-28',
       media_type: 'movie',
       industry_label: 'South Movies',
       backdrop_path: '/backdrop2.jpg',
@@ -136,7 +136,7 @@ test('3. autoIngestUpcomingReleases - automatically ingests releases with zero a
     {
       id: 103,
       title: 'Bollywood Movie 3 (Same Date)',
-      release_date: '2026-11-25',
+      release_date: '2026-11-28',
       media_type: 'movie',
       industry_label: 'Bollywood',
       poster_path: '/poster3.jpg',
@@ -150,15 +150,15 @@ test('3. autoIngestUpcomingReleases - automatically ingests releases with zero a
 
   // Movie 1 assigned Slot 0 (08:30 AM IST)
   assert.equal(res1.releases[0].slot_time, '08:30 AM IST');
-  assert.equal(res1.releases[0].scheduled_for, '2026-11-25T03:00:00.000Z');
+  assert.equal(res1.releases[0].scheduled_for, '2026-11-28T03:00:00.000Z');
 
   // Movie 2 assigned Slot 1 (10:30 AM IST)
   assert.equal(res1.releases[1].slot_time, '10:30 AM IST');
-  assert.equal(res1.releases[1].scheduled_for, '2026-11-25T05:00:00.000Z');
+  assert.equal(res1.releases[1].scheduled_for, '2026-11-28T05:00:00.000Z');
 
   // Movie 3 assigned Slot 2 (12:15 PM IST)
   assert.equal(res1.releases[2].slot_time, '12:15 PM IST');
-  assert.equal(res1.releases[2].scheduled_for, '2026-11-25T06:45:00.000Z');
+  assert.equal(res1.releases[2].scheduled_for, '2026-11-28T06:45:00.000Z');
 
   // Pass 2: Replay auto-ingest (Idempotency test)
   const res2 = await autoIngestUpcomingReleases(mockSupabase, { releases: sampleReleases });
