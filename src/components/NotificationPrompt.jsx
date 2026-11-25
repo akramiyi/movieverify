@@ -56,6 +56,7 @@ export const NotificationPrompt = ({ onSubscribeSuccess = null, onVisibilityChan
 
   return (
     <aside 
+      id="tour-push-prompt"
       aria-label="Notification Updates"
       className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 left-4 sm:left-auto z-40 max-w-sm w-[calc(100vw-2rem)] sm:w-[380px] bg-[#1a1a1a]/95 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-bottom-4"
     >
