@@ -165,7 +165,7 @@ export const NewUserGuide = ({ isOpen = false, onClose }) => {
             height: `${targetRect.height + 10}px`,
             borderColor: step.color,
             boxShadow: `0 0 25px ${step.color}99`,
-            borderRadius: isPositionTop ? '16px' : '9999px',
+            borderRadius: isBottomPromptStep ? '16px' : '9999px',
           }}
           className="fixed border-2 pointer-events-none z-[155] animate-pulse transition-all duration-300"
         />
