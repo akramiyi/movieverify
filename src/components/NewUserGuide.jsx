@@ -33,7 +33,7 @@ const TOUR_STEPS = [
   },
   {
     id: 'enable-push-alerts',
-    selector: '#tour-enable-alerts-btn, #tour-push-prompt, #tour-notification-bell',
+    selector: '#tour-push-prompt, #tour-enable-alerts-btn, aside[aria-label="Notification Updates"]',
     badge: '4 of 4 • Enable Alerts (Fayde)',
     title: 'Neeche "Enable Alerts" Par Tap Karein! 🔔',
     description: 'Neeche diye gaye box me "Enable Alerts" button dabayein! Isse nayi movie release hote hi direct notification aayega, verified download link milenge, aur 0% spam (raat ko DND safe) rahega!',
@@ -128,9 +128,9 @@ export const NewUserGuide = ({ isOpen = false, onClose }) => {
     ? Math.max(20, Math.min(tooltipWidth - 20, targetRect.centerX - tooltipLeft))
     : tooltipWidth / 2;
 
-  const isPositionTop = step?.position === 'top' && targetRect && targetRect.top > 250;
+  const isPositionTop = step?.position === 'top' && targetRect && targetRect.top > 200;
   const tooltipTop = targetRect 
-    ? (isPositionTop ? Math.max(20, targetRect.top - 200) : targetRect.bottom + 18)
+    ? (isPositionTop ? Math.max(20, targetRect.top - 190) : targetRect.bottom + 18)
     : 100;
 
   return (
@@ -154,12 +154,13 @@ export const NewUserGuide = ({ isOpen = false, onClose }) => {
             height: `${targetRect.height + 10}px`,
             borderColor: step.color,
             boxShadow: `0 0 25px ${step.color}99`,
+            borderRadius: isPositionTop ? '16px' : '9999px',
           }}
-          className="fixed rounded-full border-2 pointer-events-none z-[155] animate-pulse transition-all duration-300"
+          className="fixed border-2 pointer-events-none z-[155] animate-pulse transition-all duration-300"
         />
       )}
 
-      {/* Tooltip Card with Upward Arrow */}
+      {/* Tooltip Card with Arrow */}
       <div
         style={{
           top: `${tooltipTop}px`,
@@ -168,16 +169,30 @@ export const NewUserGuide = ({ isOpen = false, onClose }) => {
         }}
         className="fixed z-[160] bg-[#121217]/95 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-[0_12px_40px_rgba(0,0,0,0.95)] animate-in fade-in zoom-in-95 duration-200 select-none"
       >
-        {/* Animated Bouncing Pointer Arrow pointing directly UP to target element */}
-        <div
-          style={{ left: `${arrowLeft}px` }}
-          className="absolute -top-3 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce"
-        >
-          <div 
-            style={{ borderBottomColor: step.color }}
-            className="w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-b-[12px] filter drop-shadow-[0_-3px_6px_rgba(0,0,0,0.9)]"
-          />
-        </div>
+        {/* Animated Pointer Arrow */}
+        {isPositionTop ? (
+          // Arrow pointing DOWN toward bottom-right prompt
+          <div
+            style={{ left: `${arrowLeft}px` }}
+            className="absolute -bottom-3 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce"
+          >
+            <div 
+              style={{ borderTopColor: step.color }}
+              className="w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-t-[12px] filter drop-shadow-[0_3px_6px_rgba(0,0,0,0.9)]"
+            />
+          </div>
+        ) : (
+          // Arrow pointing UP toward navbar element
+          <div
+            style={{ left: `${arrowLeft}px` }}
+            className="absolute -top-3 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce"
+          >
+            <div 
+              style={{ borderBottomColor: step.color }}
+              className="w-0 h-0 border-l-[9px] border-l-transparent border-r-[9px] border-r-transparent border-b-[12px] filter drop-shadow-[0_-3px_6px_rgba(0,0,0,0.9)]"
+            />
+          </div>
+        )}
 
         {/* Card Header */}
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
