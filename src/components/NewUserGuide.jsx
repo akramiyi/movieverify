@@ -114,24 +114,35 @@ export const NewUserGuide = ({ isOpen = false, onClose }) => {
     }
   };
 
+  // Check if current step targets the bottom-right alerts prompt
+  const isBottomPromptStep = step?.id === 'enable-push-alerts';
+
   // Calculate safe horizontal alignment for tooltip card
-  const tooltipWidth = 300;
-  let tooltipLeft = targetRect ? targetRect.centerX - tooltipWidth / 2 : window.innerWidth / 2 - tooltipWidth / 2;
-  const padding = 16;
-  if (tooltipLeft < padding) tooltipLeft = padding;
-  if (tooltipLeft + tooltipWidth > window.innerWidth - padding) {
-    tooltipLeft = window.innerWidth - tooltipWidth - padding;
+  const tooltipWidth = 320;
+  let tooltipLeft = 0;
+  let tooltipTop = 100;
+  let tooltipBottom = 'auto';
+
+  if (isBottomPromptStep) {
+    // Dock cleanly in bottom-right corner right above the Get Release Alerts box
+    tooltipLeft = Math.max(16, window.innerWidth - tooltipWidth - 24);
+    tooltipTop = 'auto';
+    tooltipBottom = '150px'; // Sits directly on top of the prompt box
+  } else {
+    tooltipLeft = targetRect ? targetRect.centerX - tooltipWidth / 2 : window.innerWidth / 2 - tooltipWidth / 2;
+    const padding = 16;
+    if (tooltipLeft < padding) tooltipLeft = padding;
+    if (tooltipLeft + tooltipWidth > window.innerWidth - padding) {
+      tooltipLeft = window.innerWidth - tooltipWidth - padding;
+    }
+    tooltipTop = targetRect ? `${targetRect.bottom + 18}px` : '100px';
+    tooltipBottom = 'auto';
   }
 
   // Calculate arrow horizontal position relative to tooltip card
-  const arrowLeft = targetRect
-    ? Math.max(20, Math.min(tooltipWidth - 20, targetRect.centerX - tooltipLeft))
-    : tooltipWidth / 2;
-
-  const isPositionTop = step?.position === 'top' && targetRect && targetRect.top > 200;
-  const tooltipTop = targetRect 
-    ? (isPositionTop ? Math.max(20, targetRect.top - 190) : targetRect.bottom + 18)
-    : 100;
+  const arrowLeft = isBottomPromptStep
+    ? tooltipWidth - 60 // Points directly toward the right-side 'Enable Alerts' button
+    : (targetRect ? Math.max(20, Math.min(tooltipWidth - 20, targetRect.centerX - tooltipLeft)) : tooltipWidth / 2);
 
   return (
     <aside 
@@ -163,14 +174,15 @@ export const NewUserGuide = ({ isOpen = false, onClose }) => {
       {/* Tooltip Card with Arrow */}
       <div
         style={{
-          top: `${tooltipTop}px`,
+          top: tooltipTop !== 'auto' ? tooltipTop : undefined,
+          bottom: tooltipBottom !== 'auto' ? tooltipBottom : undefined,
           left: `${tooltipLeft}px`,
           width: `${tooltipWidth}px`,
         }}
         className="fixed z-[160] bg-[#121217]/95 backdrop-blur-xl border border-white/20 rounded-2xl p-4 shadow-[0_12px_40px_rgba(0,0,0,0.95)] animate-in fade-in zoom-in-95 duration-200 select-none"
       >
         {/* Animated Pointer Arrow */}
-        {isPositionTop ? (
+        {isBottomPromptStep ? (
           // Arrow pointing DOWN toward bottom-right prompt
           <div
             style={{ left: `${arrowLeft}px` }}
