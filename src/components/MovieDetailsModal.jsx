@@ -512,6 +512,15 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                         <span>Watch Trailer</span>
                       </button>
                     )}
+                    <a
+                      href={`https://netmirror.gold/search?q=${encodeURIComponent(cleanTitle)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 bg-[#E50914] hover:bg-[#b81d24] active:scale-95 text-white px-5 py-2.5 rounded-lg text-base font-semibold transition shadow-md cursor-pointer select-none"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Watch on NetMirror</span>
+                    </a>
                     <button
                       type="button"
                       onClick={() => onToggleMyList(movie)}
@@ -576,6 +585,16 @@ const MovieDetailsModal = ({ movie, isOpen, isLoading = false, onClose, myList =
                         <span>Watch Trailer</span>
                       </button>
                     )}
+
+                    <a
+                      href={`https://netmirror.gold/search?q=${encodeURIComponent(cleanTitle)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-[#E50914] hover:bg-[#b81d24] active:scale-[0.99] text-white py-2 px-3 rounded-lg font-semibold text-xs transition shadow-md cursor-pointer select-none text-center"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Watch on NetMirror</span>
+                    </a>
 
                     <button
                       type="button"
