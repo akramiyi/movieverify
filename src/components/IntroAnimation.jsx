@@ -46,24 +46,24 @@ const IntroAnimation = ({ onComplete }) => {
 
     window.addEventListener('mousemove', handleMouse);
 
-    // Snappy Cinematic Timeline Timers (no long black screen delays)
+    // Snappy Cinematic Timeline Timers (ultra-fast, zero wait time)
     const timers = [
-      setTimeout(() => setPhase(1), 100),   // 0.1s - Projector Light Immediately Turns On
-      setTimeout(() => setPhase(2), 650),   // 0.65s - Film Reel Spins & shoots film strip
-      setTimeout(() => setPhase(3), 1200),  // 1.2s - Film transforms into MOVIE VERIFY letters
-      setTimeout(() => setPhase(4), 1700),  // 1.7s - Premium Glass & Light Sweep Lock-in
-      setTimeout(() => setPhase(5), 2100),  // 2.1s - Cinematic Impact & Sparks
-      setTimeout(() => setPhase(6), 2450),  // 2.45s - Exit Transition Begins
+      setTimeout(() => setPhase(1), 50),    // 0.05s - Projector Light Turns On
+      setTimeout(() => setPhase(2), 250),   // 0.25s - Film Reel Spins
+      setTimeout(() => setPhase(3), 450),   // 0.45s - MOVIE VERIFY letters lock in
+      setTimeout(() => setPhase(4), 650),   // 0.65s - Premium Glow
+      setTimeout(() => setPhase(5), 850),   // 0.85s - Spark
+      setTimeout(() => setPhase(6), 1000),  // 1.0s - Instant Exit Transition
     ];
 
     const completeTimer = setTimeout(() => {
       handleSkip();
-    }, 2850); // Total 2.85s duration
+    }, 1250); // Total duration reduced from 2.85s to 1.25s for instant opening
 
     // Absolute fallback safety timeout
     const safetyTimer = setTimeout(() => {
       handleSkip();
-    }, 3200);
+    }, 1500);
 
     return () => {
       timers.forEach(clearTimeout);

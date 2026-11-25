@@ -43,6 +43,13 @@ body {
     inset 0 -1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 
+/* High-Performance Virtualized Row Rendering & Hardware Acceleration */
+.movie-row-container {
+  content-visibility: auto;
+  contain-intrinsic-size: 320px;
+  contain: layout style paint;
+}
+
 .glass-card {
   background: rgba(255, 255, 255, 0.035);
   backdrop-filter: blur(16px);
