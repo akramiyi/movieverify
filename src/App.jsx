@@ -158,11 +158,15 @@ function App() {
 
   usePushNotifications({ onForegroundMessage: handleForegroundMessage });
 
-  // Listen for push broadcasts from Service Worker so custom sound plays directly in active tabs
+  // Listen for push broadcasts from Service Worker only when window/tab is not visible
   useEffect(() => {
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       const handleSwMessage = (e) => {
         if (e.data && e.data.type === 'NOTIFICATION_RECEIVED') {
+          // If document is visible, onForegroundMessage already plays sound; avoid duplicate
+          if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+            return;
+          }
           playNotificationSound(true);
         }
       };
