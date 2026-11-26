@@ -177,7 +177,7 @@ self.addEventListener('push', (e) => {
           url: targetUrl,
         },
         actions: [
-          { action: 'download', title: '⬇️ Download Now' },
+          { action: 'view', title: 'Watch Now' },
         ],
         tag: deliveryId || resolvedTag, // Native OS deduplication tag (guaranteed non-empty string for renotify)
       };

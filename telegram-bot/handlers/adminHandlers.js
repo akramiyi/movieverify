@@ -438,10 +438,11 @@ const registerAdminHandlers = (bot) => {
       const cleanTitle = (details?.title || 'New Release').replace(/[*_`]/g, '');
       const year = details?.year ? ` (${details.year})` : '';
       const imageUrl = details?.posterUrl || details?.backdropUrl || null;
+      const overviewSnippet = details?.overview ? details.overview.substring(0, 90).trim() + '...' : 'Available to stream and verify.';
 
       const result = await broadcastNotification({
-        title: `🎬 ${cleanTitle} Available Now!`,
-        body: `Fast 1080p, 720p & 480p links are ready. Watch or download now on MovieVerify!`,
+        title: `${cleanTitle}${year} is now available`,
+        body: `${overviewSnippet} Watch or check verified links on MovieX.`,
         tmdbId,
         mediaType,
         imageUrl
@@ -603,8 +604,8 @@ const showBroadcastPreview = async (bot, chatId, tmdbId, mediaType = 'movie', ed
       `🎞 *Type:* ${typeLabel} | ID: \`${details.id}\`\n` +
       `👥 *Target Audience:* *${activeCount} Active Push Devices*\n\n` +
       `🔔 *Notification Preview:*\n` +
-      `📌 *Title:* 🎬 ${cleanTitle} Available Now!\n` +
-      `💬 *Body:* Fast 1080p, 720p & 480p links are ready. Watch or download now on MovieVerify!\n` +
+      `📌 *Title:* ${cleanTitle} (${details.year}) is now available\n` +
+      `💬 *Body:* ${details?.overview ? details.overview.substring(0, 90).trim() + '...' : 'Available to stream and verify.'} Watch or check verified links on MovieX.\n` +
       `🔗 *Deep Link:* \`https://movieverify.vercel.app/?type=${detectedType}&id=${details.id}\`\n\n` +
       `⚠️ *Are you sure you want to broadcast this push notification to all users right now?*`;
 
