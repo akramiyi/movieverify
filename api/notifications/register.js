@@ -112,6 +112,12 @@ export default async function handler(req, res, customSupabase = null, customDep
         android: {
           priority: 'high',
           ttl: 86400 * 1000,
+          notification: {
+            sound: 'default',
+            channelId: 'movieverify_releases',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+          },
         },
         webpush: {
           fcmOptions: {
@@ -124,6 +130,7 @@ export default async function handler(req, res, customSupabase = null, customDep
           notification: {
             icon: `${siteBase}/logo192.png`,
             badge: `${siteBase}/badge.png`,
+            sound: `${siteBase}/notification.mp3`,
             vibrate: [200, 100, 200, 100, 200],
             tag: `test-push-${Date.now()}`,
             renotify: true,

@@ -237,6 +237,12 @@ export function buildFcmPayload(delivery, campaign = null) {
     android: {
       priority: 'high',
       ttl: 86400 * 1000,
+      notification: {
+        sound: 'default',
+        channelId: 'movieverify_releases',
+        defaultSound: true,
+        defaultVibrateTimings: true,
+      },
     },
     webpush: {
       fcmOptions: {
@@ -249,6 +255,7 @@ export function buildFcmPayload(delivery, campaign = null) {
       notification: {
         icon: 'https://movieverify.vercel.app/logo192.png',
         badge: 'https://movieverify.vercel.app/badge.png',
+        sound: 'https://movieverify.vercel.app/notification.mp3',
         vibrate: [200, 100, 200, 100, 200],
         silent: false,
         renotify: true,
@@ -282,14 +289,20 @@ export function buildFcmPayload(delivery, campaign = null) {
     fcmMessage.notification.imageUrl = resolvedImageUrl;
     fcmMessage.webpush.notification.image = resolvedImageUrl;
     fcmMessage.data.image = String(resolvedImageUrl);
-    fcmMessage.android = {
-      priority: 'high',
-      ttl: 86400 * 1000,
-      notification: {
-        imageUrl: resolvedImageUrl,
-        icon: 'https://movieverify.vercel.app/logo192.png',
-      },
-    };
+    if (!fcmMessage.android) {
+      fcmMessage.android = {
+        priority: 'high',
+        ttl: 86400 * 1000,
+        notification: {
+          sound: 'default',
+          channelId: 'movieverify_releases',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+        },
+      };
+    }
+    fcmMessage.android.notification.imageUrl = resolvedImageUrl;
+    fcmMessage.android.notification.icon = 'https://movieverify.vercel.app/logo192.png';
   }
 
   return fcmMessage;
