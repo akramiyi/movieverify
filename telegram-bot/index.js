@@ -1061,8 +1061,8 @@ app.get('/api/admin/links/health-check', async (req, res) => {
 });
 
 // Auto-Pilot Dispatcher: Autonomous background heartbeat running inside 24/7 Render instance.
-// Triggers /api/notifications/dispatch every 10 minutes so push notifications NEVER rely on external crons or manual clicks.
-const CRON_SECRET = process.env.CRON_SECRET || process.env.INTERNAL_WORKER_SECRET || 'mvx_9f8b2c7d1a6c4f7b9a4cf3b5a0d8c2c1';
+// Triggers /api/notifications/dispatch every 2 minutes so push notifications NEVER rely on external crons or manual clicks.
+const CRON_SECRET = process.env.INTERNAL_WORKER_SECRET || process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 async function autoPilotNotificationDispatch() {
   try {
@@ -1088,9 +1088,9 @@ async function autoPilotNotificationDispatch() {
   }
 }
 
-// Run 30 seconds after server startup, then recurring every 10 minutes continuously
-setTimeout(autoPilotNotificationDispatch, 30 * 1000);
-setInterval(autoPilotNotificationDispatch, 10 * 60 * 1000);
+// Run 10 seconds after server startup, then recurring every 2 minutes continuously
+setTimeout(autoPilotNotificationDispatch, 10 * 1000);
+setInterval(autoPilotNotificationDispatch, 2 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`🌐 API Server running on port ${PORT} (Health Check, Payments & AutoPilot Dispatcher)`);
