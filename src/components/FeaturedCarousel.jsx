@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Play, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Download, Play, Plus, Check, Info, ChevronLeft, ChevronRight, Volume2, VolumeX } from 'lucide-react';
 import { fetchTMDBDetails } from '../hooks/useTMDB';
-import ImageWithFallback from './ImageWithFallback';
 import TrailerModal from './TrailerModal';
 import { getHeroBackdropSources } from '../utils/imageOptimization';
 
 const getMatchPercent = (rating) => {
   const num = parseFloat(rating);
-  return isNaN(num) ? 'N/A' : `${Math.round(num * 10)}%`;
+  return isNaN(num) ? '98%' : `${Math.round(num * 10)}% Match`;
 };
 
 const getTitleClass = (title = '') => {
@@ -22,21 +21,45 @@ const getTitleClass = (title = '') => {
   return 'text-4xl sm:text-5xl md:text-6xl lg:text-7xl';
 };
 
-const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
+// Extract clean YouTube video ID or key from URL or raw key
+const extractYouTubeKey = (urlOrKey) => {
+  if (!urlOrKey || typeof urlOrKey !== 'string') return null;
+  const trimmed = urlOrKey.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+    return trimmed;
+  }
+  const match = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  return match ? match[1] : null;
+};
+
+const FeaturedCarousel = ({
+  movies,
+  onPlayTrailer,
+  onSelectMovie,
+  myList = [],
+  onToggleMyList = () => {},
+}) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [activeTrailer, setActiveTrailer] = useState(null);
+  const [activeTrailerModal, setActiveTrailerModal] = useState(null);
+  const [trailerKeys, setTrailerKeys] = useState({}); // Cache movie_id -> youtubeKey
+  const [loadingTrailer, setLoadingTrailer] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const pauseTimeoutRef = useRef(null);
 
   const totalMovies = movies && Array.isArray(movies) ? movies.length : 0;
-  // Safe clamped index to completely prevent out-of-bounds undefined errors
   const safeIndex = totalMovies > 0 ? (currentIndex % totalMovies) : 0;
   const currentMovie = totalMovies > 0 ? movies[safeIndex] : null;
 
-  // Safe temporary pause with guaranteed auto-resume to prevent permanent freeze on mobile
-  const pauseTemporarily = useCallback((durationMs = 5000) => {
+  const isInMyList = currentMovie
+    ? myList.some((m) => String(m.id).split('-')[0] === String(currentMovie.id).split('-')[0])
+    : false;
+
+  // Safe temporary pause with auto-resume
+  const pauseTemporarily = useCallback((durationMs = 8000) => {
     setIsPaused(true);
     if (pauseTimeoutRef.current) {
       clearTimeout(pauseTimeoutRef.current);
@@ -46,34 +69,79 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
     }, durationMs);
   }, []);
 
-  // Cleanup pause timeout on unmount
+  // Cleanup pause timeout
   useEffect(() => {
     return () => {
-      if (pauseTimeoutRef.current) {
-        clearTimeout(pauseTimeoutRef.current);
-      }
+      if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current);
     };
   }, []);
 
-  // Keep index within valid bounds if movies array updates
+  // Clamped index check
   useEffect(() => {
     if (totalMovies > 0 && currentIndex >= totalMovies) {
       setCurrentIndex(0);
     }
   }, [totalMovies, currentIndex]);
 
-  // Wake up timer immediately on tab visibility / phone unlock
+  // Tab visibility wakeup
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         setIsPaused(false);
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
-  // Preload next movie's backdrop in optimized size (w780/w1280 WebP)
+  // Fetch YouTube trailer dynamically from TMDB
+  useEffect(() => {
+    if (!currentMovie || !currentMovie.id) return;
+
+    const movieId = String(currentMovie.id);
+    // If trailerKey already resolved in cache
+    if (trailerKeys[movieId] !== undefined) return;
+
+    let isCancelled = false;
+    const loadTrailer = async () => {
+      setLoadingTrailer(true);
+      try {
+        // First check if movie object already has a valid trailerUrl
+        if (currentMovie.trailerUrl && currentMovie.trailerUrl !== '#') {
+          const directKey = extractYouTubeKey(currentMovie.trailerUrl);
+          if (directKey) {
+            if (!isCancelled) {
+              setTrailerKeys((prev) => ({ ...prev, [movieId]: directKey }));
+              setLoadingTrailer(false);
+            }
+            return;
+          }
+        }
+
+        // Fetch dynamically from TMDB endpoint via fetchTMDBDetails (appends videos)
+        const details = await fetchTMDBDetails(currentMovie.id, currentMovie.mediaType || currentMovie.media_type);
+        if (isCancelled) return;
+
+        const resolvedKey = extractYouTubeKey(details?.trailerUrl);
+        setTrailerKeys((prev) => ({ ...prev, [movieId]: resolvedKey || null }));
+      } catch (err) {
+        if (!isCancelled) {
+          setTrailerKeys((prev) => ({ ...prev, [movieId]: null }));
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoadingTrailer(false);
+        }
+      }
+    };
+
+    loadTrailer();
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentMovie?.id, currentMovie?.trailerUrl, currentMovie?.mediaType, trailerKeys]);
+
+  // Preload next slide's backdrop
   useEffect(() => {
     if (totalMovies <= 1) return;
     const nextIdx = (safeIndex + 1) % totalMovies;
@@ -99,21 +167,21 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
     setCurrentIndex((prev) => (prev - 1 + totalMovies) % totalMovies);
   }, [totalMovies]);
 
-  // Auto-rotation timer: pauses on hover/touch so user isn't interrupted while clicking
+  // Auto-rotation timer (12s to allow users to enjoy preview video)
   useEffect(() => {
     if (totalMovies <= 1 || isPaused) return;
     const timer = setInterval(() => {
       handleNext();
-    }, 7000);
+    }, 12000);
     return () => clearInterval(timer);
   }, [totalMovies, isPaused, handleNext]);
 
-  // Touch gesture support for mobile swiping with tap-protection and auto-unpause
+  // Touch gesture support for mobile swiping
   const handleTouchStart = (e) => {
     if (!e.touches || !e.touches[0]) return;
     touchStartX.current = e.touches[0].clientX;
-    touchEndX.current = e.touches[0].clientX; // initialize to same coordinate to prevent accidental tap jumps
-    pauseTemporarily(6000);
+    touchEndX.current = e.touches[0].clientX;
+    pauseTemporarily(7000);
   };
 
   const handleTouchMove = (e) => {
@@ -125,15 +193,11 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
     if (touchStartX.current && touchEndX.current) {
       const diff = touchStartX.current - touchEndX.current;
       if (Math.abs(diff) > 50) {
-        if (diff > 0) {
-          handleNext();
-        } else {
-          handlePrev();
-        }
+        if (diff > 0) handleNext();
+        else handlePrev();
       }
     }
-    // Always auto-resume rotation after mobile touch ends
-    pauseTemporarily(4000);
+    pauseTemporarily(5000);
     touchStartX.current = 0;
     touchEndX.current = 0;
   };
@@ -141,6 +205,7 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
   if (!currentMovie) return null;
 
   const heroSources = getHeroBackdropSources(currentMovie);
+  const currentTrailerKey = currentMovie?.id ? trailerKeys[String(currentMovie.id)] : null;
 
   const isTvSeries = Boolean(
     currentMovie.mediaType === 'tv' ||
@@ -150,10 +215,12 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
     (currentMovie.seasons && currentMovie.seasons.length > 0)
   );
 
+  const backdropImageUrl = heroSources.desktop || heroSources.mobile || currentMovie.backdrop || currentMovie.poster;
+
   return (
-    <div 
-      className="relative w-full h-[80vh] min-h-[580px] md:h-[88vh] md:min-h-[640px] max-h-[860px] overflow-hidden bg-[#141414] select-none group"
-      onMouseEnter={() => pauseTemporarily(7000)}
+    <div
+      className="relative w-full h-[82vh] min-h-[580px] md:h-[90vh] md:min-h-[660px] max-h-[880px] overflow-hidden bg-[#00050d] select-none group"
+      onMouseEnter={() => pauseTemporarily(10000)}
       onMouseLeave={() => {
         if (pauseTimeoutRef.current) clearTimeout(pauseTimeoutRef.current);
         setIsPaused(false);
@@ -162,151 +229,220 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      {/* 1. AMAZON PRIME VIDEO BLURRED BACKDROP BACKGROUND */}
       <AnimatePresence mode="sync" initial={false}>
         <motion.div
-          key={`hero-slide-${safeIndex}-${currentMovie.id || currentMovie.title}`}
+          key={`hero-bg-${safeIndex}-${currentMovie.id || currentMovie.title}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.8, ease: 'easeInOut' }}
-          className="absolute inset-0 w-full h-full"
+          transition={{ duration: 0.9, ease: 'easeInOut' }}
+          className="absolute inset-0 w-full h-full overflow-hidden"
         >
-          {/* Backdrop Image with smooth, cinematic Ken Burns zoom */}
-          <motion.div
-            initial={{ scale: 1.05 }}
-            animate={{ scale: 1.0 }}
-            transition={{ duration: 7.5, ease: 'easeOut' }}
-            className="absolute inset-0 w-full h-full"
-          >
-            {/* Picture element: Mobile strictly downloads w780 (200KB vs 2.5MB), Desktop downloads w1280 */}
-            <picture className="w-full h-full">
-              <source
-                media="(max-width: 768px)"
-                srcSet={heroSources.mobile}
-              />
-              <source
-                media="(min-width: 769px)"
-                srcSet={heroSources.desktop}
-              />
-              <img
-                src={heroSources.mobile || heroSources.desktop || currentMovie.backdrop || currentMovie.poster}
-                alt={currentMovie.title}
-                className="w-full h-full object-cover object-center"
-                loading={safeIndex === 0 ? "eager" : "lazy"}
-                decoding="async"
-                fetchpriority={safeIndex === 0 ? "high" : "auto"}
-                onError={(e) => {
-                  if (currentMovie.poster && e.target.src !== currentMovie.poster) {
-                    e.target.src = currentMovie.poster;
-                  }
-                }}
-              />
-            </picture>
-          </motion.div>
-          
-          {/* Cinema dynamic overlay: Lighter gradient dark only at bottom, completely clear at top */}
-          <div 
-            className="absolute inset-0 pointer-events-none z-10" 
-            style={{
-              background: 'linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 50%, rgba(0, 0, 0, 0) 100%)'
-            }}
+          <img
+            src={backdropImageUrl}
+            alt=""
+            aria-hidden="true"
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+            className="w-full h-full object-cover object-center pointer-events-none scale-110 blur-xl filter brightness-[0.7] transform-gpu"
           />
-          {/* Subtle horizontal gradient on large screens to keep left-aligned typography razor sharp */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent w-full md:w-[60%] pointer-events-none z-10" />
-
-          {/* Content with elegant vertical entrance */}
-          <div className="absolute inset-0 flex flex-col justify-end px-4 sm:px-8 md:px-16 pt-24 sm:pt-28 md:pt-32 pb-16 sm:pb-20 md:pb-24 z-20 pointer-events-none">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="max-w-2xl lg:max-w-3xl w-full pointer-events-auto"
-            >
-              {/* Fake Netflix Series/Movie badge */}
-              <div className="flex items-center gap-2 mb-3">
-                <div 
-                  className="flex items-center text-primary font-bold tracking-widest text-sm md:text-base"
-                  style={{ textShadow: '0 2px 6px rgba(0, 0, 0, 0.8)' }}
-                >
-                  <span className="mr-1">N</span>
-                  <span className="text-gray-300 text-xs tracking-[0.2em]">{isTvSeries ? 'SERIES' : 'FILM'}</span>
-                </div>
-              </div>
-              
-              <h1 
-                className={`font-black text-white mb-3 sm:mb-4 uppercase tracking-tight leading-[1.08] ${getTitleClass(currentMovie.title)}`}
-                style={{ textShadow: '0 2px 10px rgba(0, 0, 0, 0.9), 0 4px 20px rgba(0, 0, 0, 0.85)' }}
-              >
-                {currentMovie.title}
-              </h1>
-
-              {/* Tags */}
-              <div 
-                className="flex items-center gap-3 text-xs sm:text-sm md:text-base font-semibold text-white mb-4 flex-wrap"
-                style={{ textShadow: '0 2px 6px rgba(0, 0, 0, 0.9)' }}
-              >
-                <span className="text-green-500 font-bold">{getMatchPercent(currentMovie.rating)} Match</span>
-                <span>{currentMovie.year}</span>
-                <span className="border border-white/40 px-1.5 py-0.5 rounded text-xs backdrop-blur-xs bg-black/20">{currentMovie.quality}</span>
-                <span>{(currentMovie.genre || 'N/A').split(',')[0]}</span>
-              </div>
-              
-              <p 
-                className="text-gray-100 text-xs sm:text-sm md:text-base mb-6 max-w-xl line-clamp-2 sm:line-clamp-3 md:line-clamp-3 font-medium leading-relaxed"
-                style={{ textShadow: '0 1px 6px rgba(0, 0, 0, 0.8), 0 2px 12px rgba(0, 0, 0, 0.9)' }}
-              >
-                {currentMovie.description}
-              </p>
-
-              <div className="flex flex-wrap items-center gap-3 md:gap-4 relative z-50 mt-2">
-                <button 
-                  onClick={() => onPlayTrailer(currentMovie)}
-                  className="px-6 md:px-8 py-2 md:py-3 bg-white hover:bg-white/90 text-black rounded font-bold transition-all flex items-center gap-2 text-sm sm:text-base md:text-lg active:scale-95 shadow-lg cursor-pointer"
-                >
-                  <Download className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
-                  Download
-                </button>
-                <button 
-                  onClick={async () => {
-                    if (currentMovie.trailerUrl && currentMovie.trailerUrl !== '#') {
-                      setActiveTrailer({ url: currentMovie.trailerUrl, title: currentMovie.title });
-                    } else if (currentMovie.id) {
-                      const res = await fetchTMDBDetails(currentMovie.id, currentMovie.mediaType);
-                      if (res && res.trailerUrl) {
-                        setActiveTrailer({ url: res.trailerUrl, title: currentMovie.title });
-                      } else {
-                        alert('Trailer link is not available yet.');
-                      }
-                    } else {
-                      alert('Trailer link is not available yet.');
-                    }
-                  }}
-                  className="px-6 md:px-8 py-2 md:py-3 bg-[#6d6d6eb3] hover:bg-[#6d6d6e66] text-white rounded font-bold transition-all flex items-center gap-2 text-sm sm:text-base md:text-lg cursor-pointer active:scale-95"
-                >
-                  <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
-                  Trailer
-                </button>
-              </div>
-            </motion.div>
-          </div>
+          {/* Dark Overlay (Prime Video Gradient & Mood) */}
+          <div className="absolute inset-0 bg-black/55 pointer-events-none z-10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#00050d] via-black/40 to-transparent pointer-events-none z-10" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#00050d]/95 via-[#00050d]/70 to-transparent w-full md:w-[70%] pointer-events-none z-10" />
         </motion.div>
       </AnimatePresence>
-      
-      {/* Interactive Hero Slide Indicator Pills (Bottom Right) */}
+
+      {/* 2. FOREGROUND CONTENT & TRAILER GRID (PRIME VIDEO LAYOUT) */}
+      <div className="relative z-20 w-full h-full max-w-7xl mx-auto px-4 sm:px-8 md:px-12 flex flex-col justify-end md:justify-center pb-16 md:pb-0 pt-20">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 lg:gap-10 items-center">
+          
+          {/* LEFT COLUMN: Metadata, Title, Description, & Prime Video Buttons */}
+          <div className="md:col-span-6 lg:col-span-5 flex flex-col justify-center">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`hero-meta-${safeIndex}-${currentMovie.id}`}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                className="space-y-3 sm:space-y-4"
+              >
+                {/* Prime Video Channel / Tag Badge */}
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-widest bg-[#00A8E1] text-black">
+                    Prime Video
+                  </span>
+                  <span className="text-gray-300 text-xs font-semibold tracking-wider">
+                    {isTvSeries ? 'SERIES' : 'FEATURE FILM'}
+                  </span>
+                </div>
+
+                {/* Movie Title */}
+                <h1
+                  className={`font-black text-white uppercase tracking-tight leading-[1.08] ${getTitleClass(currentMovie.title)} drop-shadow-2xl`}
+                >
+                  {currentMovie.title}
+                </h1>
+
+                {/* Metadata Row (Match %, Year, Quality, Genre) */}
+                <div className="flex items-center gap-3 text-xs sm:text-sm font-semibold text-gray-200 flex-wrap">
+                  <span className="text-[#46d369] font-bold">{getMatchPercent(currentMovie.rating)}</span>
+                  <span>{currentMovie.year || '2026'}</span>
+                  <span className="border border-white/40 px-1.5 py-0.5 rounded text-[11px] font-bold bg-white/10 backdrop-blur-xs">
+                    {currentMovie.quality || '1080p'}
+                  </span>
+                  <span className="text-gray-300">{(currentMovie.genre || 'Action').split(',')[0]}</span>
+                </div>
+
+                {/* Description */}
+                <p className="text-gray-200 text-xs sm:text-sm md:text-base line-clamp-3 sm:line-clamp-4 font-normal leading-relaxed text-shadow max-w-xl">
+                  {currentMovie.description || 'Watch now with high-speed verified stream and download options.'}
+                </p>
+
+                {/* 3. PRIME VIDEO STYLE ACTION BUTTONS */}
+                <div className="flex flex-wrap items-center gap-3 pt-3">
+                  {/* Primary Button: Watch Now / Download */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onPlayTrailer) onPlayTrailer(currentMovie);
+                      else if (onSelectMovie) onSelectMovie(currentMovie);
+                    }}
+                    className="px-6 py-2.5 sm:px-7 sm:py-3 bg-white hover:bg-white/90 text-black font-extrabold rounded-md transition-all flex items-center gap-2 text-sm sm:text-base active:scale-95 shadow-xl cursor-pointer"
+                  >
+                    <Download className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
+                    <span>Download</span>
+                  </button>
+
+                  {/* Secondary Button: Trailer Modal Trigger */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (currentTrailerKey) {
+                        setActiveTrailerModal({
+                          url: `https://www.youtube.com/watch?v=${currentTrailerKey}`,
+                          title: currentMovie.title,
+                        });
+                      } else if (currentMovie.trailerUrl && currentMovie.trailerUrl !== '#') {
+                        setActiveTrailerModal({ url: currentMovie.trailerUrl, title: currentMovie.title });
+                      } else {
+                        // Fallback fetch
+                        const res = await fetchTMDBDetails(currentMovie.id, currentMovie.mediaType);
+                        if (res?.trailerUrl) {
+                          setActiveTrailerModal({ url: res.trailerUrl, title: currentMovie.title });
+                        } else {
+                          alert('Trailer not available for this title.');
+                        }
+                      }
+                    }}
+                    className="px-5 py-2.5 sm:px-6 sm:py-3 bg-white/20 hover:bg-white/30 text-white font-bold rounded-md transition-all flex items-center gap-2 text-sm sm:text-base backdrop-blur-md active:scale-95 cursor-pointer border border-white/10"
+                  >
+                    <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
+                    <span>Trailer</span>
+                  </button>
+
+                  {/* Add to List Icon Button (+) */}
+                  <button
+                    type="button"
+                    onClick={() => onToggleMyList(currentMovie)}
+                    className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all border cursor-pointer active:scale-90 ${
+                      isInMyList
+                        ? 'bg-[#00A8E1] border-[#00A8E1] text-black'
+                        : 'bg-black/40 hover:bg-black/60 border-white/30 text-white hover:border-white'
+                    }`}
+                    title={isInMyList ? 'Remove from Watchlist' : 'Add to Watchlist'}
+                    aria-label={isInMyList ? 'Remove from Watchlist' : 'Add to Watchlist'}
+                  >
+                    {isInMyList ? (
+                      <Check className="w-5 h-5 stroke-[2.5]" />
+                    ) : (
+                      <Plus className="w-5 h-5 stroke-[2.5]" />
+                    )}
+                  </button>
+
+                  {/* Info Icon Button (i) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onSelectMovie) onSelectMovie(currentMovie);
+                      else if (onPlayTrailer) onPlayTrailer(currentMovie);
+                    }}
+                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/40 hover:bg-black/60 border border-white/30 hover:border-white text-white flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                    title="More Info"
+                    aria-label="More Details"
+                  >
+                    <Info className="w-5 h-5" />
+                  </button>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* RIGHT COLUMN: AUTOPLAYING YOUTUBE TRAILER IFRAME OR CLEAN UNBLURRED BACKDROP */}
+          <div className="hidden md:block md:col-span-6 lg:col-span-7">
+            <div className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)] border border-white/10 bg-black/80">
+              {currentTrailerKey ? (
+                <>
+                  <iframe
+                    key={`trailer-iframe-${currentTrailerKey}`}
+                    src={`https://www.youtube-nocookie.com/embed/${currentTrailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&loop=1&playlist=${currentTrailerKey}&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1`}
+                    title={`${currentMovie.title} Trailer Preview`}
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    className="w-full h-full object-cover pointer-events-none scale-[1.05]"
+                  />
+                  {/* Subtle edge gradient overlay to integrate seamlessly into Prime storefront */}
+                  <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/40 via-transparent to-black/20" />
+                  
+                  {/* Audio Mute/Unmute Toggle on Trailer Box */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsMuted((prev) => !prev);
+                    }}
+                    className="absolute bottom-3 right-3 z-30 w-9 h-9 rounded-full bg-black/70 hover:bg-black text-white/90 hover:text-white border border-white/20 flex items-center justify-center transition-all cursor-pointer shadow-lg active:scale-90"
+                    title={isMuted ? 'Unmute preview trailer' : 'Mute preview trailer'}
+                    aria-label="Toggle trailer audio"
+                  >
+                    {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                  </button>
+                </>
+              ) : (
+                /* Fallback: Unblurred crisp high-res backdrop image */
+                <div className="w-full h-full relative">
+                  <img
+                    src={backdropImageUrl}
+                    alt={currentMovie.title}
+                    className="w-full h-full object-cover object-center"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Hero Slide Indicator Pills (Bottom Center) */}
       {totalMovies > 1 && (
-        <div className="absolute bottom-6 right-4 sm:right-8 md:right-16 z-30 flex items-center gap-1.5 sm:gap-2">
+        <div className="absolute bottom-6 right-4 sm:right-8 md:right-12 z-30 flex items-center gap-1.5 sm:gap-2">
           {movies.slice(0, 8).map((_, idx) => (
             <button
               key={`dot-${idx}`}
               onClick={() => {
                 setCurrentIndex(idx);
-                pauseTemporarily(7000);
+                pauseTemporarily(9000);
               }}
               className={`transition-all duration-300 rounded-full cursor-pointer ${
                 safeIndex === idx
-                  ? 'w-6 sm:w-8 h-1.5 bg-[#E50914] shadow-[0_0_12px_rgba(229,9,20,0.8)]'
-                  : 'w-1.5 sm:w-2 h-1.5 sm:h-2 bg-white/40 hover:bg-white/80'
+                  ? 'w-7 sm:w-9 h-1.5 bg-[#00A8E1] shadow-[0_0_12px_rgba(0,168,225,0.8)]'
+                  : 'w-2 h-1.5 bg-white/30 hover:bg-white/70'
               }`}
               title={`Go to slide ${idx + 1}`}
               aria-label={`Go to slide ${idx + 1}`}
@@ -315,16 +451,16 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
         </div>
       )}
 
-      {/* Desktop Previous / Next Navigation Arrows on Hover */}
+      {/* Desktop Previous / Next Navigation Arrows */}
       {totalMovies > 1 && (
         <>
           <button
             type="button"
             onClick={() => {
               handlePrev();
-              pauseTemporarily(7000);
+              pauseTemporarily(9000);
             }}
-            className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 items-center justify-center rounded-full bg-black/40 hover:bg-black/70 text-white/80 hover:text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 active:scale-90 cursor-pointer shadow-xl"
+            className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 items-center justify-center rounded-full bg-black/50 hover:bg-black/80 text-white/80 hover:text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 active:scale-90 cursor-pointer shadow-2xl"
             title="Previous Featured Title"
             aria-label="Previous Featured Title"
           >
@@ -334,9 +470,9 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
             type="button"
             onClick={() => {
               handleNext();
-              pauseTemporarily(7000);
+              pauseTemporarily(9000);
             }}
-            className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 items-center justify-center rounded-full bg-black/40 hover:bg-black/70 text-white/80 hover:text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 active:scale-90 cursor-pointer shadow-xl"
+            className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 items-center justify-center rounded-full bg-black/50 hover:bg-black/80 text-white/80 hover:text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 active:scale-90 cursor-pointer shadow-2xl"
             title="Next Featured Title"
             aria-label="Next Featured Title"
           >
@@ -345,15 +481,15 @@ const FeaturedCarousel = ({ movies, onPlayTrailer }) => {
         </>
       )}
 
-      {/* Bottom fade into the rows */}
-      <div className="absolute bottom-0 w-full h-32 bg-gradient-to-t from-[#141414] to-transparent z-10 pointer-events-none" />
+      {/* Bottom fade into the catalog rows */}
+      <div className="absolute bottom-0 w-full h-24 bg-gradient-to-t from-[#141414] to-transparent z-10 pointer-events-none" />
 
-      {/* In-App Cinema Trailer Modal */}
+      {/* Full-Screen Cinema Trailer Modal (when clicking Trailer button) */}
       <TrailerModal
-        isOpen={Boolean(activeTrailer)}
-        onClose={() => setActiveTrailer(null)}
-        trailerUrl={activeTrailer?.url}
-        movieTitle={activeTrailer?.title}
+        isOpen={Boolean(activeTrailerModal)}
+        onClose={() => setActiveTrailerModal(null)}
+        trailerUrl={activeTrailerModal?.url}
+        movieTitle={activeTrailerModal?.title}
       />
     </div>
   );

@@ -995,6 +995,9 @@ function App() {
               <FeaturedCarousel
                 movies={activeTab === 'tv' && displayWebSeries.length > 0 ? displayWebSeries : displayFeatured}
                 onPlayTrailer={handleMovieSelect}
+                onSelectMovie={handleMovieSelect}
+                myList={myList}
+                onToggleMyList={toggleMyList}
               />
 
               <div className="relative z-20 pb-10">
