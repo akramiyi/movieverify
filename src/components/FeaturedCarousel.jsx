@@ -234,7 +234,7 @@ const FeaturedCarousel = ({
           transition={{ duration: 1.0, ease: 'easeInOut' }}
           className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none"
         >
-          {/* Base Layer: High-Res Backdrop Image with Subtle Ken Burns Zoom */}
+          {/* Base Layer: High-Res Backdrop Image with Subtle Ken Burns Zoom (hidden/faded when video is playing) */}
           <motion.img
             src={backdropImageUrl}
             alt=""
@@ -243,34 +243,35 @@ const FeaturedCarousel = ({
             fetchpriority="high"
             decoding="async"
             initial={{ scale: 1.0 }}
-            animate={{ scale: currentTrailerKey ? 1.0 : 1.05 }}
+            animate={{ scale: currentTrailerKey && videoReady ? 1.0 : 1.05 }}
             transition={{ duration: 10, ease: 'easeOut' }}
-            className="absolute inset-0 w-full h-full object-cover object-right md:object-center transform-gpu"
+            className={`absolute inset-0 w-full h-full object-cover object-center transform-gpu transition-opacity duration-1000 ${
+              currentTrailerKey && videoReady ? 'opacity-0' : 'opacity-100'
+            }`}
           />
 
-          {/* Video Layer: Full-screen looping YouTube background scene positioned to the right */}
+          {/* Video Layer: Full-screen looping YouTube background scene filling entire hero section */}
           {currentTrailerKey && (
             <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none">
-              {/* Right-biased 16:9 container with moderate scaling (115% vs 140%) to keep actors in focus */}
-              <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[100vw] sm:w-[95vw] md:w-[85vw] lg:w-[75vw] h-[100vh] min-h-[56.25vw] min-w-[177.77vh] flex items-center justify-end pointer-events-none select-none">
-                <iframe
-                  key={`bg-video-${safeIndex}-${currentTrailerKey}`}
-                  src={`https://www.youtube-nocookie.com/embed/${currentTrailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&loop=1&playlist=${currentTrailerKey}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&playsinline=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
-                  title="Cinematic Background Video"
-                  loading="lazy"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  tabIndex="-1"
-                  aria-hidden="true"
-                  onLoad={() => setVideoReady(true)}
-                  className={`w-full h-full object-cover pointer-events-none select-none transition-opacity duration-1000 transform-gpu scale-105 ${
-                    videoReady ? 'opacity-95' : 'opacity-0'
-                  }`}
-                  style={{
-                    pointerEvents: 'none',
-                    border: 'none',
-                  }}
-                />
-              </div>
+              <iframe
+                key={`bg-video-${safeIndex}-${currentTrailerKey}`}
+                src={`https://www.youtube-nocookie.com/embed/${currentTrailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&loop=1&playlist=${currentTrailerKey}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&playsinline=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
+                title="Cinematic Background Video"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                tabIndex="-1"
+                aria-hidden="true"
+                onLoad={() => setVideoReady(true)}
+                className={`absolute inset-0 w-full h-full pointer-events-none select-none transition-opacity duration-1000 transform-gpu ${
+                  videoReady ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{
+                  pointerEvents: 'none',
+                  border: 'none',
+                  transform: 'scale(1.1)',
+                  objectFit: 'cover',
+                }}
+              />
 
               {/* Completely transparent click-eater overlay strictly over video area to absorb any residual YouTube hover/play triggers */}
               <div className="absolute inset-0 w-full h-full pointer-events-auto bg-transparent z-[5]" />
@@ -278,11 +279,11 @@ const FeaturedCarousel = ({
           )}
 
           {/* 4. EXACT AMAZON PRIME VIDEO GRADIENT OVERLAYS */}
-          {/* Solid deep-black on the leftmost 35-40% of the screen, smoothly transitioning to transparent on the right */}
+          {/* Heavy black gradient on the left (from-black/95) so text is 100% readable, right side clear */}
           <div 
             className="absolute inset-0 z-10 pointer-events-none"
             style={{
-              background: 'linear-gradient(to right, #000000 0%, #000000 35%, rgba(0, 0, 0, 0.85) 50%, rgba(0, 0, 0, 0.4) 70%, transparent 100%)',
+              background: 'linear-gradient(to right, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.85) 30%, rgba(0, 0, 0, 0.4) 55%, transparent 75%)',
             }}
           />
 
