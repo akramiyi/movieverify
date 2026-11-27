@@ -250,7 +250,7 @@ const FeaturedCarousel = ({
             }`}
           />
 
-          {/* Video Layer: Full-screen looping YouTube background scene filling entire hero section */}
+          {/* Video Layer: Full-screen looping YouTube background scene filling entire hero section edge-to-edge */}
           {currentTrailerKey && (
             <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none">
               <iframe
@@ -262,14 +262,19 @@ const FeaturedCarousel = ({
                 tabIndex="-1"
                 aria-hidden="true"
                 onLoad={() => setVideoReady(true)}
-                className={`absolute inset-0 w-full h-full pointer-events-none select-none transition-opacity duration-1000 transform-gpu ${
+                className={`absolute w-full h-full pointer-events-none select-none transition-opacity duration-1000 transform-gpu ${
                   videoReady ? 'opacity-100' : 'opacity-0'
                 }`}
                 style={{
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%) scale(1.3)',
+                  minWidth: '100%',
+                  minHeight: '100%',
+                  width: '100%',
+                  height: '100%',
                   pointerEvents: 'none',
                   border: 'none',
-                  transform: 'scale(1.1)',
-                  objectFit: 'cover',
                 }}
               />
 
