@@ -255,7 +255,7 @@ const FeaturedCarousel = ({
             <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none">
               <iframe
                 key={`bg-video-${safeIndex}-${currentTrailerKey}`}
-                src={`https://www.youtube-nocookie.com/embed/${currentTrailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&loop=1&playlist=${currentTrailerKey}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&playsinline=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
+                src={`https://www.youtube-nocookie.com/embed/${currentTrailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&loop=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&playsinline=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
                 title="Cinematic Background Video"
                 loading="lazy"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -278,8 +278,14 @@ const FeaturedCarousel = ({
                 }}
               />
 
-              {/* Completely transparent click-eater overlay strictly over video area to absorb any residual YouTube hover/play triggers */}
-              <div className="absolute inset-0 w-full h-full pointer-events-auto bg-transparent z-[5]" />
+              {/* Completely transparent click-eater shield covering the video area to block any accidental taps/pauses */}
+              <div 
+                className="absolute inset-0 w-full h-full pointer-events-auto bg-transparent z-[5]" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+              />
             </div>
           )}
 
