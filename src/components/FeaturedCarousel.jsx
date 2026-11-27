@@ -254,14 +254,24 @@ const FeaturedCarousel = ({
           {currentTrailerKey && (
             <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none">
               <iframe
+                id={`hero-bg-iframe-${safeIndex}`}
                 key={`bg-video-${safeIndex}-${currentTrailerKey}`}
                 src={`https://www.youtube-nocookie.com/embed/${currentTrailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&loop=1&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&playsinline=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
                 title="Cinematic Background Video"
-                loading="lazy"
+                loading="eager"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 tabIndex="-1"
                 aria-hidden="true"
-                onLoad={() => setVideoReady(true)}
+                onLoad={(e) => {
+                  setVideoReady(true);
+                  // Ensure autoplay starts without pause overlay
+                  try {
+                    e.target.contentWindow?.postMessage(
+                      JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+                      '*'
+                    );
+                  } catch {}
+                }}
                 className={`absolute w-full h-full pointer-events-none select-none transition-opacity duration-1000 transform-gpu ${
                   videoReady ? 'opacity-100' : 'opacity-0'
                 }`}
@@ -419,23 +429,30 @@ const FeaturedCarousel = ({
               >
                 <Info className="w-5 h-5" />
               </button>
-
-              {/* Video Audio Mute / Unmute Button (When Trailer is playing) */}
-              {currentTrailerKey && (
-                <button
-                  type="button"
-                  onClick={() => setIsMuted((prev) => !prev)}
-                  className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/40 hover:bg-black/60 border border-white/30 hover:border-white text-white flex items-center justify-center transition-all cursor-pointer active:scale-90 shadow-lg ml-auto md:ml-2"
-                  title={isMuted ? 'Unmute background trailer' : 'Mute background trailer'}
-                  aria-label="Toggle background trailer audio"
-                >
-                  {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5 text-[#00A8E1]" />}
-                </button>
-              )}
             </div>
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Prime Video Style Sound Toggle in Right Corner */}
+      {currentTrailerKey && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsMuted((prev) => !prev);
+          }}
+          className="absolute top-28 sm:top-32 right-4 sm:right-8 md:right-12 z-30 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-black/60 hover:bg-black/85 border border-white/30 hover:border-white text-white flex items-center justify-center transition-all duration-300 cursor-pointer active:scale-90 shadow-2xl backdrop-blur-md group/vol"
+          title={isMuted ? 'Unmute background trailer' : 'Mute background trailer'}
+          aria-label="Toggle background trailer audio"
+        >
+          {isMuted ? (
+            <VolumeX className="w-5 h-5 sm:w-6 sm:h-6 text-gray-200 group-hover/vol:text-white" />
+          ) : (
+            <Volume2 className="w-5 h-5 sm:w-6 sm:h-6 text-[#00A8E1]" />
+          )}
+        </button>
+      )}
 
       {/* Hero Slide Indicator Pills (Bottom Right) */}
       {totalMovies > 1 && (
