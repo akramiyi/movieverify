@@ -232,7 +232,7 @@ const FeaturedCarousel = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 1.0, ease: 'easeInOut' }}
-          className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none"
+          className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none"
         >
           {/* Base Layer: High-Res Backdrop Image with Subtle Ken Burns Zoom */}
           <motion.img
@@ -245,39 +245,49 @@ const FeaturedCarousel = ({
             initial={{ scale: 1.0 }}
             animate={{ scale: currentTrailerKey ? 1.0 : 1.05 }}
             transition={{ duration: 10, ease: 'easeOut' }}
-            className="absolute inset-0 w-full h-full object-cover object-center transform-gpu"
+            className="absolute inset-0 w-full h-full object-cover object-right md:object-center transform-gpu"
           />
 
-          {/* Video Layer: Full-screen looping YouTube background scene */}
+          {/* Video Layer: Full-screen looping YouTube background scene positioned to the right */}
           {currentTrailerKey && (
-            <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none flex items-center justify-center">
-              {/* Scaled & 16:9 padded wrapper to ensure full edge-to-edge coverage and crop YouTube branding */}
-              <iframe
-                key={`bg-video-${safeIndex}-${currentTrailerKey}`}
-                src={`https://www.youtube-nocookie.com/embed/${currentTrailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&loop=1&playlist=${currentTrailerKey}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&playsinline=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
-                title="Cinematic Background Video"
-                loading="lazy"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                onLoad={() => setVideoReady(true)}
-                className={`w-[140vw] h-[140vh] min-w-[100%] min-h-[100%] max-w-none pointer-events-none transition-opacity duration-1000 transform-gpu ${
-                  videoReady ? 'opacity-90' : 'opacity-0'
-                }`}
-                style={{
-                  objectFit: 'cover',
-                }}
-              />
+            <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none">
+              {/* Right-biased 16:9 container with moderate scaling (115% vs 140%) to keep actors in focus */}
+              <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[100vw] sm:w-[95vw] md:w-[85vw] lg:w-[75vw] h-[100vh] min-h-[56.25vw] min-w-[177.77vh] flex items-center justify-end pointer-events-none select-none">
+                <iframe
+                  key={`bg-video-${safeIndex}-${currentTrailerKey}`}
+                  src={`https://www.youtube-nocookie.com/embed/${currentTrailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&loop=1&playlist=${currentTrailerKey}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&disablekb=1&fs=0&playsinline=1&enablejsapi=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`}
+                  title="Cinematic Background Video"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  tabIndex="-1"
+                  aria-hidden="true"
+                  onLoad={() => setVideoReady(true)}
+                  className={`w-full h-full object-cover pointer-events-none select-none transition-opacity duration-1000 transform-gpu scale-105 ${
+                    videoReady ? 'opacity-95' : 'opacity-0'
+                  }`}
+                  style={{
+                    pointerEvents: 'none',
+                    border: 'none',
+                  }}
+                />
+              </div>
+
+              {/* Completely transparent click-eater overlay strictly over video area to absorb any residual YouTube hover/play triggers */}
+              <div className="absolute inset-0 w-full h-full pointer-events-auto bg-transparent z-[5]" />
             </div>
           )}
 
           {/* 4. EXACT AMAZON PRIME VIDEO GRADIENT OVERLAYS */}
-          {/* Heavy black-to-transparent gradient on the left for maximum text readability */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-transparent w-full md:w-[65%] lg:w-[55%] z-10 pointer-events-none" />
-
-          {/* Secondary subtle full-screen base tint to avoid harsh high-key scenes */}
-          <div className="absolute inset-0 bg-black/25 z-10 pointer-events-none" />
+          {/* Solid deep-black on the leftmost 35-40% of the screen, smoothly transitioning to transparent on the right */}
+          <div 
+            className="absolute inset-0 z-10 pointer-events-none"
+            style={{
+              background: 'linear-gradient(to right, #000000 0%, #000000 35%, rgba(0, 0, 0, 0.85) 50%, rgba(0, 0, 0, 0.4) 70%, transparent 100%)',
+            }}
+          />
 
           {/* Cinematic bottom gradient fading seamlessly into catalog rows */}
-          <div className="absolute bottom-0 inset-x-0 h-40 bg-gradient-to-t from-[#141414] via-[#141414]/80 to-transparent z-10 pointer-events-none" />
+          <div className="absolute bottom-0 inset-x-0 h-40 bg-gradient-to-t from-[#141414] via-[#141414]/90 to-transparent z-10 pointer-events-none" />
         </motion.div>
       </AnimatePresence>
 
